@@ -371,25 +371,6 @@ func TestAddURLRule(t *testing.T) {
 	}
 }
 
-func TestAddGlobalParam(t *testing.T) {
-	pv := NewParamValidator("")
-
-	rule := &ParamRule{
-		Name:    "token",
-		Pattern: PatternEnum,
-		Values:  []string{"secret", "admin"},
-	}
-	pv.AddGlobalParam(rule)
-
-	if !pv.ValidateURL("/any/path?token=secret") {
-		t.Error("Global param should work for any URL")
-	}
-
-	if pv.ValidateURL("/any/path?token=invalid") {
-		t.Error("Global param should reject invalid values")
-	}
-}
-
 func TestClear(t *testing.T) {
 	pv := NewParamValidator("/api?page=[1-10]")
 
@@ -513,6 +494,30 @@ func BenchmarkNormalizeURL(b *testing.B) {
 	}
 }
 
+func BenchmarkFilterQueryParamsParallel(b *testing.B) {
+	pv := NewParamValidator("/api/*?page=[1-100]&limit=[10,20,50]")
+	urlPath := "/api/v1/data"
+	query := "page=50&limit=20&invalid=value&extra=param"
+
+	b.ResetTimer()
+	b.RunParallel(func(pb *testing.PB) {
+		for pb.Next() {
+			pv.FilterQueryParams(urlPath, query)
+		}
+	})
+}
+
+func BenchmarkFilterQueryParams(b *testing.B) {
+	pv := NewParamValidator("/api/*?page=[1-100]&limit=[10,20,50]")
+	urlPath := "/api/v1/data"
+	query := "page=50&limit=20&invalid=value&extra=param"
+
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		pv.FilterQueryParams(urlPath, query)
+	}
+}
+
 func TestConcurrentValidation(t *testing.T) {
 	pv := NewParamValidator("/api/*?page=[1-100]&limit=[10,20,50]&sort=[name,date]")
 
@@ -602,13 +607,6 @@ func TestConcurrentRuleUpdates(t *testing.T) {
 				case <-stopCh:
 					return
 				default:
-					rule := &ParamRule{
-						Name:    fmt.Sprintf("param%d", id),
-						Pattern: PatternEnum,
-						Values:  []string{fmt.Sprintf("value%d", j)},
-					}
-					pv.AddGlobalParam(rule)
-
 					urlParams := map[string]*ParamRule{
 						"page": {
 							Name:    "page",
@@ -703,19 +701,6 @@ func TestConcurrentAccessAfterClear(t *testing.T) {
 		for i := 0; i < 10; i++ {
 			pv.Clear()
 			time.Sleep(time.Microsecond * 100)
-		}
-	}()
-
-	go func() {
-		defer wg.Done()
-		for i := 0; i < 10; i++ {
-			rule := &ParamRule{
-				Name:    fmt.Sprintf("param%d", i),
-				Pattern: PatternEnum,
-				Values:  []string{"a", "b", "c"},
-			}
-			pv.AddGlobalParam(rule)
-			time.Sleep(time.Microsecond * 150)
 		}
 	}()
 
@@ -987,6 +972,88 @@ func TestMultipleRulesPriority(t *testing.T) {
 			if result != tt.expected {
 				t.Errorf("ValidateURL(%q) with rules %q = %v, expected %v",
 					tt.url, tt.rules, result, tt.expected)
+			}
+		})
+	}
+}
+
+func BenchmarkValidateQueryParams(b *testing.B) {
+	pv := NewParamValidator("/api/*?page=[1-100]&limit=[10,20,50]")
+	urlPath := "/api/v1/data"
+	query := "page=50&limit=20&invalid=value&extra=param"
+
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		pv.ValidateQueryParams(urlPath, query)
+	}
+}
+
+func BenchmarkValidateQueryParamsParallel(b *testing.B) {
+	pv := NewParamValidator("/api/*?page=[1-100]&limit=[10,20,50]")
+	urlPath := "/api/v1/data"
+	query := "page=50&limit=20"
+
+	b.ResetTimer()
+	b.RunParallel(func(pb *testing.PB) {
+		for pb.Next() {
+			pv.ValidateQueryParams(urlPath, query)
+		}
+	})
+}
+
+func TestValidateQueryParams(t *testing.T) {
+	pv := NewParamValidator("/api/*?page=[1-100]&limit=[10,20,50]")
+
+	tests := []struct {
+		name     string
+		urlPath  string
+		query    string
+		expected bool
+	}{
+		{
+			name:     "valid parameters",
+			urlPath:  "/api/v1/data",
+			query:    "page=50&limit=20",
+			expected: true,
+		},
+		{
+			name:     "invalid parameter value",
+			urlPath:  "/api/v1/data",
+			query:    "page=150&limit=20",
+			expected: false,
+		},
+		{
+			name:     "unknown parameter",
+			urlPath:  "/api/v1/data",
+			query:    "page=50&unknown=value",
+			expected: false,
+		},
+		{
+			name:     "empty query string",
+			urlPath:  "/api/v1/data",
+			query:    "",
+			expected: true,
+		},
+		{
+			name:     "multiple invalid parameters",
+			urlPath:  "/api/v1/data",
+			query:    "page=150&limit=100&invalid=value",
+			expected: false,
+		},
+		{
+			name:     "wrong path - no rules apply",
+			urlPath:  "/users",
+			query:    "page=50",
+			expected: false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result := pv.ValidateQueryParams(tt.urlPath, tt.query)
+			if result != tt.expected {
+				t.Errorf("ValidateQueryParams(%q, %q) = %v, expected %v",
+					tt.urlPath, tt.query, result, tt.expected)
 			}
 		})
 	}
