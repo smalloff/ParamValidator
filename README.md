@@ -90,10 +90,10 @@ func main() {
 	fmt.Println(pv.ValidateURL("/admin/settings?access=admin")) // true
 
 
-	urlPath := "/api/v1/users"
+	urlPath := "/products"
 	queryString := "page=5&limit=10&invalid=param"
 
 	// Fast filter
-	filteredQuery := pv.FilterQueryParams(urlPath, queryString) // page=5&limit=10
+	filteredQuery := pv.FilterQueryParams(urlPath, queryString) // page=5
 }
 ```
