@@ -77,4 +77,11 @@ func main() {
 	// Wildcard rules
 	fmt.Println(pv.ValidateURL("/admin/users?access=admin"))    // true
 	fmt.Println(pv.ValidateURL("/admin/settings?access=admin")) // true
+
+
+	urlPath := "/api/v1/users"
+	queryString := "page=5&limit=10&invalid=param"
+
+	// Fast filter
+	filteredQuery := pv.FilterQueryParams(urlPath, queryString) // page=5&limit=10
 }

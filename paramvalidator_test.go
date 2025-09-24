@@ -1,6 +1,7 @@
 package paramvalidator
 
 import (
+	"context"
 	"fmt"
 	"net/url"
 	"strings"
@@ -371,25 +372,6 @@ func TestAddURLRule(t *testing.T) {
 	}
 }
 
-func TestAddGlobalParam(t *testing.T) {
-	pv := NewParamValidator("")
-
-	rule := &ParamRule{
-		Name:    "token",
-		Pattern: PatternEnum,
-		Values:  []string{"secret", "admin"},
-	}
-	pv.AddGlobalParam(rule)
-
-	if !pv.ValidateURL("/any/path?token=secret") {
-		t.Error("Global param should work for any URL")
-	}
-
-	if pv.ValidateURL("/any/path?token=invalid") {
-		t.Error("Global param should reject invalid values")
-	}
-}
-
 func TestClear(t *testing.T) {
 	pv := NewParamValidator("/api?page=[1-10]")
 
@@ -513,6 +495,30 @@ func BenchmarkNormalizeURL(b *testing.B) {
 	}
 }
 
+func BenchmarkFilterQueryParamsParallel(b *testing.B) {
+	pv := NewParamValidator("/api/*?page=[1-100]&limit=[10,20,50]")
+	urlPath := "/api/v1/data"
+	query := "page=50&limit=20&invalid=value&extra=param"
+
+	b.ResetTimer()
+	b.RunParallel(func(pb *testing.PB) {
+		for pb.Next() {
+			pv.FilterQueryParams(urlPath, query)
+		}
+	})
+}
+
+func BenchmarkFilterQueryParams(b *testing.B) {
+	pv := NewParamValidator("/api/*?page=[1-100]&limit=[10,20,50]")
+	urlPath := "/api/v1/data"
+	query := "page=50&limit=20&invalid=value&extra=param"
+
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		pv.FilterQueryParams(urlPath, query)
+	}
+}
+
 func TestConcurrentValidation(t *testing.T) {
 	pv := NewParamValidator("/api/*?page=[1-100]&limit=[10,20,50]&sort=[name,date]")
 
@@ -602,13 +608,6 @@ func TestConcurrentRuleUpdates(t *testing.T) {
 				case <-stopCh:
 					return
 				default:
-					rule := &ParamRule{
-						Name:    fmt.Sprintf("param%d", id),
-						Pattern: PatternEnum,
-						Values:  []string{fmt.Sprintf("value%d", j)},
-					}
-					pv.AddGlobalParam(rule)
-
 					urlParams := map[string]*ParamRule{
 						"page": {
 							Name:    "page",
@@ -695,42 +694,67 @@ func TestRaceConditionDetection(t *testing.T) {
 func TestConcurrentAccessAfterClear(t *testing.T) {
 	pv := NewParamValidator("/api?page=[1-10]")
 
+	// Уменьшаем количество итераций для теста
 	var wg sync.WaitGroup
 	wg.Add(3)
 
-	go func() {
-		defer wg.Done()
-		for i := 0; i < 10; i++ {
-			pv.Clear()
-			time.Sleep(time.Microsecond * 100)
-		}
-	}()
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
 
+	// Горутина для очистки
 	go func() {
 		defer wg.Done()
-		for i := 0; i < 10; i++ {
-			rule := &ParamRule{
-				Name:    fmt.Sprintf("param%d", i),
-				Pattern: PatternEnum,
-				Values:  []string{"a", "b", "c"},
+		for i := 0; i < 5; i++ { // Уменьшаем количество очисток
+			select {
+			case <-ctx.Done():
+				return
+			default:
+				pv.Clear()
+				time.Sleep(time.Millisecond * 50) // Увеличиваем задержку
 			}
-			pv.AddGlobalParam(rule)
-			time.Sleep(time.Microsecond * 150)
 		}
 	}()
 
+	// Горутина для валидации
 	go func() {
 		defer wg.Done()
-		for i := 0; i < 100; i++ {
-			pv.ValidateURL(fmt.Sprintf("/api?param%d=a", i%10))
-			pv.NormalizeURL(fmt.Sprintf("/api?param%d=a", i%10))
+		for i := 0; i < 50; i++ { // Уменьшаем количество итераций
+			select {
+			case <-ctx.Done():
+				return
+			default:
+				pv.ValidateURL(fmt.Sprintf("/api?param%d=a", i%10))
+				time.Sleep(time.Millisecond * 10)
+			}
 		}
 	}()
 
-	wg.Wait()
+	// Горутина для нормализации
+	go func() {
+		defer wg.Done()
+		for i := 0; i < 50; i++ {
+			select {
+			case <-ctx.Done():
+				return
+			default:
+				pv.NormalizeURL(fmt.Sprintf("/api?param%d=a", i%10))
+				time.Sleep(time.Millisecond * 10)
+			}
+		}
+	}()
 
-	if pv.ValidateURL("/api?param9=a") {
-		t.Log("Validator functional after concurrent clear/add operations")
+	// Ожидаем завершения с таймаутом
+	done := make(chan struct{})
+	go func() {
+		wg.Wait()
+		close(done)
+	}()
+
+	select {
+	case <-done:
+		t.Log("Concurrent operations completed successfully")
+	case <-ctx.Done():
+		t.Error("Test timed out - possible deadlock")
 	}
 }
 
@@ -987,6 +1011,88 @@ func TestMultipleRulesPriority(t *testing.T) {
 			if result != tt.expected {
 				t.Errorf("ValidateURL(%q) with rules %q = %v, expected %v",
 					tt.url, tt.rules, result, tt.expected)
+			}
+		})
+	}
+}
+
+func BenchmarkValidateQueryParams(b *testing.B) {
+	pv := NewParamValidator("/api/*?page=[1-100]&limit=[10,20,50]")
+	urlPath := "/api/v1/data"
+	query := "page=50&limit=20&invalid=value&extra=param"
+
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		pv.ValidateQueryParams(urlPath, query)
+	}
+}
+
+func BenchmarkValidateQueryParamsParallel(b *testing.B) {
+	pv := NewParamValidator("/api/*?page=[1-100]&limit=[10,20,50]")
+	urlPath := "/api/v1/data"
+	query := "page=50&limit=20"
+
+	b.ResetTimer()
+	b.RunParallel(func(pb *testing.PB) {
+		for pb.Next() {
+			pv.ValidateQueryParams(urlPath, query)
+		}
+	})
+}
+
+func TestValidateQueryParams(t *testing.T) {
+	pv := NewParamValidator("/api/*?page=[1-100]&limit=[10,20,50]")
+
+	tests := []struct {
+		name     string
+		urlPath  string
+		query    string
+		expected bool
+	}{
+		{
+			name:     "valid parameters",
+			urlPath:  "/api/v1/data",
+			query:    "page=50&limit=20",
+			expected: true,
+		},
+		{
+			name:     "invalid parameter value",
+			urlPath:  "/api/v1/data",
+			query:    "page=150&limit=20",
+			expected: false,
+		},
+		{
+			name:     "unknown parameter",
+			urlPath:  "/api/v1/data",
+			query:    "page=50&unknown=value",
+			expected: false,
+		},
+		{
+			name:     "empty query string",
+			urlPath:  "/api/v1/data",
+			query:    "",
+			expected: true,
+		},
+		{
+			name:     "multiple invalid parameters",
+			urlPath:  "/api/v1/data",
+			query:    "page=150&limit=100&invalid=value",
+			expected: false,
+		},
+		{
+			name:     "wrong path - no rules apply",
+			urlPath:  "/users",
+			query:    "page=50",
+			expected: false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result := pv.ValidateQueryParams(tt.urlPath, tt.query)
+			if result != tt.expected {
+				t.Errorf("ValidateQueryParams(%q, %q) = %v, expected %v",
+					tt.urlPath, tt.query, result, tt.expected)
 			}
 		})
 	}

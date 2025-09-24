@@ -17,9 +17,8 @@ const (
 	PatternAny     = "any"
 	PatternAll     = "*"
 
-	// Security limits
-	MaxRulesSize       = 64 * 1024 // 64KB
-	MaxURLLength       = 4096      // 4KB
+	MaxRulesSize       = 64 * 1024
+	MaxURLLength       = 4096
 	MaxPatternLength   = 200
 	MaxParamNameLength = 100
 	MaxParamValues     = 100
@@ -38,19 +37,29 @@ type URLRule struct {
 	Params     map[string]*ParamRule
 }
 
-type ParamValidator struct {
-	mu           sync.RWMutex
+type CompiledRules struct {
 	globalParams map[string]*ParamRule
 	urlRules     map[string]*URLRule
-	rulesStr     string
-	initialized  bool
 }
 
+type ParamValidator struct {
+	mu            sync.RWMutex
+	globalParams  map[string]*ParamRule
+	urlRules      map[string]*URLRule
+	rulesStr      string
+	initialized   bool
+	compiledRules *CompiledRules
+}
+
+// NewParamValidator creates a new parameter validator with optional initial rules
+// rulesStr: String containing validation rules in specific format
+// Returns initialized ParamValidator instance
 func NewParamValidator(rulesStr string) *ParamValidator {
 	pv := &ParamValidator{
-		globalParams: make(map[string]*ParamRule),
-		urlRules:     make(map[string]*URLRule),
-		initialized:  true,
+		globalParams:  make(map[string]*ParamRule),
+		urlRules:      make(map[string]*URLRule),
+		compiledRules: &CompiledRules{},
+		initialized:   true,
 	}
 
 	if rulesStr != "" {
@@ -62,18 +71,20 @@ func NewParamValidator(rulesStr string) *ParamValidator {
 	return pv
 }
 
+// validateInputSize checks if input size exceeds allowed limits
 func (pv *ParamValidator) validateInputSize(input string, maxSize int) error {
 	if len(input) > maxSize {
 		return fmt.Errorf("input size %d exceeds maximum allowed size %d", len(input), maxSize)
 	}
 
-	if len(input) > 10*1024*1024 { // 10MB
+	if len(input) > 10*1024*1024 {
 		return fmt.Errorf("input size exceeds absolute maximum")
 	}
 
 	return nil
 }
 
+// sanitizeParamName validates and cleans parameter name
 func (pv *ParamValidator) sanitizeParamName(name string) (string, error) {
 	name = strings.TrimSpace(name)
 	if name == "" {
@@ -90,8 +101,8 @@ func (pv *ParamValidator) sanitizeParamName(name string) (string, error) {
 	return name, nil
 }
 
+// isValidParamName checks if parameter name contains only allowed characters
 func (pv *ParamValidator) isValidParamName(name string) bool {
-	// Разрешаем только буквы, цифры, дефисы и подчеркивания
 	for _, char := range name {
 		if !((char >= 'a' && char <= 'z') ||
 			(char >= 'A' && char <= 'Z') ||
@@ -103,12 +114,14 @@ func (pv *ParamValidator) isValidParamName(name string) bool {
 	return true
 }
 
+// ParseRules parses and loads validation rules from string
+// rulesStr: String containing validation rules in specific format
+// Returns error if parsing fails
 func (pv *ParamValidator) ParseRules(rulesStr string) error {
 	if !pv.initialized {
 		return fmt.Errorf("validator not initialized")
 	}
 
-	// Разрешаем пустую строку правил - это означает очистку
 	if rulesStr == "" {
 		pv.mu.Lock()
 		defer pv.mu.Unlock()
@@ -123,9 +136,49 @@ func (pv *ParamValidator) ParseRules(rulesStr string) error {
 	pv.mu.Lock()
 	defer pv.mu.Unlock()
 
-	return pv.parseRulesUnsafe(rulesStr)
+	if err := pv.parseRulesUnsafe(rulesStr); err != nil {
+		return err
+	}
+
+	pv.compileRulesUnsafe()
+	return nil
 }
 
+// compileRulesUnsafe compiles rules for faster access
+func (pv *ParamValidator) compileRulesUnsafe() {
+	pv.compiledRules = &CompiledRules{
+		globalParams: make(map[string]*ParamRule),
+		urlRules:     make(map[string]*URLRule),
+	}
+
+	for name, rule := range pv.globalParams {
+		pv.compiledRules.globalParams[name] = pv.copyParamRuleUnsafe(rule)
+	}
+
+	for pattern, rule := range pv.urlRules {
+		pv.compiledRules.urlRules[pattern] = pv.copyURLRuleUnsafe(rule)
+	}
+}
+
+// copyURLRuleUnsafe creates a deep copy of URLRule
+func (pv *ParamValidator) copyURLRuleUnsafe(rule *URLRule) *URLRule {
+	if rule == nil {
+		return nil
+	}
+
+	ruleCopy := &URLRule{
+		URLPattern: rule.URLPattern,
+		Params:     make(map[string]*ParamRule),
+	}
+
+	for paramName, paramRule := range rule.Params {
+		ruleCopy.Params[paramName] = pv.copyParamRuleUnsafe(paramRule)
+	}
+
+	return ruleCopy
+}
+
+// parseRulesUnsafe parses rules string without locking
 func (pv *ParamValidator) parseRulesUnsafe(rulesStr string) error {
 	if rulesStr == "" {
 		pv.clearUnsafe()
@@ -154,6 +207,7 @@ const (
 	RuleTypeURL
 )
 
+// detectRuleType determines the type of rules in the string
 func (pv *ParamValidator) detectRuleType(rulesStr string) RuleType {
 	cleanRulesStr := strings.ReplaceAll(rulesStr, " ", "")
 
@@ -172,6 +226,7 @@ func (pv *ParamValidator) detectRuleType(rulesStr string) RuleType {
 	return RuleTypeGlobal
 }
 
+// parseGlobalParamsUnsafe parses global parameter rules
 func (pv *ParamValidator) parseGlobalParamsUnsafe(rulesStr string) error {
 	rules := pv.splitRules(rulesStr, '&')
 
@@ -193,6 +248,7 @@ func (pv *ParamValidator) parseGlobalParamsUnsafe(rulesStr string) error {
 	return nil
 }
 
+// parseURLRulesUnsafe parses URL-specific rules
 func (pv *ParamValidator) parseURLRulesUnsafe(rulesStr string) error {
 	urlRuleStrings := pv.splitURLRules(rulesStr)
 
@@ -233,6 +289,7 @@ func (pv *ParamValidator) parseURLRulesUnsafe(rulesStr string) error {
 	return nil
 }
 
+// splitRules splits rules string considering bracket nesting
 func (pv *ParamValidator) splitRules(rulesStr string, separator byte) []string {
 	var result []string
 	var current strings.Builder
@@ -274,6 +331,7 @@ func (pv *ParamValidator) splitRules(rulesStr string, separator byte) []string {
 	return result
 }
 
+// splitURLRules splits URL rules string by semicolon or returns single rule
 func (pv *ParamValidator) splitURLRules(rulesStr string) []string {
 	var builder strings.Builder
 	builder.Grow(len(rulesStr))
@@ -292,6 +350,7 @@ func (pv *ParamValidator) splitURLRules(rulesStr string) []string {
 	return []string{rulesStr}
 }
 
+// extractURLAndParams separates URL pattern from parameters string
 func (pv *ParamValidator) extractURLAndParams(urlRuleStr string) (string, string) {
 	cleanStr := strings.ReplaceAll(urlRuleStr, " ", "")
 
@@ -330,6 +389,7 @@ func (pv *ParamValidator) extractURLAndParams(urlRuleStr string) (string, string
 	return "", urlRuleStr
 }
 
+// normalizeURLPattern cleans and standardizes URL pattern
 func (pv *ParamValidator) normalizeURLPattern(pattern string) string {
 	pattern = strings.TrimSpace(pattern)
 	if pattern == "" {
@@ -351,6 +411,7 @@ func (pv *ParamValidator) normalizeURLPattern(pattern string) string {
 	return cleaned
 }
 
+// parseParamsStringUnsafe parses parameters string into map of rules
 func (pv *ParamValidator) parseParamsStringUnsafe(paramsStr string) (map[string]*ParamRule, error) {
 	params := make(map[string]*ParamRule)
 
@@ -381,6 +442,7 @@ func (pv *ParamValidator) parseParamsStringUnsafe(paramsStr string) (map[string]
 	return params, nil
 }
 
+// parseSingleParamRuleUnsafe parses single parameter rule
 func (pv *ParamValidator) parseSingleParamRuleUnsafe(ruleStr string) (*ParamRule, error) {
 	ruleStr = strings.TrimSpace(ruleStr)
 	if ruleStr == "" {
@@ -407,6 +469,7 @@ func (pv *ParamValidator) parseSingleParamRuleUnsafe(ruleStr string) (*ParamRule
 	return pv.parseComplexParamRule(ruleStr, startBracket)
 }
 
+// parseSimpleParamRule parses simple parameter rule without brackets
 func (pv *ParamValidator) parseSimpleParamRule(ruleStr string) (*ParamRule, error) {
 	if strings.Contains(ruleStr, "=") {
 		paramName := strings.Split(ruleStr, "=")[0]
@@ -435,6 +498,7 @@ func (pv *ParamValidator) parseSimpleParamRule(ruleStr string) (*ParamRule, erro
 	}, nil
 }
 
+// parseComplexParamRule parses parameter rule with bracket constraints
 func (pv *ParamValidator) parseComplexParamRule(ruleStr string, startBracket int) (*ParamRule, error) {
 	paramName := strings.TrimSpace(ruleStr[:startBracket])
 	if strings.HasSuffix(paramName, "=") {
@@ -462,6 +526,7 @@ func (pv *ParamValidator) parseComplexParamRule(ruleStr string, startBracket int
 	return pv.createParamRule(paramName, constraintStr)
 }
 
+// extractConstraint extracts content between brackets
 func (pv *ParamValidator) extractConstraint(ruleStr string, startBracket int) (string, int) {
 	bracketDepth := 1
 	endBracket := -1
@@ -485,6 +550,7 @@ func (pv *ParamValidator) extractConstraint(ruleStr string, startBracket int) (s
 	return strings.TrimSpace(ruleStr[startBracket+1 : endBracket]), endBracket
 }
 
+// createParamRule creates ParamRule from name and constraint
 func (pv *ParamValidator) createParamRule(paramName, constraintStr string) (*ParamRule, error) {
 	rule := &ParamRule{Name: paramName}
 
@@ -509,10 +575,12 @@ func (pv *ParamValidator) createParamRule(paramName, constraintStr string) (*Par
 	return rule, nil
 }
 
+// isRangeConstraint checks if constraint string represents a range
 func (pv *ParamValidator) isRangeConstraint(constraintStr string) bool {
 	return strings.Contains(constraintStr, "-") && !strings.Contains(constraintStr, ",")
 }
 
+// parseRangeConstraint parses range constraint into rule
 func (pv *ParamValidator) parseRangeConstraint(rule *ParamRule, constraintStr string) error {
 	parts := strings.Split(constraintStr, "-")
 	if len(parts) != 2 {
@@ -550,6 +618,7 @@ func (pv *ParamValidator) parseRangeConstraint(rule *ParamRule, constraintStr st
 	return nil
 }
 
+// parseEnumConstraint parses enum constraint into rule
 func (pv *ParamValidator) parseEnumConstraint(rule *ParamRule, constraintStr string) error {
 	values := strings.Split(constraintStr, ",")
 	if len(values) > MaxParamValues {
@@ -573,6 +642,9 @@ func (pv *ParamValidator) parseEnumConstraint(rule *ParamRule, constraintStr str
 	return nil
 }
 
+// ValidateURL validates complete URL against loaded rules
+// fullURL: Complete URL to validate including query parameters
+// Returns true if URL and all parameters are valid according to rules
 func (pv *ParamValidator) ValidateURL(fullURL string) bool {
 	if pv == nil || !pv.initialized || fullURL == "" {
 		return false
@@ -588,6 +660,7 @@ func (pv *ParamValidator) ValidateURL(fullURL string) bool {
 	return pv.validateURLUnsafe(fullURL)
 }
 
+// validateURLUnsafe validates URL without locking
 func (pv *ParamValidator) validateURLUnsafe(fullURL string) bool {
 	u, err := url.Parse(fullURL)
 	if err != nil {
@@ -611,10 +684,12 @@ func (pv *ParamValidator) validateURLUnsafe(fullURL string) bool {
 	return pv.validateQueryParamsUnsafe(u.Query(), paramsRules)
 }
 
+// isAllowAllParams checks if rules allow all parameters
 func (pv *ParamValidator) isAllowAllParams(paramsRules map[string]*ParamRule) bool {
 	return paramsRules != nil && paramsRules[PatternAll] != nil
 }
 
+// validateQueryParamsUnsafe validates query parameters against rules
 func (pv *ParamValidator) validateQueryParamsUnsafe(queryParams url.Values, urlParams map[string]*ParamRule) bool {
 	for paramName, values := range queryParams {
 		rule := pv.findParamRule(paramName, urlParams)
@@ -630,18 +705,20 @@ func (pv *ParamValidator) validateQueryParamsUnsafe(queryParams url.Values, urlP
 	return true
 }
 
+// findParamRule finds matching rule for parameter name
 func (pv *ParamValidator) findParamRule(paramName string, urlParams map[string]*ParamRule) *ParamRule {
 	if rule, exists := urlParams[paramName]; exists {
 		return rule
 	}
 
-	if rule, exists := pv.globalParams[paramName]; exists {
+	if rule, exists := pv.compiledRules.globalParams[paramName]; exists {
 		return rule
 	}
 
 	return nil
 }
 
+// validateParamValues validates parameter values against rule
 func (pv *ParamValidator) validateParamValues(rule *ParamRule, values []string) bool {
 	for _, value := range values {
 		if !pv.isValueValidUnsafe(rule, value) {
@@ -651,18 +728,20 @@ func (pv *ParamValidator) validateParamValues(rule *ParamRule, values []string) 
 	return true
 }
 
+// getParamsForURLUnsafe gets all applicable parameter rules for URL path
 func (pv *ParamValidator) getParamsForURLUnsafe(urlPath string) map[string]*ParamRule {
 	urlPath = pv.normalizeURLPattern(urlPath)
 
 	mostSpecificRule := pv.findMostSpecificURLRuleUnsafe(urlPath)
 
 	result := make(map[string]*ParamRule)
+	//result := make(map[string]*ParamRule, len(pv.compiledRules.globalParams)+10)
 
-	for name, rule := range pv.globalParams {
+	for name, rule := range pv.compiledRules.globalParams {
 		result[name] = rule
 	}
 
-	for pattern, rule := range pv.urlRules {
+	for pattern, rule := range pv.compiledRules.urlRules {
 		if pv.urlMatchesPatternUnsafe(urlPath, pattern) {
 			for paramName, paramRule := range rule.Params {
 				result[paramName] = paramRule
@@ -679,11 +758,12 @@ func (pv *ParamValidator) getParamsForURLUnsafe(urlPath string) map[string]*Para
 	return result
 }
 
+// findMostSpecificURLRuleUnsafe finds most specific matching URL rule
 func (pv *ParamValidator) findMostSpecificURLRuleUnsafe(urlPath string) *URLRule {
 	var mostSpecificRule *URLRule
 	maxSpecificity := -1
 
-	for pattern, rule := range pv.urlRules {
+	for pattern, rule := range pv.compiledRules.urlRules {
 		if pv.urlMatchesPatternUnsafe(urlPath, pattern) {
 			specificity := pv.calculateSpecificityUnsafe(pattern)
 			if specificity > maxSpecificity {
@@ -696,6 +776,7 @@ func (pv *ParamValidator) findMostSpecificURLRuleUnsafe(urlPath string) *URLRule
 	return mostSpecificRule
 }
 
+// calculateSpecificityUnsafe calculates specificity score for URL pattern
 func (pv *ParamValidator) calculateSpecificityUnsafe(pattern string) int {
 	if pattern == PatternAll {
 		return 0
@@ -736,6 +817,7 @@ func (pv *ParamValidator) calculateSpecificityUnsafe(pattern string) int {
 	return specificity
 }
 
+// urlMatchesPatternUnsafe checks if URL path matches pattern
 func (pv *ParamValidator) urlMatchesPatternUnsafe(urlPath, pattern string) bool {
 	urlPath = pv.normalizeURLPattern(urlPath)
 
@@ -759,6 +841,7 @@ func (pv *ParamValidator) urlMatchesPatternUnsafe(urlPath, pattern string) bool 
 	return pattern == urlPath
 }
 
+// wildcardMatch performs wildcard pattern matching
 func (pv *ParamValidator) wildcardMatch(urlPath, pattern string) bool {
 	maxSegments := 50
 	maxSegmentLength := 200
@@ -788,6 +871,7 @@ func (pv *ParamValidator) wildcardMatch(urlPath, pattern string) bool {
 	return true
 }
 
+// isValueValidUnsafe checks if value is valid according to rule
 func (pv *ParamValidator) isValueValidUnsafe(rule *ParamRule, value string) bool {
 	switch rule.Pattern {
 	case PatternKeyOnly:
@@ -809,6 +893,11 @@ func (pv *ParamValidator) isValueValidUnsafe(rule *ParamRule, value string) bool
 	}
 }
 
+// ValidateParam validates single parameter value for specific URL path
+// urlPath: URL path to match against rules
+// paramName: Name of parameter to validate
+// paramValue: Value of parameter to validate
+// Returns true if parameter is allowed and value is valid
 func (pv *ParamValidator) ValidateParam(urlPath, paramName, paramValue string) bool {
 	if !pv.initialized || urlPath == "" || paramName == "" {
 		return false
@@ -824,6 +913,7 @@ func (pv *ParamValidator) ValidateParam(urlPath, paramName, paramValue string) b
 	return pv.validateParamUnsafe(urlPath, paramName, paramValue)
 }
 
+// validateParamUnsafe validates single parameter without locking
 func (pv *ParamValidator) validateParamUnsafe(urlPath, paramName, paramValue string) bool {
 	paramsRules := pv.getParamsForURLUnsafe(urlPath)
 	rule := pv.findParamRule(paramName, paramsRules)
@@ -835,6 +925,9 @@ func (pv *ParamValidator) validateParamUnsafe(urlPath, paramName, paramValue str
 	return pv.isValueValidUnsafe(rule, paramValue)
 }
 
+// NormalizeURL filters and normalizes URL according to validation rules
+// fullURL: Complete URL to normalize
+// Returns normalized URL with only allowed parameters and values
 func (pv *ParamValidator) NormalizeURL(fullURL string) string {
 	if pv == nil || !pv.initialized || fullURL == "" {
 		return fullURL
@@ -850,6 +943,7 @@ func (pv *ParamValidator) NormalizeURL(fullURL string) string {
 	return pv.normalizeURLUnsafe(fullURL)
 }
 
+// filterParamValues filters parameter values according to rule
 func (pv *ParamValidator) filterParamValues(rule *ParamRule, values []string) []string {
 	var allowed []string
 	for _, value := range values {
@@ -860,6 +954,7 @@ func (pv *ParamValidator) filterParamValues(rule *ParamRule, values []string) []
 	return allowed
 }
 
+// normalizeURLUnsafe normalizes URL without locking
 func (pv *ParamValidator) normalizeURLUnsafe(fullURL string) string {
 	u, err := url.Parse(fullURL)
 	if err != nil {
@@ -872,7 +967,7 @@ func (pv *ParamValidator) normalizeURLUnsafe(fullURL string) string {
 		return fullURL
 	}
 
-	if len(paramsRules) == 0 && len(pv.globalParams) == 0 {
+	if len(paramsRules) == 0 && len(pv.compiledRules.globalParams) == 0 {
 		return u.Path
 	}
 
@@ -886,6 +981,7 @@ func (pv *ParamValidator) normalizeURLUnsafe(fullURL string) string {
 	return u.Path
 }
 
+// filterQueryParamsUnsafe filters query parameters string for URL path
 func (pv *ParamValidator) filterQueryParamsUnsafe(urlPath, queryString string) string {
 	paramsRules := pv.getParamsForURLUnsafe(urlPath)
 
@@ -893,7 +989,7 @@ func (pv *ParamValidator) filterQueryParamsUnsafe(urlPath, queryString string) s
 		return queryString
 	}
 
-	if len(paramsRules) == 0 && len(pv.globalParams) == 0 {
+	if len(paramsRules) == 0 && len(pv.compiledRules.globalParams) == 0 {
 		return ""
 	}
 
@@ -905,6 +1001,7 @@ func (pv *ParamValidator) filterQueryParamsUnsafe(urlPath, queryString string) s
 	return pv.filterQueryParamsValuesUnsafe(params, paramsRules)
 }
 
+// filterQueryParamsValuesUnsafe filters parameter values and returns query string
 func (pv *ParamValidator) filterQueryParamsValuesUnsafe(params url.Values, urlParams map[string]*ParamRule) string {
 	var filtered []string
 
@@ -928,6 +1025,7 @@ func (pv *ParamValidator) filterQueryParamsValuesUnsafe(params url.Values, urlPa
 	return strings.Join(filtered, "&")
 }
 
+// filterQueryParamsUnsafeValues filters query parameters and returns url.Values
 func (pv *ParamValidator) filterQueryParamsUnsafeValues(queryParams url.Values, paramsRules map[string]*ParamRule) url.Values {
 	filtered := url.Values{}
 
@@ -946,6 +1044,10 @@ func (pv *ParamValidator) filterQueryParamsUnsafeValues(queryParams url.Values, 
 	return filtered
 }
 
+// FilterQueryParams filters query parameters string according to validation rules
+// urlPath: URL path to match against rules
+// queryString: Query parameters string to filter
+// Returns filtered query parameters string containing only allowed parameters and values
 func (pv *ParamValidator) FilterQueryParams(urlPath, queryString string) string {
 	if !pv.initialized || queryString == "" {
 		return ""
@@ -961,12 +1063,47 @@ func (pv *ParamValidator) FilterQueryParams(urlPath, queryString string) string 
 	return pv.filterQueryParamsUnsafe(urlPath, queryString)
 }
 
+// ValidateQueryParams validates query parameters string for URL path
+// urlPath: URL path to match against rules
+// queryString: Query parameters string to validate
+// Returns true if all parameters and values are valid according to rules
+func (pv *ParamValidator) ValidateQueryParams(urlPath, queryString string) bool {
+	if !pv.initialized || urlPath == "" {
+		return false
+	}
+
+	if err := pv.validateInputSize(urlPath, MaxURLLength); err != nil {
+		return false
+	}
+
+	if err := pv.validateInputSize(queryString, MaxURLLength); err != nil {
+		return false
+	}
+
+	if queryString == "" {
+		return true
+	}
+
+	fullURL := urlPath
+	if queryString != "" {
+		fullURL = urlPath + "?" + queryString
+	}
+
+	return pv.ValidateURL(fullURL)
+}
+
+// clearUnsafe clears all rules without locking
 func (pv *ParamValidator) clearUnsafe() {
 	pv.globalParams = make(map[string]*ParamRule)
 	pv.urlRules = make(map[string]*URLRule)
 	pv.rulesStr = ""
+	pv.compiledRules = &CompiledRules{
+		globalParams: make(map[string]*ParamRule),
+		urlRules:     make(map[string]*URLRule),
+	}
 }
 
+// Clear removes all validation rules
 func (pv *ParamValidator) Clear() {
 	pv.mu.Lock()
 	defer pv.mu.Unlock()
@@ -974,6 +1111,7 @@ func (pv *ParamValidator) Clear() {
 	pv.clearUnsafe()
 }
 
+// copyParamRuleUnsafe creates deep copy of ParamRule
 func (pv *ParamValidator) copyParamRuleUnsafe(rule *ParamRule) *ParamRule {
 	if rule == nil {
 		return nil
@@ -994,6 +1132,9 @@ func (pv *ParamValidator) copyParamRuleUnsafe(rule *ParamRule) *ParamRule {
 	return ruleCopy
 }
 
+// AddURLRule adds URL-specific validation rule
+// urlPattern: URL pattern to match (supports wildcards)
+// params: Map of parameter rules for this URL pattern
 func (pv *ParamValidator) AddURLRule(urlPattern string, params map[string]*ParamRule) {
 	if urlPattern == "" || len(params) == 0 {
 		return
@@ -1019,9 +1160,11 @@ func (pv *ParamValidator) AddURLRule(urlPattern string, params map[string]*Param
 		URLPattern: urlPattern,
 		Params:     paramsCopy,
 	}
+	pv.compileRulesUnsafe()
 	pv.updateRulesStringUnsafe()
 }
 
+// updateRulesStringUnsafe updates internal rules string representation
 func (pv *ParamValidator) updateRulesStringUnsafe() {
 	var rules []string
 
@@ -1047,47 +1190,72 @@ func (pv *ParamValidator) updateRulesStringUnsafe() {
 	sort.Strings(urlRulesList)
 
 	if len(rules) > 0 && len(urlRulesList) > 0 {
-		pv.rulesStr = strings.Join(rules, "&") + "; " + strings.Join(urlRulesList, "; ")
+		pv.rulesStr = strings.Join(rules, ";") + ";" + strings.Join(urlRulesList, ";")
 	} else if len(rules) > 0 {
-		pv.rulesStr = strings.Join(rules, "&")
+		pv.rulesStr = strings.Join(rules, ";")
 	} else if len(urlRulesList) > 0 {
-		pv.rulesStr = strings.Join(urlRulesList, "; ")
+		pv.rulesStr = strings.Join(urlRulesList, ";")
 	} else {
 		pv.rulesStr = ""
 	}
 }
 
+// paramRuleToStringUnsafe converts ParamRule to string representation
 func (pv *ParamValidator) paramRuleToStringUnsafe(rule *ParamRule) string {
 	if rule == nil {
 		return ""
 	}
 
-	if rule.Name == "*" && rule.Pattern == "any" {
-		return "*"
-	}
-
 	switch rule.Pattern {
-	case "key-only":
+	case PatternKeyOnly:
 		return rule.Name + "=[]"
-	case "any":
-		return rule.Name + "=[*]"
-	case "range":
+	case PatternAny:
+		return rule.Name
+	case PatternRange:
 		return fmt.Sprintf("%s=[%d-%d]", rule.Name, rule.Min, rule.Max)
-	case "enum":
-		return rule.Name + "=[" + strings.Join(rule.Values, ",") + "]"
+	case PatternEnum:
+		if len(rule.Values) == 1 {
+			return fmt.Sprintf("%s=[%s]", rule.Name, rule.Values[0])
+		}
+		return fmt.Sprintf("%s=[%s]", rule.Name, strings.Join(rule.Values, ","))
 	default:
 		return rule.Name
 	}
 }
 
-func (pv *ParamValidator) AddGlobalParam(rule *ParamRule) {
-	if rule == nil || rule.Name == "" {
-		return
+// GetRules returns current validation rules as string
+func (pv *ParamValidator) GetRules() string {
+	pv.mu.RLock()
+	defer pv.mu.RUnlock()
+
+	return pv.rulesStr
+}
+
+// GetURLRules returns all URL-specific rules
+func (pv *ParamValidator) GetURLRules() map[string]*URLRule {
+	pv.mu.RLock()
+	defer pv.mu.RUnlock()
+
+	rules := make(map[string]*URLRule)
+	for k, v := range pv.urlRules {
+		rules[k] = pv.copyURLRuleUnsafe(v)
 	}
+	return rules
+}
 
-	pv.mu.Lock()
-	defer pv.mu.Unlock()
+// GetGlobalParams returns all global parameter rules
+func (pv *ParamValidator) GetGlobalParams() map[string]*ParamRule {
+	pv.mu.RLock()
+	defer pv.mu.RUnlock()
 
-	pv.globalParams[rule.Name] = pv.copyParamRuleUnsafe(rule)
-	pv.updateRulesStringUnsafe()
+	params := make(map[string]*ParamRule)
+	for k, v := range pv.globalParams {
+		params[k] = pv.copyParamRuleUnsafe(v)
+	}
+	return params
+}
+
+// IsInitialized checks if validator is properly initialized
+func (pv *ParamValidator) IsInitialized() bool {
+	return pv != nil && pv.initialized
 }
