@@ -38,19 +38,27 @@ type URLRule struct {
 	Params     map[string]*ParamRule
 }
 
-type ParamValidator struct {
-	mu           sync.RWMutex
+// CompiledRules содержит предварительно обработанные правила для быстрого доступа
+type CompiledRules struct {
 	globalParams map[string]*ParamRule
 	urlRules     map[string]*URLRule
-	rulesStr     string
-	initialized  bool
+}
+
+type ParamValidator struct {
+	mu            sync.RWMutex
+	globalParams  map[string]*ParamRule
+	urlRules      map[string]*URLRule
+	rulesStr      string
+	initialized   bool
+	compiledRules *CompiledRules // Скомпилированные правила для быстрого доступа
 }
 
 func NewParamValidator(rulesStr string) *ParamValidator {
 	pv := &ParamValidator{
-		globalParams: make(map[string]*ParamRule),
-		urlRules:     make(map[string]*URLRule),
-		initialized:  true,
+		globalParams:  make(map[string]*ParamRule),
+		urlRules:      make(map[string]*URLRule),
+		compiledRules: &CompiledRules{},
+		initialized:   true,
 	}
 
 	if rulesStr != "" {
@@ -123,7 +131,47 @@ func (pv *ParamValidator) ParseRules(rulesStr string) error {
 	pv.mu.Lock()
 	defer pv.mu.Unlock()
 
-	return pv.parseRulesUnsafe(rulesStr)
+	if err := pv.parseRulesUnsafe(rulesStr); err != nil {
+		return err
+	}
+
+	// Компилируем правила после успешного парсинга
+	pv.compileRulesUnsafe()
+	return nil
+}
+
+func (pv *ParamValidator) compileRulesUnsafe() {
+	pv.compiledRules = &CompiledRules{
+		globalParams: make(map[string]*ParamRule),
+		urlRules:     make(map[string]*URLRule),
+	}
+
+	// Копируем глобальные параметры
+	for name, rule := range pv.globalParams {
+		pv.compiledRules.globalParams[name] = pv.copyParamRuleUnsafe(rule)
+	}
+
+	// Копируем URL правила
+	for pattern, rule := range pv.urlRules {
+		pv.compiledRules.urlRules[pattern] = pv.copyURLRuleUnsafe(rule)
+	}
+}
+
+func (pv *ParamValidator) copyURLRuleUnsafe(rule *URLRule) *URLRule {
+	if rule == nil {
+		return nil
+	}
+
+	ruleCopy := &URLRule{
+		URLPattern: rule.URLPattern,
+		Params:     make(map[string]*ParamRule),
+	}
+
+	for paramName, paramRule := range rule.Params {
+		ruleCopy.Params[paramName] = pv.copyParamRuleUnsafe(paramRule)
+	}
+
+	return ruleCopy
 }
 
 func (pv *ParamValidator) parseRulesUnsafe(rulesStr string) error {
@@ -635,7 +683,7 @@ func (pv *ParamValidator) findParamRule(paramName string, urlParams map[string]*
 		return rule
 	}
 
-	if rule, exists := pv.globalParams[paramName]; exists {
+	if rule, exists := pv.compiledRules.globalParams[paramName]; exists {
 		return rule
 	}
 
@@ -658,11 +706,13 @@ func (pv *ParamValidator) getParamsForURLUnsafe(urlPath string) map[string]*Para
 
 	result := make(map[string]*ParamRule)
 
-	for name, rule := range pv.globalParams {
+	// Добавляем глобальные параметры из скомпилированных правил
+	for name, rule := range pv.compiledRules.globalParams {
 		result[name] = rule
 	}
 
-	for pattern, rule := range pv.urlRules {
+	// Добавляем параметры из URL правил из скомпилированных правил
+	for pattern, rule := range pv.compiledRules.urlRules {
 		if pv.urlMatchesPatternUnsafe(urlPath, pattern) {
 			for paramName, paramRule := range rule.Params {
 				result[paramName] = paramRule
@@ -683,7 +733,7 @@ func (pv *ParamValidator) findMostSpecificURLRuleUnsafe(urlPath string) *URLRule
 	var mostSpecificRule *URLRule
 	maxSpecificity := -1
 
-	for pattern, rule := range pv.urlRules {
+	for pattern, rule := range pv.compiledRules.urlRules {
 		if pv.urlMatchesPatternUnsafe(urlPath, pattern) {
 			specificity := pv.calculateSpecificityUnsafe(pattern)
 			if specificity > maxSpecificity {
@@ -872,7 +922,7 @@ func (pv *ParamValidator) normalizeURLUnsafe(fullURL string) string {
 		return fullURL
 	}
 
-	if len(paramsRules) == 0 && len(pv.globalParams) == 0 {
+	if len(paramsRules) == 0 && len(pv.compiledRules.globalParams) == 0 {
 		return u.Path
 	}
 
@@ -893,7 +943,7 @@ func (pv *ParamValidator) filterQueryParamsUnsafe(urlPath, queryString string) s
 		return queryString
 	}
 
-	if len(paramsRules) == 0 && len(pv.globalParams) == 0 {
+	if len(paramsRules) == 0 && len(pv.compiledRules.globalParams) == 0 {
 		return ""
 	}
 
@@ -965,6 +1015,10 @@ func (pv *ParamValidator) clearUnsafe() {
 	pv.globalParams = make(map[string]*ParamRule)
 	pv.urlRules = make(map[string]*URLRule)
 	pv.rulesStr = ""
+	pv.compiledRules = &CompiledRules{
+		globalParams: make(map[string]*ParamRule),
+		urlRules:     make(map[string]*URLRule),
+	}
 }
 
 func (pv *ParamValidator) Clear() {
@@ -1019,6 +1073,7 @@ func (pv *ParamValidator) AddURLRule(urlPattern string, params map[string]*Param
 		URLPattern: urlPattern,
 		Params:     paramsCopy,
 	}
+	pv.compileRulesUnsafe()
 	pv.updateRulesStringUnsafe()
 }
 
@@ -1089,5 +1144,6 @@ func (pv *ParamValidator) AddGlobalParam(rule *ParamRule) {
 	defer pv.mu.Unlock()
 
 	pv.globalParams[rule.Name] = pv.copyParamRuleUnsafe(rule)
+	pv.compileRulesUnsafe()
 	pv.updateRulesStringUnsafe()
 }
