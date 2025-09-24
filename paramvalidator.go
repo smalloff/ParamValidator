@@ -66,9 +66,6 @@ func (pv *ParamValidator) validateInputSize(input string, maxSize int) error {
 	if len(input) > maxSize {
 		return fmt.Errorf("input size %d exceeds maximum allowed size %d", len(input), maxSize)
 	}
-	if len(input) == 0 {
-		return fmt.Errorf("input cannot be empty")
-	}
 
 	if len(input) > 10*1024*1024 { // 10MB
 		return fmt.Errorf("input size exceeds absolute maximum")
@@ -109,6 +106,14 @@ func (pv *ParamValidator) isValidParamName(name string) bool {
 func (pv *ParamValidator) ParseRules(rulesStr string) error {
 	if !pv.initialized {
 		return fmt.Errorf("validator not initialized")
+	}
+
+	// Разрешаем пустую строку правил - это означает очистку
+	if rulesStr == "" {
+		pv.mu.Lock()
+		defer pv.mu.Unlock()
+		pv.clearUnsafe()
+		return nil
 	}
 
 	if err := pv.validateInputSize(rulesStr, MaxRulesSize); err != nil {
