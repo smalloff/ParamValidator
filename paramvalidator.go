@@ -4,7 +4,6 @@ import (
 	"fmt"
 	"net/url"
 	"path"
-	"regexp"
 	"sort"
 	"strconv"
 	"strings"
@@ -17,6 +16,13 @@ const (
 	PatternKeyOnly = "key-only"
 	PatternAny     = "any"
 	PatternAll     = "*"
+
+	// Security limits
+	MaxRulesSize       = 64 * 1024 // 64KB
+	MaxURLLength       = 4096      // 4KB
+	MaxPatternLength   = 200
+	MaxParamNameLength = 100
+	MaxParamValues     = 100
 )
 
 type ParamRule struct {
@@ -48,17 +54,65 @@ func NewParamValidator(rulesStr string) *ParamValidator {
 	}
 
 	if rulesStr != "" {
-		pv.mu.Lock()
-		_ = pv.parseRulesUnsafe(rulesStr)
-		pv.mu.Unlock()
+		if err := pv.ParseRules(rulesStr); err != nil {
+			fmt.Printf("Warning: Failed to parse initial rules: %v\n", err)
+		}
 	}
 
 	return pv
 }
 
+func (pv *ParamValidator) validateInputSize(input string, maxSize int) error {
+	if len(input) > maxSize {
+		return fmt.Errorf("input size %d exceeds maximum allowed size %d", len(input), maxSize)
+	}
+	if len(input) == 0 {
+		return fmt.Errorf("input cannot be empty")
+	}
+
+	if len(input) > 10*1024*1024 { // 10MB
+		return fmt.Errorf("input size exceeds absolute maximum")
+	}
+
+	return nil
+}
+
+func (pv *ParamValidator) sanitizeParamName(name string) (string, error) {
+	name = strings.TrimSpace(name)
+	if name == "" {
+		return "", fmt.Errorf("parameter name cannot be empty")
+	}
+	if len(name) > MaxParamNameLength {
+		return "", fmt.Errorf("parameter name too long: %d characters", len(name))
+	}
+
+	if !pv.isValidParamName(name) {
+		return "", fmt.Errorf("invalid characters in parameter name: %s", name)
+	}
+
+	return name, nil
+}
+
+func (pv *ParamValidator) isValidParamName(name string) bool {
+	// Разрешаем только буквы, цифры, дефисы и подчеркивания
+	for _, char := range name {
+		if !((char >= 'a' && char <= 'z') ||
+			(char >= 'A' && char <= 'Z') ||
+			(char >= '0' && char <= '9') ||
+			char == '-' || char == '_') {
+			return false
+		}
+	}
+	return true
+}
+
 func (pv *ParamValidator) ParseRules(rulesStr string) error {
 	if !pv.initialized {
 		return fmt.Errorf("validator not initialized")
+	}
+
+	if err := pv.validateInputSize(rulesStr, MaxRulesSize); err != nil {
+		return err
 	}
 
 	pv.mu.Lock()
@@ -216,8 +270,15 @@ func (pv *ParamValidator) splitRules(rulesStr string, separator byte) []string {
 }
 
 func (pv *ParamValidator) splitURLRules(rulesStr string) []string {
-	cleanRulesStr := strings.ReplaceAll(rulesStr, " ", "")
-	cleanRulesStr = strings.ReplaceAll(cleanRulesStr, "\n", "")
+	var builder strings.Builder
+	builder.Grow(len(rulesStr))
+
+	for _, r := range rulesStr {
+		if r != ' ' && r != '\n' {
+			builder.WriteRune(r)
+		}
+	}
+	cleanRulesStr := builder.String()
 
 	if strings.Contains(cleanRulesStr, ";") {
 		return pv.splitRules(rulesStr, ';')
@@ -278,7 +339,11 @@ func (pv *ParamValidator) normalizeURLPattern(pattern string) string {
 		pattern = "/" + pattern
 	}
 
-	return path.Clean(pattern)
+	cleaned := path.Clean(pattern)
+	if cleaned == "." {
+		return "/"
+	}
+	return cleaned
 }
 
 func (pv *ParamValidator) parseParamsStringUnsafe(paramsStr string) (map[string]*ParamRule, error) {
@@ -319,11 +384,12 @@ func (pv *ParamValidator) parseSingleParamRuleUnsafe(ruleStr string) (*ParamRule
 
 	if strings.HasSuffix(ruleStr, "=[]") {
 		paramName := strings.TrimSuffix(ruleStr, "=[]")
-		if paramName == "" {
-			return nil, fmt.Errorf("empty parameter name in key-only rule: %s", ruleStr)
+		paramName, err := pv.sanitizeParamName(paramName)
+		if err != nil {
+			return nil, fmt.Errorf("invalid parameter name in key-only rule: %w", err)
 		}
 		return &ParamRule{
-			Name:    strings.TrimSpace(paramName),
+			Name:    paramName,
 			Pattern: PatternKeyOnly,
 		}, nil
 	}
@@ -339,9 +405,9 @@ func (pv *ParamValidator) parseSingleParamRuleUnsafe(ruleStr string) (*ParamRule
 func (pv *ParamValidator) parseSimpleParamRule(ruleStr string) (*ParamRule, error) {
 	if strings.Contains(ruleStr, "=") {
 		paramName := strings.Split(ruleStr, "=")[0]
-		paramName = strings.TrimSpace(paramName)
-		if paramName == "" {
-			return nil, fmt.Errorf("empty parameter name in rule: %s", ruleStr)
+		paramName, err := pv.sanitizeParamName(paramName)
+		if err != nil {
+			return nil, fmt.Errorf("invalid parameter name in rule: %w", err)
 		}
 		return &ParamRule{
 			Name:    paramName,
@@ -353,8 +419,13 @@ func (pv *ParamValidator) parseSimpleParamRule(ruleStr string) (*ParamRule, erro
 		return nil, fmt.Errorf("empty rule")
 	}
 
+	paramName, err := pv.sanitizeParamName(ruleStr)
+	if err != nil {
+		return nil, fmt.Errorf("invalid parameter name: %w", err)
+	}
+
 	return &ParamRule{
-		Name:    ruleStr,
+		Name:    paramName,
 		Pattern: PatternAny,
 	}, nil
 }
@@ -366,8 +437,9 @@ func (pv *ParamValidator) parseComplexParamRule(ruleStr string, startBracket int
 		paramName = strings.TrimSpace(paramName)
 	}
 
-	if paramName == "" {
-		return nil, fmt.Errorf("empty parameter name in rule: %s", ruleStr)
+	paramName, err := pv.sanitizeParamName(paramName)
+	if err != nil {
+		return nil, fmt.Errorf("invalid parameter name in rule: %w", err)
 	}
 
 	constraintStr, endBracket := pv.extractConstraint(ruleStr, startBracket)
@@ -421,7 +493,9 @@ func (pv *ParamValidator) createParamRule(paramName, constraintStr string) (*Par
 			return nil, err
 		}
 	case strings.Contains(constraintStr, ","):
-		pv.parseEnumConstraint(rule, constraintStr)
+		if err := pv.parseEnumConstraint(rule, constraintStr); err != nil {
+			return nil, err
+		}
 	default:
 		rule.Pattern = PatternEnum
 		rule.Values = []string{constraintStr}
@@ -443,6 +517,10 @@ func (pv *ParamValidator) parseRangeConstraint(rule *ParamRule, constraintStr st
 	minStr := strings.TrimSpace(parts[0])
 	maxStr := strings.TrimSpace(parts[1])
 
+	if len(minStr) > 10 || len(maxStr) > 10 {
+		return fmt.Errorf("range values too long")
+	}
+
 	min, err := strconv.ParseInt(minStr, 10, 64)
 	if err != nil {
 		return fmt.Errorf("invalid min value in range: %s", minStr)
@@ -451,6 +529,10 @@ func (pv *ParamValidator) parseRangeConstraint(rule *ParamRule, constraintStr st
 	max, err := strconv.ParseInt(maxStr, 10, 64)
 	if err != nil {
 		return fmt.Errorf("invalid max value in range: %s", maxStr)
+	}
+
+	if min < -1000000000 || max > 1000000000 {
+		return fmt.Errorf("range values out of safe bounds")
 	}
 
 	if min > max {
@@ -463,8 +545,12 @@ func (pv *ParamValidator) parseRangeConstraint(rule *ParamRule, constraintStr st
 	return nil
 }
 
-func (pv *ParamValidator) parseEnumConstraint(rule *ParamRule, constraintStr string) {
+func (pv *ParamValidator) parseEnumConstraint(rule *ParamRule, constraintStr string) error {
 	values := strings.Split(constraintStr, ",")
+	if len(values) > MaxParamValues {
+		return fmt.Errorf("too many enum values: %d, maximum is %d", len(values), MaxParamValues)
+	}
+
 	rule.Pattern = PatternEnum
 	rule.Values = make([]string, 0, len(values))
 
@@ -474,10 +560,20 @@ func (pv *ParamValidator) parseEnumConstraint(rule *ParamRule, constraintStr str
 			rule.Values = append(rule.Values, value)
 		}
 	}
+
+	if len(rule.Values) == 0 {
+		return fmt.Errorf("empty enum constraint")
+	}
+
+	return nil
 }
 
 func (pv *ParamValidator) ValidateURL(fullURL string) bool {
 	if pv == nil || !pv.initialized || fullURL == "" {
+		return false
+	}
+
+	if err := pv.validateInputSize(fullURL, MaxURLLength); err != nil {
 		return false
 	}
 
@@ -551,7 +647,7 @@ func (pv *ParamValidator) validateParamValues(rule *ParamRule, values []string) 
 }
 
 func (pv *ParamValidator) getParamsForURLUnsafe(urlPath string) map[string]*ParamRule {
-	urlPath = path.Clean(urlPath)
+	urlPath = pv.normalizeURLPattern(urlPath)
 
 	mostSpecificRule := pv.findMostSpecificURLRuleUnsafe(urlPath)
 
@@ -607,7 +703,11 @@ func (pv *ParamValidator) calculateSpecificityUnsafe(pattern string) int {
 	}
 
 	pathParts := strings.Split(strings.Trim(pattern, "/"), "/")
-	specificity += len(pathParts) * 100
+	if len(pathParts) > 100 {
+		specificity += 100 * 100
+	} else {
+		specificity += len(pathParts) * 100
+	}
 
 	if !strings.Contains(pattern, "*") {
 		specificity += 500
@@ -631,15 +731,8 @@ func (pv *ParamValidator) calculateSpecificityUnsafe(pattern string) int {
 	return specificity
 }
 
-var regexCache = struct {
-	sync.RWMutex
-	patterns map[string]*regexp.Regexp
-}{
-	patterns: make(map[string]*regexp.Regexp),
-}
-
 func (pv *ParamValidator) urlMatchesPatternUnsafe(urlPath, pattern string) bool {
-	urlPath = path.Clean(urlPath)
+	urlPath = pv.normalizeURLPattern(urlPath)
 
 	if pattern == PatternAll || pattern == urlPath {
 		return true
@@ -655,52 +748,39 @@ func (pv *ParamValidator) urlMatchesPatternUnsafe(urlPath, pattern string) bool 
 	}
 
 	if strings.Contains(pattern, "*") {
-		regexCache.RLock()
-		cachedRegex, exists := regexCache.patterns[pattern]
-		regexCache.RUnlock()
-
-		if !exists {
-			regexPattern := "^" + regexp.QuoteMeta(pattern)
-			regexPattern = strings.ReplaceAll(regexPattern, "\\*", ".*") + "$"
-
-			compiledRegex, err := regexp.Compile(regexPattern)
-			if err != nil {
-				return false
-			}
-
-			regexCache.Lock()
-			regexCache.patterns[pattern] = compiledRegex
-			regexCache.Unlock()
-
-			cachedRegex = compiledRegex
-		}
-
-		return cachedRegex.MatchString(urlPath)
+		return pv.wildcardMatch(urlPath, pattern)
 	}
 
 	return pattern == urlPath
 }
 
-func (pv *ParamValidator) ValidateParam(urlPath, paramName, paramValue string) bool {
-	if !pv.initialized || urlPath == "" || paramName == "" {
+func (pv *ParamValidator) wildcardMatch(urlPath, pattern string) bool {
+	maxSegments := 50
+	maxSegmentLength := 200
+	urlSegments := strings.Split(strings.Trim(urlPath, "/"), "/")
+	patternSegments := strings.Split(strings.Trim(pattern, "/"), "/")
+
+	if len(urlSegments) > maxSegments || len(patternSegments) > maxSegments {
 		return false
 	}
 
-	pv.mu.RLock()
-	defer pv.mu.RUnlock()
-
-	return pv.validateParamUnsafe(urlPath, paramName, paramValue)
-}
-
-func (pv *ParamValidator) validateParamUnsafe(urlPath, paramName, paramValue string) bool {
-	paramsRules := pv.getParamsForURLUnsafe(urlPath)
-	rule := pv.findParamRule(paramName, paramsRules)
-
-	if rule == nil {
+	if len(urlSegments) != len(patternSegments) {
 		return false
 	}
 
-	return pv.isValueValidUnsafe(rule, paramValue)
+	for i := 0; i < len(urlSegments); i++ {
+		if patternSegments[i] == "*" {
+			continue
+		}
+		if len(urlSegments[i]) > maxSegmentLength || len(patternSegments[i]) > maxSegmentLength {
+			return false
+		}
+		if patternSegments[i] != urlSegments[i] {
+			return false
+		}
+	}
+
+	return true
 }
 
 func (pv *ParamValidator) isValueValidUnsafe(rule *ParamRule, value string) bool {
@@ -724,8 +804,38 @@ func (pv *ParamValidator) isValueValidUnsafe(rule *ParamRule, value string) bool
 	}
 }
 
+func (pv *ParamValidator) ValidateParam(urlPath, paramName, paramValue string) bool {
+	if !pv.initialized || urlPath == "" || paramName == "" {
+		return false
+	}
+
+	if err := pv.validateInputSize(urlPath, MaxURLLength); err != nil {
+		return false
+	}
+
+	pv.mu.RLock()
+	defer pv.mu.RUnlock()
+
+	return pv.validateParamUnsafe(urlPath, paramName, paramValue)
+}
+
+func (pv *ParamValidator) validateParamUnsafe(urlPath, paramName, paramValue string) bool {
+	paramsRules := pv.getParamsForURLUnsafe(urlPath)
+	rule := pv.findParamRule(paramName, paramsRules)
+
+	if rule == nil {
+		return false
+	}
+
+	return pv.isValueValidUnsafe(rule, paramValue)
+}
+
 func (pv *ParamValidator) NormalizeURL(fullURL string) string {
 	if pv == nil || !pv.initialized || fullURL == "" {
+		return fullURL
+	}
+
+	if err := pv.validateInputSize(fullURL, MaxURLLength); err != nil {
 		return fullURL
 	}
 
@@ -836,6 +946,10 @@ func (pv *ParamValidator) FilterQueryParams(urlPath, queryString string) string 
 		return ""
 	}
 
+	if err := pv.validateInputSize(urlPath, MaxURLLength); err != nil {
+		return ""
+	}
+
 	pv.mu.RLock()
 	defer pv.mu.RUnlock()
 
@@ -852,9 +966,7 @@ func (pv *ParamValidator) Clear() {
 	pv.mu.Lock()
 	defer pv.mu.Unlock()
 
-	pv.globalParams = make(map[string]*ParamRule)
-	pv.urlRules = make(map[string]*URLRule)
-	pv.rulesStr = ""
+	pv.clearUnsafe()
 }
 
 func (pv *ParamValidator) copyParamRuleUnsafe(rule *ParamRule) *ParamRule {
@@ -879,6 +991,10 @@ func (pv *ParamValidator) copyParamRuleUnsafe(rule *ParamRule) *ParamRule {
 
 func (pv *ParamValidator) AddURLRule(urlPattern string, params map[string]*ParamRule) {
 	if urlPattern == "" || len(params) == 0 {
+		return
+	}
+
+	if err := pv.validateInputSize(urlPattern, MaxPatternLength); err != nil {
 		return
 	}
 
