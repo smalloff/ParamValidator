@@ -31,37 +31,44 @@ Allow all parameters for URL "/api/*?*"
 ## Quick Start
 
 ```go
-// Create validator
-rules := "/products?page=[1-10]&category=[electronics,books]"
-pv := paramvalidator.NewParamValidator(rules)
+import (
+	"fmt"
+	"github.com/smalloff/paramvalidator"
+)
 
-// Validate URL
-isValid := pv.ValidateURL("/products?page=5&category=electronics")
-fmt.Println("URL valid:", isValid) // true
-
-// Normalize URL
-normalized := pv.NormalizeURL("/products?page=15&category=electronics&invalid=param")
-fmt.Println("Normalized URL:", normalized) // /products?category=electronics
-
-// Multiple URL rules
-rules := "/products?page=[1-10];/users?sort=[name,date];/search?q=[]"
-pv := paramvalidator.NewParamValidator(rules)
-
-fmt.Println(pv.ValidateURL("/products?page=5"))    // true
-fmt.Println(pv.ValidateURL("/users?sort=name"))    // true
-fmt.Println(pv.ValidateURL("/search?q"))          // true (key-only parameter)
-
-// Global rules + URL-specific
-rules := "page=[1-100];/products?page=[1-10];/admin/*?access=[admin,superuser]"
-pv := paramvalidator.NewParamValidator(rules)
-
-// Global rule works for any URL
-fmt.Println(pv.ValidateURL("/any/path?page=50"))     // true (global rule)
-
-// URL-specific rule has priority
-fmt.Println(pv.ValidateURL("/products?page=5"))      // true (specific rule)
-fmt.Println(pv.ValidateURL("/products?page=50"))     // false (1-10 restriction)
-
-// Wildcard rules
-fmt.Println(pv.ValidateURL("/admin/users?access=admin"))    // true
-fmt.Println(pv.ValidateURL("/admin/settings?access=admin")) // true
+func main() {
+    // Create validator
+    rules := "/products?page=[1-10]&category=[electronics,books]"
+    pv := paramvalidator.NewParamValidator(rules)
+    
+    // Validate URL
+    isValid := pv.ValidateURL("/products?page=5&category=electronics")
+    fmt.Println("URL valid:", isValid) // true
+    
+    // Normalize URL
+    normalized := pv.NormalizeURL("/products?page=15&category=electronics&invalid=param")
+    fmt.Println("Normalized URL:", normalized) // /products?category=electronics
+    
+    // Multiple URL rules
+    rules := "/products?page=[1-10];/users?sort=[name,date];/search?q=[]"
+    pv := paramvalidator.NewParamValidator(rules)
+    
+    fmt.Println(pv.ValidateURL("/products?page=5"))    // true
+    fmt.Println(pv.ValidateURL("/users?sort=name"))    // true
+    fmt.Println(pv.ValidateURL("/search?q"))          // true (key-only parameter)
+    
+    // Global rules + URL-specific
+    rules := "page=[1-100];/products?page=[1-10];/admin/*?access=[admin,superuser]"
+    pv := paramvalidator.NewParamValidator(rules)
+    
+    // Global rule works for any URL
+    fmt.Println(pv.ValidateURL("/any/path?page=50"))     // true (global rule)
+    
+    // URL-specific rule has priority
+    fmt.Println(pv.ValidateURL("/products?page=5"))      // true (specific rule)
+    fmt.Println(pv.ValidateURL("/products?page=50"))     // false (1-10 restriction)
+    
+    // Wildcard rules
+    fmt.Println(pv.ValidateURL("/admin/users?access=admin"))    // true
+    fmt.Println(pv.ValidateURL("/admin/settings?access=admin")) // true
+}
