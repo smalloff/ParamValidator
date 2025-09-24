@@ -29,7 +29,7 @@ Key-only parameter (no value) "active=[]"
 
 Any value "query=[*]"
 
-Allow all parameters for URL "/api/*?*"
+Allow all parameters for URL "/api/*?\*"
 
 ## Quick Start
 
