@@ -7,6 +7,15 @@ import (
 	"strings"
 )
 
+// wildcardPatternStats holds analysis results for wildcard patterns
+type wildcardPatternStats struct {
+	count              int
+	slashCount         int
+	hasWildcard        bool
+	lastCharIsWildcard bool
+	hasMiddleWildcard  bool
+}
+
 // ValidateURL validates complete URL against loaded rules
 // fullURL: Complete URL to validate including query parameters
 // Returns true if URL and all parameters are valid according to rules
@@ -75,15 +84,16 @@ func (pv *ParamValidator) findParamRule(paramName string, urlParams map[string]*
 // getParamsForURLUnsafe gets all applicable parameter rules for URL path
 func (pv *ParamValidator) getParamsForURLUnsafe(urlPath string) map[string]*ParamRule {
 	urlPath = pv.normalizeURLPattern(urlPath)
-
 	mostSpecificRule := pv.findMostSpecificURLRuleUnsafe(urlPath)
 
 	result := make(map[string]*ParamRule)
 
+	// Add global parameters
 	for name, rule := range pv.compiledRules.globalParams {
 		result[name] = rule
 	}
 
+	// Add URL-specific parameters
 	for pattern, rule := range pv.compiledRules.urlRules {
 		if pv.urlMatchesPatternUnsafe(urlPath, pattern) {
 			for paramName, paramRule := range rule.Params {
@@ -92,6 +102,7 @@ func (pv *ParamValidator) getParamsForURLUnsafe(urlPath string) map[string]*Para
 		}
 	}
 
+	// Override with most specific rule parameters
 	if mostSpecificRule != nil {
 		for paramName, paramRule := range mostSpecificRule.Params {
 			result[paramName] = paramRule
@@ -125,82 +136,95 @@ func (pv *ParamValidator) calculateSpecificityUnsafe(pattern string) int {
 		return 0
 	}
 
-	hasWildcard := false
-	wildcardCount := 0
-	slashCount := 0
-	lastCharIsWildcard := false
-	hasMiddleWildcard := false
-
-	for i := 0; i < len(pattern); i++ {
-		switch pattern[i] {
-		case '*':
-			wildcardCount++
-			hasWildcard = true
-			if i == len(pattern)-1 {
-				lastCharIsWildcard = true
-			} else if i > 0 {
-				hasMiddleWildcard = true
-			}
-		case '/':
-			slashCount++
-		}
-	}
-
-	pathSegmentCount := slashCount
-	if len(pattern) > 0 && pattern[0] != '/' {
-		pathSegmentCount++
-	}
+	wildcardStats := pv.analyzeWildcardPattern(pattern)
+	pathSegmentCount := pv.countPathSegments(pattern)
 
 	specificity := pathSegmentCount * 100
 
-	if !hasWildcard {
+	if !wildcardStats.hasWildcard {
 		specificity += 1500
 	} else {
-		specificity -= wildcardCount * 200
+		specificity -= wildcardStats.count * 200
 
-		if lastCharIsWildcard {
+		if wildcardStats.lastCharIsWildcard {
 			specificity -= 300
 		}
-		if hasMiddleWildcard {
+		if wildcardStats.hasMiddleWildcard {
 			specificity -= 100
 		}
 	}
 
-	if slashCount > 1 {
-		specificity += slashCount * 50
+	if wildcardStats.slashCount > 1 {
+		specificity += wildcardStats.slashCount * 50
 	}
 
 	return specificity
+}
+
+// analyzeWildcardPattern analyzes wildcard pattern characteristics
+func (pv *ParamValidator) analyzeWildcardPattern(pattern string) wildcardPatternStats {
+	var stats wildcardPatternStats
+
+	for i := 0; i < len(pattern); i++ {
+		switch pattern[i] {
+		case '*':
+			stats.count++
+			stats.hasWildcard = true
+			if i == len(pattern)-1 {
+				stats.lastCharIsWildcard = true
+			} else if i > 0 {
+				stats.hasMiddleWildcard = true
+			}
+		case '/':
+			stats.slashCount++
+		}
+	}
+
+	return stats
+}
+
+// countPathSegments counts segments in URL path
+func (pv *ParamValidator) countPathSegments(pattern string) int {
+	slashCount := strings.Count(pattern, "/")
+	if len(pattern) > 0 && pattern[0] != '/' {
+		return slashCount + 1
+	}
+	return slashCount
 }
 
 // urlMatchesPatternUnsafe checks if URL path matches pattern
 func (pv *ParamValidator) urlMatchesPatternUnsafe(urlPath, pattern string) bool {
 	urlPath = pv.normalizeURLPattern(urlPath)
 
-	if pattern == PatternAll || pattern == urlPath {
+	switch {
+	case pattern == PatternAll || pattern == urlPath:
+		return true
+	case strings.HasSuffix(pattern, PatternAll):
+		return pv.matchPrefixPattern(urlPath, pattern)
+	case strings.Contains(pattern, "*"):
+		return pv.wildcardMatch(urlPath, pattern)
+	default:
+		return pattern == urlPath
+	}
+}
+
+// matchPrefixPattern matches URL against prefix pattern ending with wildcard
+func (pv *ParamValidator) matchPrefixPattern(urlPath, pattern string) bool {
+	prefix := strings.TrimSuffix(pattern, PatternAll)
+	if prefix == "" {
 		return true
 	}
-
-	if strings.HasSuffix(pattern, PatternAll) {
-		prefix := strings.TrimSuffix(pattern, PatternAll)
-		if prefix == "" {
-			return true
-		}
-		prefix = strings.TrimSuffix(prefix, "/")
-		return strings.HasPrefix(urlPath, prefix)
-	}
-
-	if strings.Contains(pattern, "*") {
-		return pv.wildcardMatch(urlPath, pattern)
-	}
-
-	return pattern == urlPath
+	prefix = strings.TrimSuffix(prefix, "/")
+	return strings.HasPrefix(urlPath, prefix)
 }
 
 // wildcardMatch performs wildcard pattern matching
 func (pv *ParamValidator) wildcardMatch(urlPath, pattern string) bool {
-	maxSegments := 50
-	maxSegmentLength := 200
+	const (
+		maxSegments      = 50
+		maxSegmentLength = 200
+	)
+
 	urlSegments := strings.Split(strings.Trim(urlPath, "/"), "/")
 	patternSegments := strings.Split(strings.Trim(pattern, "/"), "/")
 
@@ -235,23 +259,38 @@ func (pv *ParamValidator) isValueValidUnsafe(rule *ParamRule, value string) bool
 	case PatternAny:
 		return true
 	case PatternRange:
-		num, err := strconv.ParseInt(value, 10, 64)
-		return err == nil && num >= rule.Min && num <= rule.Max
+		return pv.validateRangeValue(rule, value)
 	case PatternEnum:
-		for _, allowedValue := range rule.Values {
-			if value == allowedValue {
-				return true
-			}
-		}
-		return false
+		return pv.validateEnumValue(rule, value)
 	case PatternCallback:
-		if pv.callbackFunc != nil {
-			return pv.callbackFunc(rule.Name, value)
-		}
-		return false
+		return pv.validateCallbackValue(rule, value)
 	default:
 		return false
 	}
+}
+
+// validateRangeValue validates numeric range values
+func (pv *ParamValidator) validateRangeValue(rule *ParamRule, value string) bool {
+	num, err := strconv.ParseInt(value, 10, 64)
+	return err == nil && num >= rule.Min && num <= rule.Max
+}
+
+// validateEnumValue validates enum values
+func (pv *ParamValidator) validateEnumValue(rule *ParamRule, value string) bool {
+	for _, allowedValue := range rule.Values {
+		if value == allowedValue {
+			return true
+		}
+	}
+	return false
+}
+
+// validateCallbackValue validates values using callback function
+func (pv *ParamValidator) validateCallbackValue(rule *ParamRule, value string) bool {
+	if pv.callbackFunc != nil {
+		return pv.callbackFunc(rule.Name, value)
+	}
+	return false
 }
 
 // ValidateParam validates single parameter value for specific URL path
@@ -321,15 +360,16 @@ func (pv *ParamValidator) normalizeURLUnsafe(fullURL string) string {
 		return u.Path
 	}
 
-	var filteredParams string
-	if u.RawQuery != "" {
-		filteredParams, _, err = pv.parseAndFilterQueryParams(u.RawQuery, paramsRules)
-		if err != nil {
-			return u.Path
-		}
+	if u.RawQuery == "" {
+		return u.Path
 	}
 
-	if len(filteredParams) > 0 {
+	filteredParams, _, err := pv.parseAndFilterQueryParams(u.RawQuery, paramsRules)
+	if err != nil {
+		return u.Path
+	}
+
+	if filteredParams != "" {
 		u.RawQuery = filteredParams
 		return u.String()
 	}
@@ -348,56 +388,16 @@ func (pv *ParamValidator) parseAndValidateQueryParams(queryString string, params
 		return false, fmt.Errorf("too many parameters")
 	}
 
-	isValid := true
 	allowAll := pv.isAllowAllParams(paramsRules)
+	isValid := true
 
-	for len(queryString) > 0 && paramCount > 0 {
-		var segment string
-		if pos := strings.IndexByte(queryString, '&'); pos >= 0 {
-			segment = queryString[:pos]
-			queryString = queryString[pos+1:]
-		} else {
-			segment = queryString
-			queryString = ""
-		}
-		paramCount--
-
-		if segment == "" {
-			continue
-		}
-
-		eqPos := strings.IndexByte(segment, '=')
-		var key, value string
-
-		if eqPos == -1 {
-			decodedKey, err := url.QueryUnescape(segment)
-			if err != nil {
-				isValid = false
-				continue
-			}
-			key = decodedKey
-			value = ""
-		} else {
-			originalKey := segment[:eqPos]
-			originalValue := segment[eqPos+1:]
-
-			decodedKey, err1 := url.QueryUnescape(originalKey)
-			decodedValue, err2 := url.QueryUnescape(originalValue)
-
-			if err1 != nil || err2 != nil {
-				isValid = false
-				continue
-			}
-			key = decodedKey
-			value = decodedValue
-		}
-
+	err := pv.processQueryParams(queryString, paramCount, func(key, value, originalKey, originalValue string) {
 		if !allowAll && !pv.isParamAllowedUnsafe(key, value, paramsRules) {
 			isValid = false
 		}
-	}
+	})
 
-	return isValid, nil
+	return isValid, err
 }
 
 // parseAndFilterQueryParams parses and filters query parameters, returning filtered query string
@@ -411,76 +411,89 @@ func (pv *ParamValidator) parseAndFilterQueryParams(queryString string, paramsRu
 		return "", false, fmt.Errorf("too many parameters")
 	}
 
-	filteredParams := ""
-
+	var filteredParams strings.Builder
 	isValid := true
 	allowAll := pv.isAllowAllParams(paramsRules)
 	firstParam := true
 
-	for len(queryString) > 0 && paramCount > 0 {
-		var segment string
-		if pos := strings.IndexByte(queryString, '&'); pos >= 0 {
-			segment = queryString[:pos]
-			queryString = queryString[pos+1:]
-		} else {
-			segment = queryString
-			queryString = ""
+	err := pv.processQueryParams(queryString, paramCount, func(key, value, originalKey, originalValue string) {
+		if allowAll || pv.isParamAllowedUnsafe(key, value, paramsRules) {
+			if !firstParam {
+				filteredParams.WriteString("&")
+			} else {
+				firstParam = false
+			}
+
+			if originalValue == "" {
+				filteredParams.WriteString(originalKey)
+			} else {
+				filteredParams.WriteString(originalKey + "=" + originalValue)
+			}
+		} else if !allowAll {
+			isValid = false
 		}
+	})
+
+	return filteredParams.String(), isValid, err
+}
+
+// processQueryParams processes query parameters with a callback function
+func (pv *ParamValidator) processQueryParams(queryString string, paramCount int, processor func(key, value, originalKey, originalValue string)) error {
+	for len(queryString) > 0 && paramCount > 0 {
+		segment, remaining := pv.extractNextParamSegment(queryString)
+		queryString = remaining
 		paramCount--
 
 		if segment == "" {
 			continue
 		}
 
-		eqPos := strings.IndexByte(segment, '=')
-		var key, value string
-		var originalKey, originalValue string
-
-		if eqPos == -1 {
-			originalKey = segment
-			decodedKey, err := url.QueryUnescape(segment)
-			if err != nil {
-				isValid = false
-				continue
-			}
-			key = decodedKey
-			value = ""
-			originalValue = ""
-		} else {
-			originalKey = segment[:eqPos]
-			originalValue = segment[eqPos+1:]
-
-			decodedKey, err1 := url.QueryUnescape(originalKey)
-			decodedValue, err2 := url.QueryUnescape(originalValue)
-
-			if err1 != nil || err2 != nil {
-				isValid = false
-				continue
-			}
-			key = decodedKey
-			value = decodedValue
+		key, value, originalKey, originalValue, err := pv.parseParamSegment(segment)
+		if err != nil {
+			// Продолжаем обработку остальных параметров при ошибке декодирования
+			continue
 		}
 
-		if allowAll || pv.isParamAllowedUnsafe(key, value, paramsRules) {
-			if !firstParam {
-				filteredParams += "&"
-			} else {
-				firstParam = false
-			}
-
-			if eqPos == -1 {
-				filteredParams += originalKey
-			} else {
-				filteredParams += originalKey + "=" + originalValue
-			}
-		} else if !allowAll {
-			isValid = false
-		}
+		processor(key, value, originalKey, originalValue)
 	}
 
-	return filteredParams, isValid, nil
+	return nil
 }
 
+// extractNextParamSegment extracts the next parameter segment from query string
+func (pv *ParamValidator) extractNextParamSegment(queryString string) (string, string) {
+	if pos := strings.IndexByte(queryString, '&'); pos >= 0 {
+		return queryString[:pos], queryString[pos+1:]
+	}
+	return queryString, ""
+}
+
+// parseParamSegment parses a single parameter segment into key and value
+func (pv *ParamValidator) parseParamSegment(segment string) (key, value, originalKey, originalValue string, err error) {
+	eqPos := strings.IndexByte(segment, '=')
+
+	if eqPos == -1 {
+		decodedKey, err := url.QueryUnescape(segment)
+		if err != nil {
+			return "", "", "", "", err
+		}
+		return decodedKey, "", segment, "", nil
+	}
+
+	originalKey = segment[:eqPos]
+	originalValue = segment[eqPos+1:]
+
+	decodedKey, err1 := url.QueryUnescape(originalKey)
+	decodedValue, err2 := url.QueryUnescape(originalValue)
+
+	if err1 != nil || err2 != nil {
+		return "", "", "", "", fmt.Errorf("decoding error")
+	}
+
+	return decodedKey, decodedValue, originalKey, originalValue, nil
+}
+
+// isParamAllowedUnsafe checks if parameter is allowed according to rules
 func (pv *ParamValidator) isParamAllowedUnsafe(paramName, paramValue string, paramsRules map[string]*ParamRule) bool {
 	rule := pv.findParamRule(paramName, paramsRules)
 	if rule == nil {
@@ -489,6 +502,7 @@ func (pv *ParamValidator) isParamAllowedUnsafe(paramName, paramValue string, par
 	return pv.isValueValidUnsafe(rule, paramValue)
 }
 
+// filterQueryParamsUnsafe filters query parameters without locking
 func (pv *ParamValidator) filterQueryParamsUnsafe(urlPath, queryString string) string {
 	paramsRules := pv.getParamsForURLUnsafe(urlPath)
 
@@ -547,6 +561,9 @@ func (pv *ParamValidator) ValidateQueryParams(urlPath, queryString string) bool 
 	if queryString == "" {
 		return true
 	}
+
+	pv.mu.RLock()
+	defer pv.mu.RUnlock()
 
 	paramsRules := pv.getParamsForURLUnsafe(urlPath)
 

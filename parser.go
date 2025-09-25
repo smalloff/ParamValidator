@@ -65,6 +65,14 @@ type ParamValidator struct {
 	callbackFunc  CallbackFunc
 }
 
+type RuleType int
+
+const (
+	RuleTypeUnknown RuleType = iota
+	RuleTypeGlobal
+	RuleTypeURL
+)
+
 // NewParamValidator creates a new parameter validator with optional initial rules
 // rulesStr: String containing validation rules in specific format
 // Returns initialized ParamValidator instance or error if parsing fails
@@ -223,14 +231,6 @@ func (pv *ParamValidator) parseRulesUnsafe(rulesStr string) error {
 		return fmt.Errorf("unknown rule type")
 	}
 }
-
-type RuleType int
-
-const (
-	RuleTypeUnknown RuleType = iota
-	RuleTypeGlobal
-	RuleTypeURL
-)
 
 // detectRuleType determines the type of rules in the string
 func (pv *ParamValidator) detectRuleType(rulesStr string) RuleType {
