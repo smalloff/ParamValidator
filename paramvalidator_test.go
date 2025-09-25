@@ -891,7 +891,7 @@ func TestMultipleRulesNormalization(t *testing.T) {
 			name:     "parameters from multiple matching rules",
 			rules:    "/api/v1/*?page=[1-10];/api/v1/users?limit=[5,10]",
 			url:      "/api/v1/users?page=5&limit=10",
-			expected: "/api/v1/users?limit=10&page=5",
+			expected: "/api/v1/users?page=5&limit=10",
 		},
 		{
 			name:     "same parameter name - more specific wins",
@@ -927,7 +927,7 @@ func TestMultipleRulesNormalization(t *testing.T) {
 			name:     "multiple rules with different parameters",
 			rules:    "/api/*?page=[1-10];/api/users?limit=[5,10]",
 			url:      "/api/users?page=5&limit=10&invalid=value",
-			expected: "/api/users?limit=10&page=5",
+			expected: "/api/users?page=5&limit=10",
 		},
 		{
 			name:     "conflicting parameter names",
