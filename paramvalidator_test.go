@@ -1188,7 +1188,6 @@ func BenchmarkValidateQueryParamsParallel(b *testing.B) {
 }
 
 func TestCallbackPattern(t *testing.T) {
-	// Callback функция для валидации
 	callbackFunc := func(key string, value string) bool {
 		switch key {
 		case "token":
@@ -1262,18 +1261,15 @@ func TestCallbackPattern(t *testing.T) {
 }
 
 func TestCallbackWithoutFunction(t *testing.T) {
-	// Создаем валидатор с callback паттерном, но без callback функции
 	pv, err := NewParamValidator("/api?token=[?]")
 	if err != nil {
 		t.Fatalf("Failed to create validator: %v", err)
 	}
 
-	// Без callback функции параметр с паттерном [?] должен быть невалидным
 	if pv.ValidateURL("/api?token=any_value") {
 		t.Error("Callback parameter should be invalid when no callback function is set")
 	}
 
-	// Устанавливаем callback функцию позже
 	callbackFunc := func(key string, value string) bool {
 		return value == "valid"
 	}
@@ -1302,7 +1298,6 @@ func TestCallbackEdgeCases(t *testing.T) {
 
 	t.Run("callback not called for non-callback parameters", func(t *testing.T) {
 		callbackCalled = false
-		// Создаем валидатор с обычным параметром (не callback)
 		pv2, err := NewParamValidator("/test?param=[value1,value2]")
 		if err != nil {
 			t.Fatalf("Failed to create validator: %v", err)
