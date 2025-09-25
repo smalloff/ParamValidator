@@ -20,16 +20,14 @@ Override - specific rules overwrite general ones
 Support for wildcards and exact matches
 ```
 cpu: Intel(R) Core(TM) i5-4670K CPU @ 3.40GHz
-BenchmarkValidateURL-4                   	  496651	      2463 ns/op	    1344 B/op	      14 allocs/op
-BenchmarkNormalizeURL-4                  	  462272	      2686 ns/op	    1512 B/op	      22 allocs/op
-BenchmarkFilterQueryParamsParallel-4     	 2113588	       509.4 ns/op	     432 B/op	      12 allocs/op
-BenchmarkFilterQueryParams-4             	  693978	      1687 ns/op	     432 B/op	      12 allocs/op
-BenchmarkConcurrentValidation-4          	 1271839	      1036 ns/op	    1584 B/op	      15 allocs/op
-BenchmarkConcurrentNormalization-4       	 1241494	       934.1 ns/op	    1496 B/op	      21 allocs/op
-BenchmarkValidateQueryParams-4           	  406701	      2734 ns/op	    1424 B/op	      17 allocs/op
-BenchmarkValidateQueryParamsParallel-4   	 1555990	       783.3 ns/op	    1328 B/op	      13 allocs/op
-PASS
-ok 
+BenchmarkValidateURL-4                   	  750792	      1428 ns/op	     488 B/op	       8 allocs/op
+BenchmarkNormalizeURL-4                  	  823394	      1395 ns/op	     480 B/op	       7 allocs/op
+BenchmarkFilterQueryParamsParallel-4     	 3556333	       317.4 ns/op	     288 B/op	       5 allocs/op
+BenchmarkFilterQueryParams-4             	 1000000	      1028 ns/op	     288 B/op	       5 allocs/op
+BenchmarkConcurrentValidation-4          	 1270618	       904.1 ns/op	     688 B/op	       8 allocs/op
+BenchmarkConcurrentNormalization-4       	 3077982	       407.3 ns/op	     480 B/op	       7 allocs/op
+BenchmarkValidateQueryParams-4           	  857406	      1344 ns/op	     496 B/op	       7 allocs/op
+BenchmarkValidateQueryParamsParallel-4   	 2859098	       382.5 ns/op	     464 B/op	       7 allocs/op
 ```
 
 ## Rule Syntax
