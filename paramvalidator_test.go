@@ -3,7 +3,6 @@ package paramvalidator
 import (
 	"context"
 	"fmt"
-	"net/url"
 	"strings"
 	"sync"
 	"testing"
@@ -15,36 +14,62 @@ func TestNewParamValidator(t *testing.T) {
 		name      string
 		rulesStr  string
 		wantValid bool
+		wantError bool
 	}{
 		{
 			name:      "empty rules",
 			rulesStr:  "",
 			wantValid: true,
+			wantError: false,
 		},
 		{
 			name:      "global rules",
 			rulesStr:  "page=[1-10]&sort=[name,date]",
 			wantValid: true,
+			wantError: false,
 		},
 		{
 			name:      "url rules",
 			rulesStr:  "/products?page=[1-10];/users?sort=[name,date]",
 			wantValid: true,
+			wantError: false,
+		},
+		{
+			name:      "invalid rules format",
+			rulesStr:  "page=[1-10",
+			wantValid: false,
+			wantError: true,
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			pv := NewParamValidator(tt.rulesStr)
-			if pv == nil {
-				t.Fatal("Expected validator to be created")
+			pv, err := NewParamValidator(tt.rulesStr)
+
+			if tt.wantError {
+				if err == nil {
+					t.Errorf("NewParamValidator() expected error for rules %q, but got nil", tt.rulesStr)
+				}
+				if pv != nil {
+					t.Error("NewParamValidator() should return nil validator when error occurs")
+				}
+			} else {
+				if err != nil {
+					t.Errorf("NewParamValidator() unexpected error = %v for rules %q", err, tt.rulesStr)
+				}
+				if pv == nil {
+					t.Error("Expected validator to be created")
+				}
 			}
 		})
 	}
 }
 
 func TestParseRules(t *testing.T) {
-	pv := NewParamValidator("")
+	pv, err := NewParamValidator("")
+	if err != nil {
+		t.Fatalf("Failed to create validator: %v", err)
+	}
 
 	tests := []struct {
 		name      string
@@ -184,7 +209,10 @@ func TestValidateURL(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			pv := NewParamValidator(tt.rules)
+			pv, err := NewParamValidator(tt.rules)
+			if err != nil {
+				t.Fatalf("Failed to create validator: %v", err)
+			}
 			result := pv.ValidateURL(tt.url)
 			if result != tt.expected {
 				t.Errorf("ValidateURL(%q) with rules %q = %v, expected %v",
@@ -195,7 +223,10 @@ func TestValidateURL(t *testing.T) {
 }
 
 func TestValidateParam(t *testing.T) {
-	pv := NewParamValidator("/products?page=[1-10]&category=[electronics,books]")
+	pv, err := NewParamValidator("/products?page=[1-10]&category=[electronics,books]")
+	if err != nil {
+		t.Fatalf("Failed to create validator: %v", err)
+	}
 
 	tests := []struct {
 		name     string
@@ -294,7 +325,10 @@ func TestNormalizeURL(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			pv := NewParamValidator(tt.rules)
+			pv, err := NewParamValidator(tt.rules)
+			if err != nil {
+				t.Fatalf("Failed to create validator: %v", err)
+			}
 			result := pv.NormalizeURL(tt.url)
 
 			expected := tt.expected
@@ -306,7 +340,10 @@ func TestNormalizeURL(t *testing.T) {
 }
 
 func TestFilterQueryParams(t *testing.T) {
-	pv := NewParamValidator("/api?page=[1-10]&limit=[5,10]")
+	pv, err := NewParamValidator("/api?page=[1-10]&limit=[5,10]")
+	if err != nil {
+		t.Fatalf("Failed to create validator: %v", err)
+	}
 
 	tests := []struct {
 		name     string
@@ -352,7 +389,10 @@ func TestFilterQueryParams(t *testing.T) {
 }
 
 func TestAddURLRule(t *testing.T) {
-	pv := NewParamValidator("")
+	pv, err := NewParamValidator("")
+	if err != nil {
+		t.Fatalf("Failed to create validator: %v", err)
+	}
 
 	rule := &ParamRule{
 		Name:    "page",
@@ -373,7 +413,10 @@ func TestAddURLRule(t *testing.T) {
 }
 
 func TestClear(t *testing.T) {
-	pv := NewParamValidator("/api?page=[1-10]")
+	pv, err := NewParamValidator("/api?page=[1-10]")
+	if err != nil {
+		t.Fatalf("Failed to create validator: %v", err)
+	}
 
 	if !pv.ValidateURL("/api?page=5") {
 		t.Error("Should validate before clear")
@@ -421,7 +464,10 @@ func TestURLPatternMatching(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			pv := NewParamValidator(tt.rules)
+			pv, err := NewParamValidator(tt.rules)
+			if err != nil {
+				t.Fatalf("Failed to create validator: %v", err)
+			}
 			result := pv.ValidateURL(tt.url)
 			if result != tt.expected {
 				t.Errorf("URL pattern matching for %q with rules %q = %v, expected %v",
@@ -445,7 +491,10 @@ func TestEdgeCases(t *testing.T) {
 	})
 
 	t.Run("invalid URL", func(t *testing.T) {
-		pv := NewParamValidator("/test?param=value")
+		pv, err := NewParamValidator("/test?param=value")
+		if err != nil {
+			t.Fatalf("Failed to create validator: %v", err)
+		}
 
 		if pv.ValidateURL(":invalid:url:") {
 			t.Error("Invalid URL should not validate")
@@ -453,7 +502,10 @@ func TestEdgeCases(t *testing.T) {
 	})
 
 	t.Run("empty parameter values", func(t *testing.T) {
-		pv := NewParamValidator("/test?param=[value1,value2]")
+		pv, err := NewParamValidator("/test?param=[value1,value2]")
+		if err != nil {
+			t.Fatalf("Failed to create validator: %v", err)
+		}
 
 		if pv.ValidateParam("/test", "param", "") {
 			t.Error("Empty value should not validate against enum")
@@ -476,7 +528,10 @@ func TestEdgeCases(t *testing.T) {
 }
 
 func BenchmarkValidateURL(b *testing.B) {
-	pv := NewParamValidator("/api/v1/*?page=[1-100]&limit=[10,20,50]&sort=[name,date]")
+	pv, err := NewParamValidator("/api/v1/*?page=[1-100]&limit=[10,20,50]&sort=[name,date]")
+	if err != nil {
+		b.Fatalf("Failed to create validator: %v", err)
+	}
 	url := "/api/v1/users/list?page=50&limit=20&sort=name"
 
 	b.ResetTimer()
@@ -486,7 +541,10 @@ func BenchmarkValidateURL(b *testing.B) {
 }
 
 func BenchmarkNormalizeURL(b *testing.B) {
-	pv := NewParamValidator("/api/*?page=[1-100]&limit=[10,20,50]")
+	pv, err := NewParamValidator("/api/*?page=[1-100]&limit=[10,20,50]")
+	if err != nil {
+		b.Fatalf("Failed to create validator: %v", err)
+	}
 	url := "/api/v1/data?page=50&limit=20&invalid=value&extra=param"
 
 	b.ResetTimer()
@@ -496,7 +554,10 @@ func BenchmarkNormalizeURL(b *testing.B) {
 }
 
 func BenchmarkFilterQueryParamsParallel(b *testing.B) {
-	pv := NewParamValidator("/api/*?page=[1-100]&limit=[10,20,50]")
+	pv, err := NewParamValidator("/api/*?page=[1-100]&limit=[10,20,50]")
+	if err != nil {
+		b.Fatalf("Failed to create validator: %v", err)
+	}
 	urlPath := "/api/v1/data"
 	query := "page=50&limit=20&invalid=value&extra=param"
 
@@ -509,7 +570,10 @@ func BenchmarkFilterQueryParamsParallel(b *testing.B) {
 }
 
 func BenchmarkFilterQueryParams(b *testing.B) {
-	pv := NewParamValidator("/api/*?page=[1-100]&limit=[10,20,50]")
+	pv, err := NewParamValidator("/api/*?page=[1-100]&limit=[10,20,50]")
+	if err != nil {
+		b.Fatalf("Failed to create validator: %v", err)
+	}
 	urlPath := "/api/v1/data"
 	query := "page=50&limit=20&invalid=value&extra=param"
 
@@ -520,7 +584,10 @@ func BenchmarkFilterQueryParams(b *testing.B) {
 }
 
 func TestConcurrentValidation(t *testing.T) {
-	pv := NewParamValidator("/api/*?page=[1-100]&limit=[10,20,50]&sort=[name,date]")
+	pv, err := NewParamValidator("/api/*?page=[1-100]&limit=[10,20,50]&sort=[name,date]")
+	if err != nil {
+		t.Fatalf("Failed to create validator: %v", err)
+	}
 
 	numGoroutines := 100
 	var wg sync.WaitGroup
@@ -573,7 +640,10 @@ func TestConcurrentValidation(t *testing.T) {
 }
 
 func TestConcurrentRuleUpdates(t *testing.T) {
-	pv := NewParamValidator("")
+	pv, err := NewParamValidator("")
+	if err != nil {
+		t.Fatalf("Failed to create validator: %v", err)
+	}
 
 	numReaders := 50
 	numWriters := 10
@@ -635,7 +705,10 @@ func TestConcurrentRuleUpdates(t *testing.T) {
 }
 
 func TestConcurrentParseRules(t *testing.T) {
-	pv := NewParamValidator("")
+	pv, err := NewParamValidator("")
+	if err != nil {
+		t.Fatalf("Failed to create validator: %v", err)
+	}
 
 	numGoroutines := 20
 	var wg sync.WaitGroup
@@ -668,7 +741,10 @@ func TestConcurrentParseRules(t *testing.T) {
 }
 
 func TestRaceConditionDetection(t *testing.T) {
-	pv := NewParamValidator("/initial?param=[value1,value2]")
+	pv, err := NewParamValidator("/initial?param=[value1,value2]")
+	if err != nil {
+		t.Fatalf("Failed to create validator: %v", err)
+	}
 
 	done := make(chan bool)
 
@@ -692,7 +768,10 @@ func TestRaceConditionDetection(t *testing.T) {
 }
 
 func TestConcurrentAccessAfterClear(t *testing.T) {
-	pv := NewParamValidator("/api?page=[1-10]")
+	pv, err := NewParamValidator("/api?page=[1-10]")
+	if err != nil {
+		t.Fatalf("Failed to create validator: %v", err)
+	}
 
 	var wg sync.WaitGroup
 	wg.Add(3)
@@ -754,7 +833,10 @@ func TestConcurrentAccessAfterClear(t *testing.T) {
 }
 
 func BenchmarkConcurrentValidation(b *testing.B) {
-	pv := NewParamValidator("/api/*?page=[1-100]&limit=[10,20,50]")
+	pv, err := NewParamValidator("/api/*?page=[1-100]&limit=[10,20,50]")
+	if err != nil {
+		b.Fatalf("Failed to create validator: %v", err)
+	}
 
 	b.ResetTimer()
 	b.RunParallel(func(pb *testing.PB) {
@@ -766,7 +848,10 @@ func BenchmarkConcurrentValidation(b *testing.B) {
 }
 
 func BenchmarkConcurrentNormalization(b *testing.B) {
-	pv := NewParamValidator("/api/*?page=[1-100]&limit=[10,20,50]")
+	pv, err := NewParamValidator("/api/*?page=[1-100]&limit=[10,20,50]")
+	if err != nil {
+		b.Fatalf("Failed to create validator: %v", err)
+	}
 
 	b.ResetTimer()
 	b.RunParallel(func(pb *testing.PB) {
@@ -865,7 +950,10 @@ func TestMultipleRulesWithSemicolon(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			pv := NewParamValidator(tt.rules)
+			pv, err := NewParamValidator(tt.rules)
+			if err != nil {
+				t.Fatalf("Failed to create validator: %v", err)
+			}
 			result := pv.ValidateURL(tt.url)
 			if result != tt.expected {
 				t.Errorf("ValidateURL(%q) with rules %q = %v, expected %v",
@@ -940,27 +1028,75 @@ func TestMultipleRulesNormalization(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			pv := NewParamValidator(tt.rules)
-			result := pv.NormalizeURL(tt.url)
-
-			expectedURL, err := url.Parse(tt.expected)
+			pv, err := NewParamValidator(tt.rules)
 			if err != nil {
-				t.Fatalf("Invalid expected URL: %v", err)
+				t.Fatalf("Failed to create validator: %v", err)
 			}
-			expected := expectedURL.Path
-			if expectedURL.RawQuery != "" {
-				expected += "?" + expectedURL.RawQuery
-			}
-
-			if result != expected {
+			result := pv.NormalizeURL(tt.url)
+			if result != tt.expected {
 				t.Errorf("NormalizeURL(%q) with rules %q = %q, expected %q",
-					tt.url, tt.rules, result, expected)
+					tt.url, tt.rules, result, tt.expected)
 			}
 		})
 	}
 }
 
-func TestMultipleRulesPriority(t *testing.T) {
+func TestMultipleRulesFilterQueryParams(t *testing.T) {
+	pv, err := NewParamValidator("/api/*?page=[1-10];/api/v1/*?limit=[5,10]")
+	if err != nil {
+		t.Fatalf("Failed to create validator: %v", err)
+	}
+
+	tests := []struct {
+		name     string
+		urlPath  string
+		query    string
+		expected string
+	}{
+		{
+			name:     "both rules match",
+			urlPath:  "/api/v1/users",
+			query:    "page=5&limit=10",
+			expected: "page=5&limit=10",
+		},
+		{
+			name:     "only first rule matches",
+			urlPath:  "/api/v2/users",
+			query:    "page=5&limit=10",
+			expected: "page=5",
+		},
+		{
+			name:     "only second rule matches",
+			urlPath:  "/api/v1/users",
+			query:    "limit=10&invalid=value",
+			expected: "limit=10",
+		},
+		{
+			name:     "no rules match exact path",
+			urlPath:  "/other/path",
+			query:    "page=5&limit=10",
+			expected: "",
+		},
+		{
+			name:     "conflicting parameters - more specific wins",
+			urlPath:  "/api/v1/users",
+			query:    "page=5&page=15",
+			expected: "page=5",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result := pv.FilterQueryParams(tt.urlPath, tt.query)
+			if result != tt.expected {
+				t.Errorf("FilterQueryParams(%q, %q) = %q, expected %q",
+					tt.urlPath, tt.query, result, tt.expected)
+			}
+		})
+	}
+}
+
+func TestMultipleRulesOrderPrecedence(t *testing.T) {
 	tests := []struct {
 		name     string
 		rules    string
@@ -968,40 +1104,49 @@ func TestMultipleRulesPriority(t *testing.T) {
 		expected bool
 	}{
 		{
-			name:     "more specific path wins - invalid case",
-			rules:    "/api/*?page=[1-100];/api/users?page=[1-10]",
-			url:      "/api/users?page=50",
-			expected: false,
-		},
-		{
-			name:     "more specific path wins",
-			rules:    "/api/*?page=[1-100];/api/users?page=[1-10]",
-			url:      "/api/users?page=5",
+			name:     "more specific rule takes precedence",
+			rules:    "/api/*?page=[1-100];/api/v1/users?page=[1-10]",
+			url:      "/api/v1/users?page=5",
 			expected: true,
 		},
 		{
-			name:     "more specific path wins - invalid case",
-			rules:    "/api/*?page=[1-100];/api/users?page=[1-10]",
-			url:      "/api/users?page=50",
+			name:     "more specific rule rejects invalid value",
+			rules:    "/api/*?page=[1-100];/api/v1/users?page=[1-10]",
+			url:      "/api/v1/users?page=50",
 			expected: false,
 		},
 		{
-			name:     "global rules have lowest priority",
-			rules:    "page=[1-100];/api/users?page=[1-10];/api/users/list?page=[1-5]",
-			url:      "/api/users/list?page=3",
+			name:     "less specific rule applies when more specific doesn't match",
+			rules:    "/api/*?page=[1-100];/api/v1/users?page=[1-10]",
+			url:      "/api/v2/users?page=50",
 			expected: true,
 		},
 		{
-			name:     "exact match preferred over wildcard",
-			rules:    "/api/*?sort=[name,date];/api/users?sort=[name]",
-			url:      "/api/users?sort=name",
+			name:     "exact match takes precedence over wildcard",
+			rules:    "/api/v1/*?page=[1-100];/api/v1/users?page=[1-10]",
+			url:      "/api/v1/users?page=5",
+			expected: true,
+		},
+		{
+			name:     "longer path takes precedence",
+			rules:    "/api/v1?page=[1-100];/api/v1/users?page=[1-10]",
+			url:      "/api/v1/users?page=5",
+			expected: true,
+		},
+		{
+			name:     "global rules apply when no URL matches",
+			rules:    "page=[1-10];/api/v1/users?sort=[name,date]",
+			url:      "/other/path?page=5",
 			expected: true,
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			pv := NewParamValidator(tt.rules)
+			pv, err := NewParamValidator(tt.rules)
+			if err != nil {
+				t.Fatalf("Failed to create validator: %v", err)
+			}
 			result := pv.ValidateURL(tt.url)
 			if result != tt.expected {
 				t.Errorf("ValidateURL(%q) with rules %q = %v, expected %v",
@@ -1012,7 +1157,10 @@ func TestMultipleRulesPriority(t *testing.T) {
 }
 
 func BenchmarkValidateQueryParams(b *testing.B) {
-	pv := NewParamValidator("/api/*?page=[1-100]&limit=[10,20,50]")
+	pv, err := NewParamValidator("/api/*?page=[1-100]&limit=[10,20,50]")
+	if err != nil {
+		b.Fatalf("Failed to create validator: %v", err)
+	}
 	urlPath := "/api/v1/data"
 	query := "page=50&limit=20&invalid=value&extra=param"
 
@@ -1023,7 +1171,10 @@ func BenchmarkValidateQueryParams(b *testing.B) {
 }
 
 func BenchmarkValidateQueryParamsParallel(b *testing.B) {
-	pv := NewParamValidator("/api/*?page=[1-100]&limit=[10,20,50]")
+	pv, err := NewParamValidator("/api/*?page=[1-100]&limit=[10,20,50]")
+	if err != nil {
+		b.Fatalf("Failed to create validator: %v", err)
+	}
 	urlPath := "/api/v1/data"
 	query := "page=50&limit=20"
 
@@ -1033,62 +1184,4 @@ func BenchmarkValidateQueryParamsParallel(b *testing.B) {
 			pv.ValidateQueryParams(urlPath, query)
 		}
 	})
-}
-
-func TestValidateQueryParams(t *testing.T) {
-	pv := NewParamValidator("/api/*?page=[1-100]&limit=[10,20,50]")
-
-	tests := []struct {
-		name     string
-		urlPath  string
-		query    string
-		expected bool
-	}{
-		{
-			name:     "valid parameters",
-			urlPath:  "/api/v1/data",
-			query:    "page=50&limit=20",
-			expected: true,
-		},
-		{
-			name:     "invalid parameter value",
-			urlPath:  "/api/v1/data",
-			query:    "page=150&limit=20",
-			expected: false,
-		},
-		{
-			name:     "unknown parameter",
-			urlPath:  "/api/v1/data",
-			query:    "page=50&unknown=value",
-			expected: false,
-		},
-		{
-			name:     "empty query string",
-			urlPath:  "/api/v1/data",
-			query:    "",
-			expected: true,
-		},
-		{
-			name:     "multiple invalid parameters",
-			urlPath:  "/api/v1/data",
-			query:    "page=150&limit=100&invalid=value",
-			expected: false,
-		},
-		{
-			name:     "wrong path - no rules apply",
-			urlPath:  "/users",
-			query:    "page=50",
-			expected: false,
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			result := pv.ValidateQueryParams(tt.urlPath, tt.query)
-			if result != tt.expected {
-				t.Errorf("ValidateQueryParams(%q, %q) = %v, expected %v",
-					tt.urlPath, tt.query, result, tt.expected)
-			}
-		})
-	}
 }

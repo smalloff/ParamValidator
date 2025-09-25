@@ -63,8 +63,8 @@ type ParamValidator struct {
 
 // NewParamValidator creates a new parameter validator with optional initial rules
 // rulesStr: String containing validation rules in specific format
-// Returns initialized ParamValidator instance
-func NewParamValidator(rulesStr string) *ParamValidator {
+// Returns initialized ParamValidator instance or error if parsing fails
+func NewParamValidator(rulesStr string) (*ParamValidator, error) {
 	pv := &ParamValidator{
 		globalParams:  make(map[string]*ParamRule),
 		urlRules:      make(map[string]*URLRule),
@@ -75,10 +75,10 @@ func NewParamValidator(rulesStr string) *ParamValidator {
 	if rulesStr != "" {
 		if err := pv.ParseRules(rulesStr); err != nil {
 			fmt.Printf("Warning: Failed to parse initial rules: %v\n", err)
+			return nil, err
 		}
 	}
-
-	return pv
+	return pv, nil
 }
 
 // validateInputSize checks if input size exceeds allowed limits
