@@ -686,13 +686,12 @@ func (pv *ParamValidator) validateURLUnsafe(fullURL string) bool {
 		return true
 	}
 
-	filteredParams, err := pv.parseAndFilterQueryParams(u.RawQuery, paramsRules)
+	_, valid, err := pv.parseAndFilterQueryParams(u.RawQuery, paramsRules)
 	if err != nil {
 		return false
 	}
 
-	originalCount := strings.Count(u.RawQuery, "&") + 1
-	return len(filteredParams) >= originalCount
+	return valid
 }
 
 // isAllowAllParams checks if rules allow all parameters
@@ -964,33 +963,35 @@ func (pv *ParamValidator) normalizeURLUnsafe(fullURL string) string {
 		return u.Path
 	}
 
-	var filteredParams []QueryParam
+	var filteredParams string
 	if u.RawQuery != "" {
-		filteredParams, err = pv.parseAndFilterQueryParams(u.RawQuery, paramsRules)
+		filteredParams, _, err = pv.parseAndFilterQueryParams(u.RawQuery, paramsRules)
 		if err != nil {
 			return u.Path
 		}
 	}
 
 	if len(filteredParams) > 0 {
-		u.RawQuery = encodeQueryOrdered(filteredParams)
+		u.RawQuery = filteredParams
 		return u.String()
 	}
 
 	return u.Path
 }
 
-func (pv *ParamValidator) parseAndFilterQueryParams(queryString string, paramsRules map[string]*ParamRule) ([]QueryParam, error) {
+// parseAndFilterQueryParams parses and filters query parameters, returning filtered query string
+func (pv *ParamValidator) parseAndFilterQueryParams(queryString string, paramsRules map[string]*ParamRule) (string, bool, error) {
 	if queryString == "" {
-		return nil, nil
+		return "", false, nil
 	}
 
 	paramCount := strings.Count(queryString, "&") + 1
 	if paramCount > MaxParamValues {
-		return nil, fmt.Errorf("too many parameters")
+		return "", false, fmt.Errorf("too many parameters")
 	}
 
-	filteredParams := make([]QueryParam, 0, min(paramCount, MaxParamValues))
+	var filteredParams []string
+	isValid := true
 	allowAll := pv.isAllowAllParams(paramsRules)
 
 	for len(queryString) > 0 && len(filteredParams) < MaxParamValues {
@@ -1016,6 +1017,7 @@ func (pv *ParamValidator) parseAndFilterQueryParams(queryString string, paramsRu
 			originalKey = segment
 			decodedKey, err := url.QueryUnescape(segment)
 			if err != nil {
+				isValid = false
 				continue // Пропускаем некорректно закодированные параметры
 			}
 			key = decodedKey
@@ -1030,6 +1032,7 @@ func (pv *ParamValidator) parseAndFilterQueryParams(queryString string, paramsRu
 			decodedValue, err2 := url.QueryUnescape(originalValue)
 
 			if err1 != nil || err2 != nil {
+				isValid = false
 				continue // Пропускаем некорректно закодированные параметры
 			}
 			key = decodedKey
@@ -1038,14 +1041,22 @@ func (pv *ParamValidator) parseAndFilterQueryParams(queryString string, paramsRu
 
 		// Если разрешены все параметры или параметр разрешен правилами
 		if allowAll || pv.isParamAllowedUnsafe(key, value, paramsRules) {
-			filteredParams = append(filteredParams, QueryParam{
-				Key:   originalKey,   // Сохраняем оригинальную кодировку ключа
-				Value: originalValue, // Сохраняем оригинальную кодировку значения
-			})
+			// Сохраняем оригинальную строку параметра
+			if eqPos == -1 {
+				filteredParams = append(filteredParams, originalKey)
+			} else {
+				filteredParams = append(filteredParams, originalKey+"="+originalValue)
+			}
+		} else if !allowAll {
+			isValid = false
 		}
 	}
 
-	return filteredParams, nil
+	if len(filteredParams) == 0 {
+		return "", isValid, nil
+	}
+
+	return strings.Join(filteredParams, "&"), isValid, nil
 }
 
 func (pv *ParamValidator) isParamAllowedUnsafe(paramName, paramValue string, paramsRules map[string]*ParamRule) bool {
@@ -1054,21 +1065,6 @@ func (pv *ParamValidator) isParamAllowedUnsafe(paramName, paramValue string, par
 		return false
 	}
 	return pv.isValueValidUnsafe(rule, paramValue)
-}
-
-func encodeQueryOrdered(params []QueryParam) string {
-	if len(params) == 0 {
-		return ""
-	}
-
-	var pairs []string
-	for _, param := range params {
-		escapedKey := url.QueryEscape(param.Key)
-		escapedValue := url.QueryEscape(param.Value)
-		pairs = append(pairs, escapedKey+"="+escapedValue)
-	}
-
-	return strings.Join(pairs, "&")
 }
 
 func (pv *ParamValidator) filterQueryParamsUnsafe(urlPath, queryString string) string {
@@ -1082,12 +1078,12 @@ func (pv *ParamValidator) filterQueryParamsUnsafe(urlPath, queryString string) s
 		return ""
 	}
 
-	filteredParams, err := pv.parseAndFilterQueryParams(queryString, paramsRules)
+	filteredParams, _, err := pv.parseAndFilterQueryParams(queryString, paramsRules)
 	if err != nil {
 		return ""
 	}
 
-	return encodeQueryOrdered(filteredParams)
+	return filteredParams
 }
 
 // FilterQueryParams filters query parameters string according to validation rules
