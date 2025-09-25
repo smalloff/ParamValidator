@@ -694,31 +694,28 @@ func TestRaceConditionDetection(t *testing.T) {
 func TestConcurrentAccessAfterClear(t *testing.T) {
 	pv := NewParamValidator("/api?page=[1-10]")
 
-	// Уменьшаем количество итераций для теста
 	var wg sync.WaitGroup
 	wg.Add(3)
 
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 
-	// Горутина для очистки
 	go func() {
 		defer wg.Done()
-		for i := 0; i < 5; i++ { // Уменьшаем количество очисток
+		for i := 0; i < 5; i++ {
 			select {
 			case <-ctx.Done():
 				return
 			default:
 				pv.Clear()
-				time.Sleep(time.Millisecond * 50) // Увеличиваем задержку
+				time.Sleep(time.Millisecond * 50)
 			}
 		}
 	}()
 
-	// Горутина для валидации
 	go func() {
 		defer wg.Done()
-		for i := 0; i < 50; i++ { // Уменьшаем количество итераций
+		for i := 0; i < 50; i++ {
 			select {
 			case <-ctx.Done():
 				return
@@ -729,7 +726,6 @@ func TestConcurrentAccessAfterClear(t *testing.T) {
 		}
 	}()
 
-	// Горутина для нормализации
 	go func() {
 		defer wg.Done()
 		for i := 0; i < 50; i++ {
@@ -743,7 +739,6 @@ func TestConcurrentAccessAfterClear(t *testing.T) {
 		}
 	}()
 
-	// Ожидаем завершения с таймаутом
 	done := make(chan struct{})
 	go func() {
 		wg.Wait()
@@ -891,7 +886,7 @@ func TestMultipleRulesNormalization(t *testing.T) {
 			name:     "parameters from multiple matching rules",
 			rules:    "/api/v1/*?page=[1-10];/api/v1/users?limit=[5,10]",
 			url:      "/api/v1/users?page=5&limit=10",
-			expected: "/api/v1/users?limit=10&page=5",
+			expected: "/api/v1/users?page=5&limit=10",
 		},
 		{
 			name:     "same parameter name - more specific wins",
@@ -927,7 +922,7 @@ func TestMultipleRulesNormalization(t *testing.T) {
 			name:     "multiple rules with different parameters",
 			rules:    "/api/*?page=[1-10];/api/users?limit=[5,10]",
 			url:      "/api/users?page=5&limit=10&invalid=value",
-			expected: "/api/users?limit=10&page=5",
+			expected: "/api/users?page=5&limit=10",
 		},
 		{
 			name:     "conflicting parameter names",
