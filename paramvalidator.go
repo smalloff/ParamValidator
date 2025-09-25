@@ -982,60 +982,69 @@ func (pv *ParamValidator) normalizeURLUnsafe(fullURL string) string {
 	filteredParams := pv.filterQueryParamsUnsafeValues(queryParams, paramsRules)
 
 	if len(filteredParams) > 0 {
-		u.RawQuery = EncodeQueryOrdered(filteredParams)
+		u.RawQuery = encodeQueryOrdered(filteredParams)
 		return u.String()
 	}
 
 	return u.Path
 }
 
-// parseQueryOrdered parses URL query string while preserving parameter order
-// Returns slice of key-value pairs in original order
 func parseQueryOrdered(queryString string) ([]struct{ Key, Value string }, error) {
-	var params []struct{ Key, Value string }
-
 	if queryString == "" {
-		return params, nil
+		return nil, nil
 	}
 
-	pairs := strings.Split(queryString, "&")
-	for _, pair := range pairs {
-		if pair == "" {
+	paramCount := strings.Count(queryString, "&") + 1
+	if paramCount > MaxParamValues {
+		return nil, fmt.Errorf("too many parameters")
+	}
+
+	params := make([]struct{ Key, Value string }, 0, paramCount)
+
+	for len(queryString) > 0 && len(params) < MaxParamValues {
+
+		var segment string
+		if pos := strings.IndexByte(queryString, '&'); pos >= 0 {
+			segment = queryString[:pos]
+			queryString = queryString[pos+1:]
+		} else {
+			segment = queryString
+			queryString = ""
+		}
+
+		if segment == "" {
 			continue
 		}
 
-		// Split into key and value
-		parts := strings.SplitN(pair, "=", 2)
-		key := parts[0]
+		eqPos := strings.IndexByte(segment, '=')
+		if eqPos == -1 {
 
-		// Unescape key
-		keyUnescaped, err := url.QueryUnescape(key)
-		if err != nil {
-			// If unescape fails, use original
-			keyUnescaped = key
-		}
+			key, err := url.QueryUnescape(segment)
+			if err != nil {
+				continue
+			}
+			params = append(params, struct{ Key, Value string }{
+				Key:   key,
+				Value: "",
+			})
+		} else {
 
-		value := ""
-		if len(parts) > 1 {
-			value = parts[1]
-			// Unescape value
-			valueUnescaped, err := url.QueryUnescape(value)
-			if err == nil {
-				value = valueUnescaped
+			keyStr, err1 := url.QueryUnescape(segment[:eqPos])
+			valueStr, err2 := url.QueryUnescape(segment[eqPos+1:])
+
+			if err1 == nil && err2 == nil {
+				params = append(params, struct{ Key, Value string }{
+					Key:   keyStr,
+					Value: valueStr,
+				})
 			}
 		}
-
-		params = append(params, struct{ Key, Value string }{
-			Key:   keyUnescaped,
-			Value: value,
-		})
 	}
 
 	return params, nil
 }
 
-// EncodeQueryOrdered converts ordered parameters back to query string
-func EncodeQueryOrdered(params []struct{ Key, Value string }) string {
+func encodeQueryOrdered(params []struct{ Key, Value string }) string {
 	if len(params) == 0 {
 		return ""
 	}
@@ -1085,7 +1094,7 @@ func (pv *ParamValidator) filterQueryParamsUnsafe(urlPath, queryString string) s
 	}
 
 	filteredParams := pv.filterQueryParamsUnsafeValues(params, paramsRules)
-	return EncodeQueryOrdered(filteredParams)
+	return encodeQueryOrdered(filteredParams)
 }
 
 // FilterQueryParams filters query parameters string according to validation rules
