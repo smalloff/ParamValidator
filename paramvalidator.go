@@ -1188,12 +1188,21 @@ func (pv *ParamValidator) ValidateQueryParams(urlPath, queryString string) bool 
 		return true
 	}
 
-	fullURL := urlPath
-	if queryString != "" {
-		fullURL = urlPath + "?" + queryString
+	paramsRules := pv.getParamsForURLUnsafe(urlPath)
+
+	if pv.isAllowAllParams(paramsRules) {
+		return true
 	}
 
-	return pv.ValidateURL(fullURL)
+	if len(paramsRules) == 0 {
+		return false
+	}
+
+	valid, err := pv.parseAndValidateQueryParams(queryString, paramsRules)
+	if err != nil {
+		return false
+	}
+	return valid
 }
 
 // clearUnsafe clears all rules without locking
