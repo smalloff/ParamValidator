@@ -673,15 +673,21 @@ func (pv *ParamValidator) validateURLUnsafe(fullURL string) bool {
 		return true
 	}
 
-	if len(paramsRules) == 0 && len(u.Query()) > 0 {
+	if len(paramsRules) == 0 && u.RawQuery != "" {
 		return false
 	}
 
-	if len(u.Query()) > 0 && len(paramsRules) == 0 {
+	if u.RawQuery == "" {
+		return true
+	}
+
+	// Заменяем url.ParseQuery на ParseQueryOrdered
+	queryParams, err := ParseQueryOrdered(u.RawQuery)
+	if err != nil {
 		return false
 	}
 
-	return pv.validateQueryParamsUnsafe(u.Query(), paramsRules)
+	return pv.validateQueryParamsUnsafe(queryParams, paramsRules)
 }
 
 // isAllowAllParams checks if rules allow all parameters
@@ -690,8 +696,13 @@ func (pv *ParamValidator) isAllowAllParams(paramsRules map[string]*ParamRule) bo
 }
 
 // validateQueryParamsUnsafe validates query parameters against rules
-func (pv *ParamValidator) validateQueryParamsUnsafe(queryParams url.Values, urlParams map[string]*ParamRule) bool {
-	for paramName, values := range queryParams {
+func (pv *ParamValidator) validateQueryParamsUnsafe(queryParams []struct{ Key, Value string }, urlParams map[string]*ParamRule) bool {
+	paramGroups := make(map[string][]string)
+	for _, param := range queryParams {
+		paramGroups[param.Key] = append(paramGroups[param.Key], param.Value)
+	}
+
+	for paramName, values := range paramGroups {
 		rule := pv.findParamRule(paramName, urlParams)
 		if rule == nil {
 			return false
@@ -971,7 +982,16 @@ func (pv *ParamValidator) normalizeURLUnsafe(fullURL string) string {
 		return u.Path
 	}
 
-	filteredParams := pv.filterQueryParamsUnsafeValues(u.Query(), paramsRules)
+	// Заменяем url.ParseQuery на ParseQueryOrdered
+	var queryParams []struct{ Key, Value string }
+	if u.RawQuery != "" {
+		queryParams, err = ParseQueryOrdered(u.RawQuery)
+		if err != nil {
+			return u.Path
+		}
+	}
+
+	filteredParams := pv.filterQueryParamsUnsafeValues(queryParams, paramsRules)
 
 	if len(filteredParams) > 0 {
 		u.RawQuery = filteredParams.Encode()
@@ -981,40 +1001,80 @@ func (pv *ParamValidator) normalizeURLUnsafe(fullURL string) string {
 	return u.Path
 }
 
-// filterQueryParamsUnsafe filters query parameters string for URL path
-func (pv *ParamValidator) filterQueryParamsUnsafe(urlPath, queryString string) string {
-	paramsRules := pv.getParamsForURLUnsafe(urlPath)
+// ParseQueryOrdered parses URL query string while preserving parameter order
+// Returns slice of key-value pairs in original order
+func ParseQueryOrdered(queryString string) ([]struct{ Key, Value string }, error) {
+	var params []struct{ Key, Value string }
 
-	if pv.isAllowAllParams(paramsRules) {
-		return queryString
+	if queryString == "" {
+		return params, nil
 	}
 
-	if len(paramsRules) == 0 && len(pv.compiledRules.globalParams) == 0 {
+	pairs := strings.Split(queryString, "&")
+	for _, pair := range pairs {
+		if pair == "" {
+			continue
+		}
+
+		// Split into key and value
+		parts := strings.SplitN(pair, "=", 2)
+		key := parts[0]
+
+		// Unescape key
+		keyUnescaped, err := url.QueryUnescape(key)
+		if err != nil {
+			// If unescape fails, use original
+			keyUnescaped = key
+		}
+
+		// Handle value
+		value := ""
+		if len(parts) > 1 {
+			value = parts[1]
+			// Unescape value
+			valueUnescaped, err := url.QueryUnescape(value)
+			if err == nil {
+				value = valueUnescaped
+			}
+		}
+
+		params = append(params, struct{ Key, Value string }{
+			Key:   keyUnescaped,
+			Value: value,
+		})
+	}
+
+	return params, nil
+}
+
+// EncodeQueryOrdered converts ordered parameters back to query string
+func EncodeQueryOrdered(params []struct{ Key, Value string }) string {
+	if len(params) == 0 {
 		return ""
 	}
 
-	params, err := url.ParseQuery(queryString)
-	if err != nil {
-		return ""
+	var pairs []string
+	for _, param := range params {
+		escapedKey := url.QueryEscape(param.Key)
+		escapedValue := url.QueryEscape(param.Value)
+		pairs = append(pairs, escapedKey+"="+escapedValue)
 	}
 
-	return pv.filterQueryParamsValuesUnsafe(params, paramsRules)
+	return strings.Join(pairs, "&")
 }
 
 // filterQueryParamsValuesUnsafe filters parameter values and returns query string
-func (pv *ParamValidator) filterQueryParamsValuesUnsafe(params url.Values, urlParams map[string]*ParamRule) string {
+func (pv *ParamValidator) filterQueryParamsValuesUnsafe(params []struct{ Key, Value string }, urlParams map[string]*ParamRule) string {
 	var filtered []string
 
-	for paramName, values := range params {
-		rule := pv.findParamRule(paramName, urlParams)
+	for _, param := range params {
+		rule := pv.findParamRule(param.Key, urlParams)
 		if rule == nil {
 			continue
 		}
 
-		for _, value := range values {
-			if pv.isValueValidUnsafe(rule, value) {
-				filtered = append(filtered, url.QueryEscape(paramName)+"="+url.QueryEscape(value))
-			}
+		if pv.isValueValidUnsafe(rule, param.Value) {
+			filtered = append(filtered, url.QueryEscape(param.Key)+"="+url.QueryEscape(param.Value))
 		}
 	}
 
@@ -1026,10 +1086,16 @@ func (pv *ParamValidator) filterQueryParamsValuesUnsafe(params url.Values, urlPa
 }
 
 // filterQueryParamsUnsafeValues filters query parameters and returns url.Values
-func (pv *ParamValidator) filterQueryParamsUnsafeValues(queryParams url.Values, paramsRules map[string]*ParamRule) url.Values {
+func (pv *ParamValidator) filterQueryParamsUnsafeValues(queryParams []struct{ Key, Value string }, paramsRules map[string]*ParamRule) url.Values {
 	filtered := url.Values{}
 
-	for paramName, values := range queryParams {
+	// Группируем параметры по имени
+	paramGroups := make(map[string][]string)
+	for _, param := range queryParams {
+		paramGroups[param.Key] = append(paramGroups[param.Key], param.Value)
+	}
+
+	for paramName, values := range paramGroups {
 		rule := pv.findParamRule(paramName, paramsRules)
 		if rule == nil {
 			continue
@@ -1042,6 +1108,26 @@ func (pv *ParamValidator) filterQueryParamsUnsafeValues(queryParams url.Values, 
 	}
 
 	return filtered
+}
+
+func (pv *ParamValidator) filterQueryParamsUnsafe(urlPath, queryString string) string {
+	paramsRules := pv.getParamsForURLUnsafe(urlPath)
+
+	if pv.isAllowAllParams(paramsRules) {
+		return queryString
+	}
+
+	if len(paramsRules) == 0 && len(pv.compiledRules.globalParams) == 0 {
+		return ""
+	}
+
+	// Заменяем url.ParseQuery на ParseQueryOrdered
+	params, err := ParseQueryOrdered(queryString)
+	if err != nil {
+		return ""
+	}
+
+	return pv.filterQueryParamsValuesUnsafe(params, paramsRules)
 }
 
 // FilterQueryParams filters query parameters string according to validation rules
