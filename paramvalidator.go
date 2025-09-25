@@ -691,7 +691,7 @@ func (pv *ParamValidator) validateURLUnsafe(fullURL string) bool {
 		return true
 	}
 
-	_, valid, err := pv.parseAndFilterQueryParams(u.RawQuery, paramsRules)
+	valid, err := pv.parseAndValidateQueryParams(u.RawQuery, paramsRules)
 	if err != nil {
 		return false
 	}
@@ -975,6 +975,69 @@ func (pv *ParamValidator) normalizeURLUnsafe(fullURL string) string {
 	}
 
 	return u.Path
+}
+
+// parseAndValidateQueryParams parses and validates query parameters, returning validation result
+func (pv *ParamValidator) parseAndValidateQueryParams(queryString string, paramsRules map[string]*ParamRule) (bool, error) {
+	if queryString == "" {
+		return true, nil
+	}
+
+	paramCount := strings.Count(queryString, "&") + 1
+	if paramCount > MaxParamValues {
+		return false, fmt.Errorf("too many parameters")
+	}
+
+	isValid := true
+	allowAll := pv.isAllowAllParams(paramsRules)
+
+	for len(queryString) > 0 && paramCount > 0 {
+		var segment string
+		if pos := strings.IndexByte(queryString, '&'); pos >= 0 {
+			segment = queryString[:pos]
+			queryString = queryString[pos+1:]
+		} else {
+			segment = queryString
+			queryString = ""
+		}
+		paramCount--
+
+		if segment == "" {
+			continue
+		}
+
+		eqPos := strings.IndexByte(segment, '=')
+		var key, value string
+
+		if eqPos == -1 {
+			decodedKey, err := url.QueryUnescape(segment)
+			if err != nil {
+				isValid = false
+				continue
+			}
+			key = decodedKey
+			value = ""
+		} else {
+			originalKey := segment[:eqPos]
+			originalValue := segment[eqPos+1:]
+
+			decodedKey, err1 := url.QueryUnescape(originalKey)
+			decodedValue, err2 := url.QueryUnescape(originalValue)
+
+			if err1 != nil || err2 != nil {
+				isValid = false
+				continue
+			}
+			key = decodedKey
+			value = decodedValue
+		}
+
+		if !allowAll && !pv.isParamAllowedUnsafe(key, value, paramsRules) {
+			isValid = false
+		}
+	}
+
+	return isValid, nil
 }
 
 // parseAndFilterQueryParams parses and filters query parameters, returning filtered query string
