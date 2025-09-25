@@ -694,31 +694,28 @@ func TestRaceConditionDetection(t *testing.T) {
 func TestConcurrentAccessAfterClear(t *testing.T) {
 	pv := NewParamValidator("/api?page=[1-10]")
 
-	// Уменьшаем количество итераций для теста
 	var wg sync.WaitGroup
 	wg.Add(3)
 
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 
-	// Горутина для очистки
 	go func() {
 		defer wg.Done()
-		for i := 0; i < 5; i++ { // Уменьшаем количество очисток
+		for i := 0; i < 5; i++ {
 			select {
 			case <-ctx.Done():
 				return
 			default:
 				pv.Clear()
-				time.Sleep(time.Millisecond * 50) // Увеличиваем задержку
+				time.Sleep(time.Millisecond * 50)
 			}
 		}
 	}()
 
-	// Горутина для валидации
 	go func() {
 		defer wg.Done()
-		for i := 0; i < 50; i++ { // Уменьшаем количество итераций
+		for i := 0; i < 50; i++ {
 			select {
 			case <-ctx.Done():
 				return
@@ -729,7 +726,6 @@ func TestConcurrentAccessAfterClear(t *testing.T) {
 		}
 	}()
 
-	// Горутина для нормализации
 	go func() {
 		defer wg.Done()
 		for i := 0; i < 50; i++ {
@@ -743,7 +739,6 @@ func TestConcurrentAccessAfterClear(t *testing.T) {
 		}
 	}()
 
-	// Ожидаем завершения с таймаутом
 	done := make(chan struct{})
 	go func() {
 		wg.Wait()
