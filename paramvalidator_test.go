@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 )
@@ -1184,4 +1185,229 @@ func BenchmarkValidateQueryParamsParallel(b *testing.B) {
 			pv.ValidateQueryParams(urlPath, query)
 		}
 	})
+}
+
+func TestCallbackPattern(t *testing.T) {
+	// Callback функция для валидации
+	callbackFunc := func(key string, value string) bool {
+		switch key {
+		case "token":
+			return value == "valid_token"
+		case "user_id":
+			return len(value) > 0 && len(value) <= 10
+		case "timestamp":
+			return len(value) == 10 // предположим, что timestamp из 10 цифр
+		default:
+			return false
+		}
+	}
+
+	tests := []struct {
+		name     string
+		rules    string
+		url      string
+		expected bool
+	}{
+		{
+			name:     "valid callback parameter",
+			rules:    "/api?token=[?]",
+			url:      "/api?token=valid_token",
+			expected: true,
+		},
+		{
+			name:     "invalid callback parameter",
+			rules:    "/api?token=[?]",
+			url:      "/api?token=invalid_token",
+			expected: false,
+		},
+		{
+			name:     "multiple callback parameters",
+			rules:    "/auth?token=[?]&user_id=[?]",
+			url:      "/auth?token=valid_token&user_id=12345",
+			expected: true,
+		},
+		{
+			name:     "mixed callback and regular rules",
+			rules:    "/data?token=[?]&page=[1-10]",
+			url:      "/data?token=valid_token&page=5",
+			expected: true,
+		},
+		{
+			name:     "callback with empty value",
+			rules:    "/api?token=[?]",
+			url:      "/api?token=",
+			expected: false,
+		},
+		{
+			name:     "callback parameter in global rules",
+			rules:    "timestamp=[?]",
+			url:      "/any/path?timestamp=1234567890",
+			expected: true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			pv, err := NewParamValidator(tt.rules, callbackFunc)
+			if err != nil {
+				t.Fatalf("Failed to create validator: %v", err)
+			}
+			result := pv.ValidateURL(tt.url)
+			if result != tt.expected {
+				t.Errorf("ValidateURL(%q) with rules %q = %v, expected %v",
+					tt.url, tt.rules, result, tt.expected)
+			}
+		})
+	}
+}
+
+func TestCallbackWithoutFunction(t *testing.T) {
+	// Создаем валидатор с callback паттерном, но без callback функции
+	pv, err := NewParamValidator("/api?token=[?]")
+	if err != nil {
+		t.Fatalf("Failed to create validator: %v", err)
+	}
+
+	// Без callback функции параметр с паттерном [?] должен быть невалидным
+	if pv.ValidateURL("/api?token=any_value") {
+		t.Error("Callback parameter should be invalid when no callback function is set")
+	}
+
+	// Устанавливаем callback функцию позже
+	callbackFunc := func(key string, value string) bool {
+		return value == "valid"
+	}
+	pv.SetCallback(callbackFunc)
+
+	if !pv.ValidateURL("/api?token=valid") {
+		t.Error("Callback parameter should be valid after setting callback function")
+	}
+
+	if pv.ValidateURL("/api?token=invalid") {
+		t.Error("Callback parameter should be invalid for wrong values")
+	}
+}
+
+func TestCallbackEdgeCases(t *testing.T) {
+	callbackCalled := false
+	callbackFunc := func(key string, value string) bool {
+		callbackCalled = true
+		return true
+	}
+
+	pv, err := NewParamValidator("/test?param=[?]", callbackFunc)
+	if err != nil {
+		t.Fatalf("Failed to create validator: %v", err)
+	}
+
+	t.Run("callback not called for non-callback parameters", func(t *testing.T) {
+		callbackCalled = false
+		// Создаем валидатор с обычным параметром (не callback)
+		pv2, err := NewParamValidator("/test?param=[value1,value2]")
+		if err != nil {
+			t.Fatalf("Failed to create validator: %v", err)
+		}
+		pv2.SetCallback(callbackFunc)
+
+		pv2.ValidateURL("/test?param=value1")
+		if callbackCalled {
+			t.Error("Callback should not be called for non-callback parameters")
+		}
+	})
+
+	t.Run("callback called with correct parameters", func(t *testing.T) {
+		var receivedKey, receivedValue string
+		testCallback := func(key string, value string) bool {
+			receivedKey = key
+			receivedValue = value
+			return true
+		}
+
+		pv.SetCallback(testCallback)
+		pv.ValidateURL("/test?param=test_value")
+
+		if receivedKey != "param" {
+			t.Errorf("Callback called with key %q, expected %q", receivedKey, "param")
+		}
+		if receivedValue != "test_value" {
+			t.Errorf("Callback called with value %q, expected %q", receivedValue, "test_value")
+		}
+	})
+}
+
+func TestCallbackWithNormalization(t *testing.T) {
+	callbackFunc := func(key string, value string) bool {
+		return value == "allowed"
+	}
+
+	pv, err := NewParamValidator("/api?secret=[?]", callbackFunc)
+	if err != nil {
+		t.Fatalf("Failed to create validator: %v", err)
+	}
+
+	tests := []struct {
+		name     string
+		url      string
+		expected string
+	}{
+		{
+			name:     "keep valid callback parameter",
+			url:      "/api?secret=allowed&invalid=value",
+			expected: "/api?secret=allowed",
+		},
+		{
+			name:     "remove invalid callback parameter",
+			url:      "/api?secret=disallowed&other=value",
+			expected: "/api",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result := pv.NormalizeURL(tt.url)
+			if result != tt.expected {
+				t.Errorf("NormalizeURL(%q) = %q, expected %q", tt.url, result, tt.expected)
+			}
+		})
+	}
+}
+
+func TestCallbackConcurrentAccess(t *testing.T) {
+	var (
+		callbackCount int64
+	)
+
+	callbackFunc := func(key string, value string) bool {
+		atomic.AddInt64(&callbackCount, 1)
+		return value == "valid"
+	}
+
+	pv, err := NewParamValidator("/api?param=[?]", callbackFunc)
+	if err != nil {
+		t.Fatalf("Failed to create validator: %v", err)
+	}
+
+	var wg sync.WaitGroup
+	wg.Add(2)
+
+	go func() {
+		defer wg.Done()
+		for i := 0; i < 100; i++ {
+			pv.ValidateURL("/api?param=valid")
+		}
+	}()
+
+	go func() {
+		defer wg.Done()
+		for i := 0; i < 100; i++ {
+			pv.ValidateURL("/api?param=invalid")
+		}
+	}()
+
+	wg.Wait()
+
+	finalCount := atomic.LoadInt64(&callbackCount)
+	if finalCount != 200 {
+		t.Errorf("Callback should be called 200 times, but was called %d times", finalCount)
+	}
 }
