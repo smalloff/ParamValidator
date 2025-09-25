@@ -20,14 +20,14 @@ Override - specific rules overwrite general ones
 Support for wildcards and exact matches
 ```
 cpu: Intel(R) Core(TM) i5-4670K CPU @ 3.40GHz
-BenchmarkValidateURL-4                   	  750792	      1428 ns/op	     488 B/op	       8 allocs/op
-BenchmarkNormalizeURL-4                  	  823394	      1395 ns/op	     480 B/op	       7 allocs/op
-BenchmarkFilterQueryParamsParallel-4     	 3556333	       317.4 ns/op	     288 B/op	       5 allocs/op
-BenchmarkFilterQueryParams-4             	 1000000	      1028 ns/op	     288 B/op	       5 allocs/op
-BenchmarkConcurrentValidation-4          	 1270618	       904.1 ns/op	     688 B/op	       8 allocs/op
-BenchmarkConcurrentNormalization-4       	 3077982	       407.3 ns/op	     480 B/op	       7 allocs/op
-BenchmarkValidateQueryParams-4           	  857406	      1344 ns/op	     496 B/op	       7 allocs/op
-BenchmarkValidateQueryParamsParallel-4   	 2859098	       382.5 ns/op	     464 B/op	       7 allocs/op
+BenchmarkValidateURL-4                   	  822536	      1266 ns/op	     400 B/op	       3 allocs/op
+BenchmarkNormalizeURL-4                  	  750369	      1562 ns/op	     480 B/op	       7 allocs/op
+BenchmarkFilterQueryParamsParallel-4     	 2731122	       511.6 ns/op	     288 B/op	       5 allocs/op
+BenchmarkFilterQueryParams-4             	 1000000	      1066 ns/op	     288 B/op	       5 allocs/op
+BenchmarkConcurrentValidation-4          	 2200932	       496.2 ns/op	     656 B/op	       5 allocs/op
+BenchmarkConcurrentNormalization-4       	 2876188	       431.4 ns/op	     480 B/op	       7 allocs/op
+BenchmarkValidateQueryParams-4           	  931423	      1228 ns/op	     464 B/op	       4 allocs/op
+BenchmarkValidateQueryParamsParallel-4   	 3374367	       339.6 ns/op	     432 B/op	       4 allocs/op
 ```
 
 ## Rule Syntax
