@@ -11,11 +11,12 @@ import (
 )
 
 const (
-	PatternRange   = "range"
-	PatternEnum    = "enum"
-	PatternKeyOnly = "key-only"
-	PatternAny     = "any"
-	PatternAll     = "*"
+	PatternRange    = "range"
+	PatternEnum     = "enum"
+	PatternKeyOnly  = "key-only"
+	PatternAny      = "any"
+	PatternAll      = "*"
+	PatternCallback = "callback"
 
 	MaxRulesSize       = 64 * 1024
 	MaxURLLength       = 4096
@@ -29,6 +30,9 @@ type QueryParam struct {
 	Key   string
 	Value string
 }
+
+// CallbackFunc defines the signature for custom validation callback
+type CallbackFunc func(key string, value string) bool
 
 // ParamRule defines validation rules for a specific parameter
 type ParamRule struct {
@@ -59,12 +63,13 @@ type ParamValidator struct {
 	rulesStr      string
 	initialized   bool
 	compiledRules *CompiledRules
+	callbackFunc  CallbackFunc
 }
 
 // NewParamValidator creates a new parameter validator with optional initial rules
 // rulesStr: String containing validation rules in specific format
-// Returns initialized ParamValidator instance
-func NewParamValidator(rulesStr string) *ParamValidator {
+// Returns initialized ParamValidator instance or error if parsing fails
+func NewParamValidator(rulesStr string, callback ...CallbackFunc) (*ParamValidator, error) {
 	pv := &ParamValidator{
 		globalParams:  make(map[string]*ParamRule),
 		urlRules:      make(map[string]*URLRule),
@@ -72,13 +77,24 @@ func NewParamValidator(rulesStr string) *ParamValidator {
 		initialized:   true,
 	}
 
+	if len(callback) > 0 && callback[0] != nil {
+		pv.callbackFunc = callback[0]
+	}
+
 	if rulesStr != "" {
 		if err := pv.ParseRules(rulesStr); err != nil {
 			fmt.Printf("Warning: Failed to parse initial rules: %v\n", err)
+			return nil, err
 		}
 	}
+	return pv, nil
+}
 
-	return pv
+// SetCallback sets the custom validation callback function
+func (pv *ParamValidator) SetCallback(callback CallbackFunc) {
+	pv.mu.Lock()
+	defer pv.mu.Unlock()
+	pv.callbackFunc = callback
 }
 
 // validateInputSize checks if input size exceeds allowed limits
@@ -471,6 +487,18 @@ func (pv *ParamValidator) parseSingleParamRuleUnsafe(ruleStr string) (*ParamRule
 		}, nil
 	}
 
+	if strings.HasSuffix(ruleStr, "=[?]") {
+		paramName := strings.TrimSuffix(ruleStr, "=[?]")
+		paramName, err := pv.sanitizeParamName(paramName)
+		if err != nil {
+			return nil, fmt.Errorf("invalid parameter name in callback rule: %w", err)
+		}
+		return &ParamRule{
+			Name:    paramName,
+			Pattern: PatternCallback,
+		}, nil
+	}
+
 	startBracket := strings.Index(ruleStr, "[")
 	if startBracket == -1 {
 		return pv.parseSimpleParamRule(ruleStr)
@@ -569,6 +597,8 @@ func (pv *ParamValidator) createParamRule(paramName, constraintStr string) (*Par
 		rule.Pattern = PatternKeyOnly
 	case constraintStr == PatternAll:
 		rule.Pattern = PatternAny
+	case constraintStr == "?":
+		rule.Pattern = PatternCallback
 	case pv.isRangeConstraint(constraintStr):
 		if err := pv.parseRangeConstraint(rule, constraintStr); err != nil {
 			return nil, err
@@ -887,6 +917,11 @@ func (pv *ParamValidator) isValueValidUnsafe(rule *ParamRule, value string) bool
 			if value == allowedValue {
 				return true
 			}
+		}
+		return false
+	case PatternCallback:
+		if pv.callbackFunc != nil {
+			return pv.callbackFunc(rule.Name, value)
 		}
 		return false
 	default:
@@ -1340,6 +1375,8 @@ func (pv *ParamValidator) formatParamRule(rule *ParamRule) string {
 			return fmt.Sprintf("%s=[%s]", rule.Name, rule.Values[0])
 		}
 		return fmt.Sprintf("%s=[%s]", rule.Name, strings.Join(rule.Values, ","))
+	case PatternCallback:
+		return rule.Name + "=[?]"
 	default:
 		return rule.Name
 	}
