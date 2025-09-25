@@ -46,118 +46,54 @@ Allow with callback: "query=[?]"
 ```go
 package main
 
-
 import (
 	"fmt"
 	"github.com/smalloff/paramvalidator"
 )
 
 func main() {
-    // Example 1: Basic usage without callback
-    rules := "/products?page=[1-10]&category=[electronics,books]"
-    pv, err := paramvalidator.NewParamValidator(rules)
-    if err != nil {
-        fmt.Println("Error creating validator:", err)
-        return
-    }
+	// Define validation rules
+	rules := "/products?page=[1-10]&category=[electronics,books]"
+	
+	// Create validator
+	pv, err := paramvalidator.NewParamValidator(rules)
+	if err != nil {
+		fmt.Println("Error:", err)
+		return
+	}
 
-    // Validate URL
-    isValid := pv.ValidateURL("/products?page=5&category=electronics")
-    fmt.Println("URL valid:", isValid) // true
+	// Validate URL parameters
+	isValid := pv.ValidateURL("/products?page=5&category=electronics")
+	fmt.Println("URL valid:", isValid) // true
 
-    // Normalize URL
-    normalized := pv.NormalizeURL("/products?page=15&category=electronics&invalid=param")
-    fmt.Println("Normalized URL:", normalized) // /products?category=electronics
+	// Normalize invalid URL (removes invalid params)
+	normalized := pv.NormalizeURL("/products?page=15&category=electronics&invalid=param")
+	fmt.Println("Normalized URL:", normalized) // /products?category=electronics
 
-    // Example 2: Multiple URL rules
-    rules = "/products?page=[1-10];/users?sort=[name,date];/search?q=[]"
-    pv, err = paramvalidator.NewParamValidator(rules)
-    if err != nil {
-        fmt.Println("Error creating validator:", err)
-        return
-    }
+	
+	// Rule with callback parameter [?]
+	rules = "/api?auth=[?]&page=[1-10]"
+	
+	// Create validator with callback function
+	pv, err = paramvalidator.NewParamValidator(rules, func(key string, value string) bool {
+		if key == "auth" {
+			// Custom validation logic
+			return value == "secret123"
+		}
+		return false
+	})
+	
+	if err != nil {
+		fmt.Println("Error:", err)
+		return
+	}
 
-    fmt.Println("Products page valid:", pv.ValidateURL("/products?page=5")) // true
-    fmt.Println("Users sort valid:", pv.ValidateURL("/users?sort=name"))    // true
-    fmt.Println("Search query valid:", pv.ValidateURL("/search?q"))         // true (key-only parameter)
+	// Validate with callback
+	valid1 := pv.ValidateURL("/api?auth=secret123&page=5")
+	fmt.Println("Valid auth:", valid1) // true
 
-    // Example 3: Global rules + URL-specific with callback
-    rules = "page=[1-100];/products?page=[1-10];/admin/*?access=[admin,superuser]&token=[?]"
-    
-    // Create validator with callback function
-    callbackFunc := func(key string, value string) bool {
-        switch key {
-        case "token":
-            // Custom validation logic for token
-            return len(value) == 32 && strings.HasPrefix(value, "tok_")
-        default:
-            return false
-        }
-    }
-    
-    pv, err = paramvalidator.NewParamValidator(rules, callbackFunc)
-    if err != nil {
-        fmt.Println("Error creating validator:", err)
-        return
-    }
-
-    // Global rule works for any URL
-    fmt.Println("Global rule valid:", pv.ValidateURL("/any/path?page=50")) // true
-
-    // URL-specific rule has priority
-    fmt.Println("Specific rule valid:", pv.ValidateURL("/products?page=5"))  // true
-    fmt.Println("Specific rule invalid:", pv.ValidateURL("/products?page=50")) // false
-
-    // Wildcard rules with callback
-    fmt.Println("Admin with valid token:", pv.ValidateURL("/admin/users?access=admin&token=tok_123456789012345678901234567890")) // true
-    fmt.Println("Admin with invalid token:", pv.ValidateURL("/admin/users?access=admin&token=invalid")) // false
-
-    // Example 4: Query parameter filtering
-    urlPath := "/products"
-    queryString := "page=5&limit=10&invalid=param"
-
-    // Fast filter
-    filteredQuery := pv.FilterQueryParams(urlPath, queryString)
-    fmt.Println("Filtered query:", filteredQuery) // page=5
-
-    // Example 5: Dynamic callback setting
-    pv, err = paramvalidator.NewParamValidator("/api?auth=[?]")
-    if err != nil {
-        fmt.Println("Error creating validator:", err)
-        return
-    }
-
-    // Initially, callback parameters will fail without a callback function
-    fmt.Println("Without callback:", pv.ValidateURL("/api?auth=secret")) // false
-
-    // Set callback dynamically
-    pv.SetCallback(func(key string, value string) bool {
-        return value == "secret123"
-    })
-
-    fmt.Println("With callback - valid:", pv.ValidateURL("/api?auth=secret123")) // true
-    fmt.Println("With callback - invalid:", pv.ValidateURL("/api?auth=wrong"))   // false
-
-    // Example 6: Mixed callback and regular rules
-    rules = "/data?page=[1-10]&auth=[?]&filter=[active,inactive]"
-    pv, err = paramvalidator.NewParamValidator(rules, func(key string, value string) bool {
-        if key == "auth" {
-            return strings.HasPrefix(value, "bearer_")
-        }
-        return false
-    })
-
-    if err != nil {
-        fmt.Println("Error creating validator:", err)
-        return
-    }
-
-    fmt.Println("Mixed rules - valid:", pv.ValidateURL("/data?page=5&auth=bearer_token123&filter=active")) // true
-    fmt.Println("Mixed rules - invalid auth:", pv.ValidateURL("/data?page=5&auth=invalid&filter=active")) // false
-    fmt.Println("Mixed rules - invalid page:", pv.ValidateURL("/data?page=15&auth=bearer_token123&filter=active")) // false
-
-    // Example 7: Normalization with callback parameters
-    normalized = pv.NormalizeURL("/data?page=5&auth=invalid_token&filter=active&extra=param")
-    fmt.Println("Normalized with callback:", normalized) // /data?page=5&filter=active
+	valid2 := pv.ValidateURL("/api?auth=wrong&page=5")
+	fmt.Println("Invalid auth:", valid2) // false
+}	
 }
 ```
