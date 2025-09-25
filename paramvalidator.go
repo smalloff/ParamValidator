@@ -990,11 +990,13 @@ func (pv *ParamValidator) parseAndFilterQueryParams(queryString string, paramsRu
 		return "", false, fmt.Errorf("too many parameters")
 	}
 
-	var filteredParams []string
+	filteredParams := ""
+
 	isValid := true
 	allowAll := pv.isAllowAllParams(paramsRules)
+	firstParam := true
 
-	for len(queryString) > 0 && len(filteredParams) < MaxParamValues {
+	for len(queryString) > 0 && paramCount > 0 {
 		var segment string
 		if pos := strings.IndexByte(queryString, '&'); pos >= 0 {
 			segment = queryString[:pos]
@@ -1003,6 +1005,7 @@ func (pv *ParamValidator) parseAndFilterQueryParams(queryString string, paramsRu
 			segment = queryString
 			queryString = ""
 		}
+		paramCount--
 
 		if segment == "" {
 			continue
@@ -1042,21 +1045,23 @@ func (pv *ParamValidator) parseAndFilterQueryParams(queryString string, paramsRu
 		// Если разрешены все параметры или параметр разрешен правилами
 		if allowAll || pv.isParamAllowedUnsafe(key, value, paramsRules) {
 			// Сохраняем оригинальную строку параметра
-			if eqPos == -1 {
-				filteredParams = append(filteredParams, originalKey)
+			if !firstParam {
+				filteredParams += "&"
 			} else {
-				filteredParams = append(filteredParams, originalKey+"="+originalValue)
+				firstParam = false
+			}
+
+			if eqPos == -1 {
+				filteredParams += originalKey
+			} else {
+				filteredParams += originalKey + "=" + originalValue
 			}
 		} else if !allowAll {
 			isValid = false
 		}
 	}
 
-	if len(filteredParams) == 0 {
-		return "", isValid, nil
-	}
-
-	return strings.Join(filteredParams, "&"), isValid, nil
+	return filteredParams, isValid, nil
 }
 
 func (pv *ParamValidator) isParamAllowedUnsafe(paramName, paramValue string, paramsRules map[string]*ParamRule) bool {
