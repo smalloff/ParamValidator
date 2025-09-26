@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"net/url"
 	"strings"
+	"sync"
 )
 
 // WithCallback устанавливает callback-функцию для валидации
@@ -302,13 +303,26 @@ func (pv *ParamValidator) parseAndValidateQueryParams(queryString string, params
 	return isValid, err
 }
 
+var builderPool = sync.Pool{
+	New: func() interface{} {
+		b := &strings.Builder{}
+		b.Grow(256) // предварительное выделение
+		return b
+	},
+}
+
 // parseAndFilterQueryParams parses and filters query parameters
 func (pv *ParamValidator) parseAndFilterQueryParams(queryString string, paramsRules map[string]*ParamRule) (string, bool, error) {
 	if queryString == "" {
 		return "", true, nil
 	}
 
-	var filteredParams strings.Builder
+	filteredParams := builderPool.Get().(*strings.Builder)
+	defer func() {
+		filteredParams.Reset()
+		builderPool.Put(filteredParams)
+	}()
+
 	isValid := true
 	allowAll := pv.isAllowAllParams(paramsRules)
 	firstParam := true
