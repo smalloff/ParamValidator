@@ -164,6 +164,11 @@ func (pv *ParamValidator) isValueValidUnsafe(rule *ParamRule, value string) bool
 		return pv.validateEnumValue(rule, value)
 	case PatternCallback:
 		return pv.validateCallbackValue(rule, value)
+	case "plugin":
+		if rule.CustomValidator != nil {
+			return rule.CustomValidator(value)
+		}
+		return false
 	default:
 		return false
 	}

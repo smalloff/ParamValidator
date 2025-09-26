@@ -8,11 +8,33 @@ import (
 )
 
 // RuleParser handles parsing of validation rules
-type RuleParser struct{}
+// PluginConstraintParser интерфейс для парсеров кастомных ограничений
+type PluginConstraintParser interface {
+	// CanParse проверяет, может ли плагин обработать эту constraint
+	CanParse(constraintStr string) bool
+
+	// Parse создает функцию валидации для параметра
+	Parse(paramName, constraintStr string) (func(string) bool, error)
+
+	// GetName возвращает имя плагина для отладки
+	GetName() string
+}
+
+// RuleParser с поддержкой плагинов
+type RuleParser struct {
+	plugins []PluginConstraintParser
+}
+
+// RegisterPlugin регистрирует новый плагин
+func (rp *RuleParser) RegisterPlugin(plugin PluginConstraintParser) {
+	rp.plugins = append(rp.plugins, plugin)
+}
 
 // NewRuleParser creates a new rule parser
-func NewRuleParser() *RuleParser {
-	return &RuleParser{}
+func NewRuleParser(plugins ...PluginConstraintParser) *RuleParser {
+	return &RuleParser{
+		plugins: plugins,
+	}
 }
 
 // sanitizeParamName validates and cleans parameter name
@@ -238,6 +260,9 @@ func (rp *RuleParser) extractURLAndParams(urlRuleStr string) (string, string) {
 
 	if strings.HasPrefix(cleanStr, "/") || strings.HasPrefix(cleanStr, "*") {
 		bracketDepth := 0
+		questionMarkPos := -1
+
+		// First, find the question mark outside of brackets
 		for i := 0; i < len(cleanStr); i++ {
 			switch cleanStr[i] {
 			case '[':
@@ -248,24 +273,30 @@ func (rp *RuleParser) extractURLAndParams(urlRuleStr string) (string, string) {
 				}
 			case '?':
 				if bracketDepth == 0 {
-					urlPattern := strings.TrimSpace(urlRuleStr[:i])
-					paramsStr := strings.TrimSpace(urlRuleStr[i+1:])
-					return urlPattern, paramsStr
+					questionMarkPos = i
+					break
 				}
 			}
 		}
 
-		if strings.Contains(cleanStr, "[") {
-			parts := strings.SplitN(cleanStr, "[", 2)
-			if len(parts) == 2 {
-				urlPattern := strings.TrimSpace(parts[0])
-				urlPattern = strings.TrimSuffix(urlPattern, "?")
-				paramsStr := "[" + parts[1]
+		if questionMarkPos != -1 {
+			// We have a URL with parameters: /path?param=value
+			urlPattern := strings.TrimSpace(cleanStr[:questionMarkPos])
+			paramsStr := strings.TrimSpace(cleanStr[questionMarkPos+1:])
+			return urlPattern, paramsStr
+		} else {
+			// No question mark, check if we have brackets directly after URL
+			bracketPos := strings.Index(cleanStr, "[")
+			if bracketPos != -1 {
+				// URL pattern with inline parameters: /path[param=value]
+				urlPattern := strings.TrimSpace(cleanStr[:bracketPos])
+				paramsStr := strings.TrimSpace(cleanStr[bracketPos:])
 				return urlPattern, paramsStr
+			} else {
+				// Just a URL pattern without parameters
+				return strings.TrimSpace(cleanStr), ""
 			}
 		}
-
-		return strings.TrimSpace(urlRuleStr), ""
 	}
 
 	return "", urlRuleStr
@@ -373,9 +404,23 @@ func (rp *RuleParser) parseSimpleParamRule(ruleStr string) (*ParamRule, error) {
 // parseComplexParamRule parses parameter rule with bracket constraints
 func (rp *RuleParser) parseComplexParamRule(ruleStr string, startBracket int) (*ParamRule, error) {
 	paramName := strings.TrimSpace(ruleStr[:startBracket])
+
+	// Remove trailing "=" if present (for URL rules like /path?param=[value])
 	if strings.HasSuffix(paramName, "=") {
 		paramName = strings.TrimSuffix(paramName, "=")
 		paramName = strings.TrimSpace(paramName)
+	}
+
+	// For URL rules, extract only the actual parameter name (after last ? or &)
+	if strings.Contains(paramName, "?") {
+		parts := strings.Split(paramName, "?")
+		if len(parts) > 1 {
+			paramName = parts[len(parts)-1]
+		}
+	}
+	if strings.Contains(paramName, "&") {
+		parts := strings.Split(paramName, "&")
+		paramName = parts[len(parts)-1]
 	}
 
 	paramName, err := rp.sanitizeParamName(paramName)
@@ -429,9 +474,26 @@ func (rp *RuleParser) extractConstraint(ruleStr string, startBracket int) (strin
 }
 
 // createParamRule creates ParamRule from name and constraint
+// createParamRule creates ParamRule from name and constraint
 func (rp *RuleParser) createParamRule(paramName, constraintStr string) (*ParamRule, error) {
 	rule := &ParamRule{Name: paramName}
 
+	// Сначала проверяем плагины
+	for _, plugin := range rp.plugins {
+		if plugin.CanParse(constraintStr) {
+			validatorFunc, err := plugin.Parse(paramName, constraintStr)
+			if err != nil {
+				// Если плагин сказал, что может парсить, но парсинг failed - это ошибка
+				return nil, fmt.Errorf("plugin %s failed to parse constraint '%s': %w", plugin.GetName(), constraintStr, err)
+			}
+
+			rule.Pattern = "plugin"
+			rule.CustomValidator = validatorFunc
+			return rule, nil
+		}
+	}
+
+	// Если ни один плагин не подошел, используем стандартную логику
 	switch {
 	case constraintStr == "":
 		rule.Pattern = PatternKeyOnly
@@ -448,7 +510,6 @@ func (rp *RuleParser) createParamRule(paramName, constraintStr string) (*ParamRu
 			return nil, err
 		}
 	default:
-		// Single value enum
 		rule.Pattern = PatternEnum
 		rule.Values = []string{constraintStr}
 	}

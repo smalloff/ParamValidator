@@ -34,11 +34,12 @@ const (
 
 // ParamRule defines validation rule for single parameter
 type ParamRule struct {
-	Name    string
-	Pattern string
-	Min     int64
-	Max     int64
-	Values  []string
+	Name            string
+	Pattern         string
+	Min             int64
+	Max             int64
+	Values          []string
+	CustomValidator func(string) bool
 }
 
 // URLRule defines validation rules for specific URL pattern
