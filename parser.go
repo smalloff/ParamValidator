@@ -507,12 +507,11 @@ func (rp *RuleParser) createParamRule(paramName, constraintStr string) (*ParamRu
 		if plugin.CanParse(constraintStr) {
 			validatorFunc, err := plugin.Parse(paramName, constraintStr)
 			if err != nil {
-				// Если плагин сказал, что может парсить, но парсинг failed - это ошибка
 				return nil, fmt.Errorf("plugin %s failed to parse constraint '%s': %w", plugin.GetName(), constraintStr, err)
 			}
 
 			rule.Pattern = "plugin"
-			rule.CustomValidator = validatorFunc
+			rule.CustomValidator = validatorFunc // ВАЖНО: сохраняем функцию
 			return rule, nil
 		}
 	}

@@ -3,7 +3,6 @@ package paramvalidator
 import (
 	"fmt"
 	"net/url"
-	"strconv"
 	"strings"
 )
 
@@ -179,8 +178,6 @@ func (pv *ParamValidator) isValueValidUnsafe(rule *ParamRule, value string) bool
 		return value == ""
 	case PatternAny:
 		return true
-	case PatternRange:
-		return pv.validateRangeValue(rule, value)
 	case PatternEnum:
 		return pv.validateEnumValue(rule, value)
 	case PatternCallback:
@@ -193,12 +190,6 @@ func (pv *ParamValidator) isValueValidUnsafe(rule *ParamRule, value string) bool
 	default:
 		return false
 	}
-}
-
-// validateRangeValue validates numeric range values
-func (pv *ParamValidator) validateRangeValue(rule *ParamRule, value string) bool {
-	num, err := strconv.ParseInt(value, 10, 64)
-	return err == nil && num >= rule.Min && num <= rule.Max
 }
 
 // validateEnumValue validates enum values
@@ -487,10 +478,11 @@ func (pv *ParamValidator) copyParamRuleUnsafe(rule *ParamRule) *ParamRule {
 	}
 
 	ruleCopy := &ParamRule{
-		Name:    rule.Name,
-		Pattern: rule.Pattern,
-		Min:     rule.Min,
-		Max:     rule.Max,
+		Name:            rule.Name,
+		Pattern:         rule.Pattern,
+		Min:             rule.Min,
+		Max:             rule.Max,
+		CustomValidator: rule.CustomValidator,
 	}
 
 	if rule.Values != nil {

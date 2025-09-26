@@ -800,29 +800,61 @@ func BenchmarkRangePluginNormalization(b *testing.B) {
 	}
 }
 
-func BenchmarkMultiplePlugins(b *testing.B) {
-	// Create multiple plugins
-	rangePlugin := plugins.NewRangePlugin()
+func BenchmarkValidateWithMultiplePlugins(b *testing.B) {
+	// Создаем правила, которые используют все три плагина
+	rules := `/api?age=[range:18-65]&email=[regex:^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$]&score=[comparison:>50]&name=[regex:^[a-zA-Z ]{2,50}$]&quantity=[range:1-100]&rating=[comparison:>=3.5]`
 
-	parser := NewRuleParser(rangePlugin)
-
-	pv := &ParamValidator{
-		globalParams:  make(map[string]*ParamRule),
-		urlRules:      make(map[string]*URLRule),
-		urlMatcher:    NewURLMatcher(),
-		compiledRules: &CompiledRules{},
-		initialized:   true,
-		parser:        parser,
+	pv, err := NewParamValidator(rules,
+		WithPlugins(
+			plugins.NewComparisonPlugin(),
+			plugins.NewRangePlugin(),
+			plugins.NewRegexPlugin(),
+		))
+	if err != nil {
+		b.Fatalf("Failed to create validator: %v", err)
 	}
 
-	err := pv.ParseRules("/api?age=[18-65]&email=[email]")
-	if err != nil {
-		b.Fatalf("Failed to parse rules: %v", err)
+	// Тестовые URL для валидации
+	testURLs := []string{
+		"/api?age=25&email=test@example.com&score=75&name=John Doe&quantity=10&rating=4.2",
+		"/api?age=30&email=user@domain.com&score=60&name=Jane Smith&quantity=50&rating=3.8",
+		"/api?age=22&email=admin@test.org&score=80&name=Bob Wilson&quantity=25&rating=4.5",
 	}
 
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		pv.ValidateURL("/api?age=25&email=test@example.com")
+		// Чередуем тестовые URL для более реалистичного бенчмарка
+		url := testURLs[i%len(testURLs)]
+		pv.ValidateURL(url)
+	}
+}
+
+func BenchmarkNormalizeWithMultiplePlugins(b *testing.B) {
+	// Создаем правила, которые используют все три плагина
+	rules := `/api?age=[18-65]&email=[^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$]&score=[>50]&name=[^[a-zA-Z ]{2,50}$]&quantity=[1-100]&rating=[>=3]`
+
+	pv, err := NewParamValidator(rules,
+		WithPlugins(
+			plugins.NewComparisonPlugin(),
+			plugins.NewRangePlugin(),
+			plugins.NewRegexPlugin(),
+		))
+	if err != nil {
+		b.Fatalf("Failed to create validator: %v", err)
+	}
+
+	// Тестовые URL для валидации
+	testURLs := []string{
+		"/api?age=25&email=test@example.com&score=75&name=John Doe&quantity=10&rating=4.2",
+		"/api?age=30&email=user@domain.com&score=60&name=Jane Smith&quantity=50&rating=3.8",
+		"/api?age=22&email=admin@test.org&score=80&name=Bob Wilson&quantity=25&rating=4.5",
+	}
+
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		// Чередуем тестовые URL для более реалистичного бенчмарка
+		url := testURLs[i%len(testURLs)]
+		pv.NormalizeURL(url)
 	}
 }
 
