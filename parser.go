@@ -261,9 +261,13 @@ func (rp *RuleParser) extractURLAndParams(urlRuleStr string) (string, string) {
 	if strings.HasPrefix(cleanStr, "/") || strings.HasPrefix(cleanStr, "*") {
 		bracketDepth := 0
 		questionMarkPos := -1
+		breakOut := false
 
 		// First, find the question mark outside of brackets
 		for i := 0; i < len(cleanStr); i++ {
+			if breakOut {
+				break
+			}
 			switch cleanStr[i] {
 			case '[':
 				bracketDepth++
@@ -274,7 +278,7 @@ func (rp *RuleParser) extractURLAndParams(urlRuleStr string) (string, string) {
 			case '?':
 				if bracketDepth == 0 {
 					questionMarkPos = i
-					break
+					breakOut = true
 				}
 			}
 		}
