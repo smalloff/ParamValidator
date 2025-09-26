@@ -31,6 +31,7 @@ const (
 	MaxParamValues     = 100
 	MaxRulesSize       = 100 * 1024
 	MaxPatternLength   = 200
+	MaxParamsCount     = 128
 )
 
 // ParamRule defines validation rule for single parameter
@@ -41,27 +42,47 @@ type ParamRule struct {
 	Max             int64
 	Values          []string
 	CustomValidator func(string) bool
+	BitmaskIndex    int
 }
 
 // URLRule defines validation rules for specific URL pattern
 type URLRule struct {
 	URLPattern string
 	Params     map[string]*ParamRule
+	ParamMask  ParamMask
+}
+
+type ParamMask struct {
+	parts [4]uint32
+}
+
+type RuleSource int
+
+const (
+	SourceNone RuleSource = iota
+	SourceGlobal
+	SourceURL
+	SourceSpecificURL
+)
+
+type ParamMasks struct {
+	Global      ParamMask // Глобальные параметры (низший приоритет)
+	URL         ParamMask // Обычные URL правила (средний приоритет)
+	SpecificURL ParamMask // Специфичные URL правила (высший приоритет)
 }
 
 // CompiledRules contains pre-compiled rules for faster access
 type CompiledRules struct {
 	globalParams map[string]*ParamRule
 	urlRules     map[string]*URLRule
+	paramIndex   *ParamIndex
 }
 
-// wildcardPatternStats contains analysis of wildcard patterns
-type wildcardPatternStats struct {
-	count              int
-	hasWildcard        bool
-	lastCharIsWildcard bool
-	hasMiddleWildcard  bool
-	slashCount         int
+type ParamIndex struct {
+	paramToIndex map[string]int // Имя параметра -> индекс
+	indexToParam map[int]string // Индекс -> имя параметра
+	nextIndex    int
+	mu           sync.RWMutex
 }
 
 // ParamValidator main struct for parameter validation
@@ -74,4 +95,13 @@ type ParamValidator struct {
 	initialized   bool
 	mu            sync.RWMutex
 	parser        *RuleParser
+	paramIndex    *ParamIndex
+}
+
+type wildcardPatternStats struct {
+	count              int
+	hasWildcard        bool
+	lastCharIsWildcard bool
+	hasMiddleWildcard  bool
+	slashCount         int
 }
