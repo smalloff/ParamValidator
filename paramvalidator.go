@@ -14,6 +14,7 @@ func NewParamValidator(rulesStr string, callback ...CallbackFunc) (*ParamValidat
 	pv := &ParamValidator{
 		globalParams:  make(map[string]*ParamRule),
 		urlRules:      make(map[string]*URLRule),
+		urlMatcher:    NewURLMatcher(),
 		compiledRules: &CompiledRules{},
 		initialized:   true,
 		parser:        NewRuleParser(),
@@ -703,12 +704,25 @@ func (pv *ParamValidator) compileRulesUnsafe() {
 		urlRules:     make(map[string]*URLRule),
 	}
 
+	// Копируем глобальные параметры
 	for name, rule := range pv.globalParams {
 		pv.compiledRules.globalParams[name] = pv.copyParamRuleUnsafe(rule)
 	}
 
+	// Копируем URL-правила (используем актуальные pv.urlRules)
 	for pattern, rule := range pv.urlRules {
 		pv.compiledRules.urlRules[pattern] = pv.copyURLRuleUnsafe(rule)
+	}
+
+	// Также обновляем URLMatcher с новыми правилами
+	pv.updateURLMatcherUnsafe()
+}
+
+// updateURLMatcherUnsafe обновляет URLMatcher с текущими правилами
+func (pv *ParamValidator) updateURLMatcherUnsafe() {
+	pv.urlMatcher.ClearRules()
+	for pattern, rule := range pv.urlRules {
+		pv.urlMatcher.AddRule(pattern, pv.copyURLRuleUnsafe(rule))
 	}
 }
 

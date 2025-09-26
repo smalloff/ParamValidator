@@ -66,6 +66,7 @@ type wildcardPatternStats struct {
 type ParamValidator struct {
 	globalParams  map[string]*ParamRule
 	urlRules      map[string]*URLRule
+	urlMatcher    *URLMatcher
 	compiledRules *CompiledRules
 	callbackFunc  CallbackFunc
 	initialized   bool
