@@ -389,30 +389,6 @@ func TestFilterQueryParams(t *testing.T) {
 	}
 }
 
-func TestAddURLRule(t *testing.T) {
-	pv, err := NewParamValidator("")
-	if err != nil {
-		t.Fatalf("Failed to create validator: %v", err)
-	}
-
-	rule := &ParamRule{
-		Name:    "page",
-		Pattern: PatternRange,
-		Min:     1,
-		Max:     10,
-	}
-	params := map[string]*ParamRule{"page": rule}
-	pv.AddURLRule("/test", params)
-
-	if !pv.ValidateURL("/test?page=5") {
-		t.Error("Added URL rule should validate correctly")
-	}
-
-	if pv.ValidateURL("/test?page=15") {
-		t.Error("Added URL rule should reject invalid values")
-	}
-}
-
 func TestClear(t *testing.T) {
 	pv, err := NewParamValidator("/api?page=[1-10]")
 	if err != nil {
@@ -651,15 +627,16 @@ func TestConcurrentRuleUpdates(t *testing.T) {
 	var wg sync.WaitGroup
 	wg.Add(numReaders + numWriters)
 
-	errorCh := make(chan error, numReaders+numWriters)
-	stopCh := make(chan struct{})
+	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second) // Ограничение времени
+	defer cancel()
 
+	// Readers
 	for i := 0; i < numReaders; i++ {
 		go func(id int) {
 			defer wg.Done()
-			for {
+			for j := 0; j < 100; j++ { // Ограниченное количество итераций
 				select {
-				case <-stopCh:
+				case <-ctx.Done():
 					return
 				default:
 					pv.ValidateURL(fmt.Sprintf("/test%d?param=value", id))
@@ -671,37 +648,35 @@ func TestConcurrentRuleUpdates(t *testing.T) {
 		}(i)
 	}
 
+	// Writers
 	for i := 0; i < numWriters; i++ {
 		go func(id int) {
 			defer wg.Done()
-			for j := 0; j < 5; j++ {
+			for j := 0; j < 10; j++ { // Ограниченное количество итераций
 				select {
-				case <-stopCh:
+				case <-ctx.Done():
 					return
 				default:
-					urlParams := map[string]*ParamRule{
-						"page": {
-							Name:    "page",
-							Pattern: PatternRange,
-							Min:     int64(id * 10),
-							Max:     int64(id*10 + 5),
-						},
-					}
-					pv.AddURLRule(fmt.Sprintf("/api%d", id), urlParams)
-
-					time.Sleep(time.Millisecond)
+					rules := fmt.Sprintf("/api%d?param=[value%d]", id, j)
+					pv.ParseRules(rules)
+					time.Sleep(time.Millisecond * 10)
 				}
 			}
 		}(i)
 	}
 
-	time.Sleep(time.Second)
-	close(stopCh)
-	wg.Wait()
-	close(errorCh)
+	// Ждем завершения или таймаута
+	done := make(chan struct{})
+	go func() {
+		wg.Wait()
+		close(done)
+	}()
 
-	if len(errorCh) > 0 {
-		t.Errorf("Concurrent rule updates failed with %d errors", len(errorCh))
+	select {
+	case <-done:
+		// Тест завершился успешно
+	case <-ctx.Done():
+		t.Error("Test timed out - possible deadlock")
 	}
 }
 

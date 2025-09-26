@@ -2,75 +2,73 @@ package paramvalidator
 
 import "sync"
 
-const (
-	PatternRange    = "range"
-	PatternEnum     = "enum"
-	PatternKeyOnly  = "key-only"
-	PatternAny      = "any"
-	PatternAll      = "*"
-	PatternCallback = "callback"
+// CallbackFunc defines function type for custom validation
+type CallbackFunc func(paramName string, paramValue string) bool
 
-	MaxRulesSize       = 64 * 1024
-	MaxURLLength       = 4096
-	MaxPatternLength   = 200
-	MaxParamNameLength = 100
-	MaxParamValues     = 100
+// RuleType represents type of validation rules
+type RuleType int
+
+const (
+	RuleTypeGlobal RuleType = iota
+	RuleTypeURL
 )
 
-// QueryParam represents a single query parameter key-value pair
-type QueryParam struct {
-	Key   string
-	Value string
-}
+// Pattern constants for validation
+const (
+	PatternAll      = "*"
+	PatternAny      = "any"
+	PatternKeyOnly  = "key-only"
+	PatternRange    = "range"
+	PatternEnum     = "enum"
+	PatternCallback = "callback"
+)
 
-// CallbackFunc defines the signature for custom validation callback
-type CallbackFunc func(key string, value string) bool
+// Validation limits
+const (
+	MaxURLLength       = 2048
+	MaxParamNameLength = 100
+	MaxParamValues     = 100
+	MaxRulesSize       = 100 * 1024
+	MaxPatternLength   = 200
+)
 
-// ParamRule defines validation rules for a specific parameter
+// ParamRule defines validation rule for single parameter
 type ParamRule struct {
-	Values  []string
 	Name    string
 	Pattern string
 	Min     int64
 	Max     int64
+	Values  []string
 }
 
-// URLRule defines validation rules for a specific URL pattern
+// URLRule defines validation rules for specific URL pattern
 type URLRule struct {
-	Params     map[string]*ParamRule
 	URLPattern string
+	Params     map[string]*ParamRule
 }
 
-// CompiledRules contains optimized rule structures for fast validation
+// CompiledRules contains pre-compiled rules for faster access
 type CompiledRules struct {
 	globalParams map[string]*ParamRule
 	urlRules     map[string]*URLRule
 }
 
-// ParamValidator validates URL parameters against configured rules
-type ParamValidator struct {
-	mu            sync.RWMutex
-	globalParams  map[string]*ParamRule
-	urlRules      map[string]*URLRule
-	rulesStr      string
-	initialized   bool
-	compiledRules *CompiledRules
-	callbackFunc  CallbackFunc
-}
-
-type RuleType int
-
-const (
-	RuleTypeUnknown RuleType = iota
-	RuleTypeGlobal
-	RuleTypeURL
-)
-
-// wildcardPatternStats holds analysis results for wildcard patterns
+// wildcardPatternStats contains analysis of wildcard patterns
 type wildcardPatternStats struct {
 	count              int
-	slashCount         int
 	hasWildcard        bool
 	lastCharIsWildcard bool
 	hasMiddleWildcard  bool
+	slashCount         int
+}
+
+// ParamValidator main struct for parameter validation
+type ParamValidator struct {
+	globalParams  map[string]*ParamRule
+	urlRules      map[string]*URLRule
+	compiledRules *CompiledRules
+	callbackFunc  CallbackFunc
+	initialized   bool
+	mu            sync.RWMutex
+	parser        *RuleParser
 }

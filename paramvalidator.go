@@ -7,6 +7,51 @@ import (
 	"strings"
 )
 
+// NewParamValidator creates a new parameter validator with optional initial rules
+// rulesStr: String containing validation rules in specific format
+// Returns initialized ParamValidator instance or error if parsing fails
+func NewParamValidator(rulesStr string, callback ...CallbackFunc) (*ParamValidator, error) {
+	pv := &ParamValidator{
+		globalParams:  make(map[string]*ParamRule),
+		urlRules:      make(map[string]*URLRule),
+		compiledRules: &CompiledRules{},
+		initialized:   true,
+		parser:        NewRuleParser(),
+	}
+
+	if len(callback) > 0 && callback[0] != nil {
+		pv.callbackFunc = callback[0]
+	}
+
+	if rulesStr != "" {
+		if err := pv.ParseRules(rulesStr); err != nil {
+			fmt.Printf("Warning: Failed to parse initial rules: %v\n", err)
+			return nil, err
+		}
+	}
+	return pv, nil
+}
+
+// SetCallback sets the custom validation callback function
+func (pv *ParamValidator) SetCallback(callback CallbackFunc) {
+	pv.mu.Lock()
+	defer pv.mu.Unlock()
+	pv.callbackFunc = callback
+}
+
+// validateInputSize checks if input size exceeds allowed limits
+func (pv *ParamValidator) validateInputSize(input string, maxSize int) error {
+	if len(input) > maxSize {
+		return fmt.Errorf("input size %d exceeds maximum allowed size %d", len(input), maxSize)
+	}
+
+	if len(input) > 10*1024*1024 {
+		return fmt.Errorf("input size exceeds absolute maximum")
+	}
+
+	return nil
+}
+
 // ValidateURL validates complete URL against loaded rules
 func (pv *ParamValidator) ValidateURL(fullURL string) bool {
 	if pv == nil || !pv.initialized || fullURL == "" {
@@ -66,7 +111,7 @@ func (pv *ParamValidator) findParamRule(paramName string, urlParams map[string]*
 
 // getParamsForURLUnsafe gets all applicable parameter rules for URL path
 func (pv *ParamValidator) getParamsForURLUnsafe(urlPath string) map[string]*ParamRule {
-	urlPath = pv.normalizeURLPattern(urlPath)
+	urlPath = NormalizeURLPattern(urlPath)
 	mostSpecificRule := pv.findMostSpecificURLRuleUnsafe(urlPath)
 
 	result := make(map[string]*ParamRule)
@@ -177,7 +222,7 @@ func (pv *ParamValidator) countPathSegments(pattern string) int {
 
 // urlMatchesPatternUnsafe checks if URL path matches pattern
 func (pv *ParamValidator) urlMatchesPatternUnsafe(urlPath, pattern string) bool {
-	urlPath = pv.normalizeURLPattern(urlPath)
+	urlPath = NormalizeURLPattern(urlPath)
 
 	switch {
 	case pattern == PatternAll || pattern == urlPath:
@@ -571,4 +616,116 @@ func (pv *ParamValidator) ValidateQueryParams(urlPath, queryString string) bool 
 
 	valid, err := pv.parseAndValidateQueryParams(queryString, paramsRules)
 	return err == nil && valid
+}
+
+// Clear removes all validation rules
+func (pv *ParamValidator) Clear() {
+	pv.mu.Lock()
+	defer pv.mu.Unlock()
+	pv.clearUnsafe()
+}
+
+// copyParamRuleUnsafe creates a deep copy of ParamRule
+func (pv *ParamValidator) copyParamRuleUnsafe(rule *ParamRule) *ParamRule {
+	if rule == nil {
+		return nil
+	}
+
+	ruleCopy := &ParamRule{
+		Name:    rule.Name,
+		Pattern: rule.Pattern,
+		Min:     rule.Min,
+		Max:     rule.Max,
+	}
+
+	if rule.Values != nil {
+		ruleCopy.Values = make([]string, len(rule.Values))
+		copy(ruleCopy.Values, rule.Values)
+	}
+
+	return ruleCopy
+}
+
+// clearUnsafe resets all rules without locking
+func (pv *ParamValidator) clearUnsafe() {
+	pv.globalParams = make(map[string]*ParamRule)
+	pv.urlRules = make(map[string]*URLRule)
+	pv.compiledRules = &CompiledRules{
+		globalParams: make(map[string]*ParamRule),
+		urlRules:     make(map[string]*URLRule),
+	}
+}
+
+// ClearRules clears all loaded validation rules
+func (pv *ParamValidator) ClearRules() {
+	pv.mu.Lock()
+	defer pv.mu.Unlock()
+	pv.clearUnsafe()
+}
+
+// ParseRules parses and loads validation rules from string
+// rulesStr: String containing validation rules in specific format
+// Returns error if parsing fails
+func (pv *ParamValidator) ParseRules(rulesStr string) error {
+	if !pv.initialized {
+		return fmt.Errorf("validator not initialized")
+	}
+
+	if rulesStr == "" {
+		pv.mu.Lock()
+		defer pv.mu.Unlock()
+		pv.clearUnsafe()
+		return nil
+	}
+
+	if err := pv.validateInputSize(rulesStr, MaxRulesSize); err != nil {
+		return err
+	}
+
+	pv.mu.Lock()
+	defer pv.mu.Unlock()
+
+	globalParams, urlRules, err := pv.parser.parseRulesUnsafe(rulesStr)
+	if err != nil {
+		return err
+	}
+
+	pv.globalParams = globalParams
+	pv.urlRules = urlRules
+	pv.compileRulesUnsafe()
+	return nil
+}
+
+// compileRulesUnsafe compiles rules for faster access
+func (pv *ParamValidator) compileRulesUnsafe() {
+	pv.compiledRules = &CompiledRules{
+		globalParams: make(map[string]*ParamRule),
+		urlRules:     make(map[string]*URLRule),
+	}
+
+	for name, rule := range pv.globalParams {
+		pv.compiledRules.globalParams[name] = pv.copyParamRuleUnsafe(rule)
+	}
+
+	for pattern, rule := range pv.urlRules {
+		pv.compiledRules.urlRules[pattern] = pv.copyURLRuleUnsafe(rule)
+	}
+}
+
+// copyURLRuleUnsafe creates a deep copy of URLRule
+func (pv *ParamValidator) copyURLRuleUnsafe(rule *URLRule) *URLRule {
+	if rule == nil {
+		return nil
+	}
+
+	ruleCopy := &URLRule{
+		URLPattern: rule.URLPattern,
+		Params:     make(map[string]*ParamRule),
+	}
+
+	for paramName, paramRule := range rule.Params {
+		ruleCopy.Params[paramName] = pv.copyParamRuleUnsafe(paramRule)
+	}
+
+	return ruleCopy
 }
