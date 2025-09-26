@@ -143,182 +143,12 @@ func (pv *ParamValidator) getParamsForURLUnsafe(urlPath string) map[string]*Para
 
 // findMostSpecificURLRuleUnsafe finds most specific matching URL rule
 func (pv *ParamValidator) findMostSpecificURLRuleUnsafe(urlPath string) *URLRule {
-	var mostSpecificRule *URLRule
-	maxSpecificity := -1
-
-	for pattern, rule := range pv.compiledRules.urlRules {
-		if pv.urlMatchesPatternUnsafe(urlPath, pattern) {
-			specificity := pv.calculateSpecificityUnsafe(pattern)
-			if specificity > maxSpecificity {
-				maxSpecificity = specificity
-				mostSpecificRule = rule
-			}
-		}
-	}
-
-	return mostSpecificRule
-}
-
-// calculateSpecificityUnsafe calculates specificity score for URL pattern
-func (pv *ParamValidator) calculateSpecificityUnsafe(pattern string) int {
-	if pattern == PatternAll {
-		return 0
-	}
-
-	wildcardStats := pv.analyzeWildcardPattern(pattern)
-	pathSegmentCount := pv.countPathSegments(pattern)
-
-	specificity := pathSegmentCount * 100
-
-	if !wildcardStats.hasWildcard {
-		specificity += 1500
-	} else {
-		specificity -= wildcardStats.count * 200
-
-		if wildcardStats.lastCharIsWildcard {
-			specificity -= 300
-		}
-		if wildcardStats.hasMiddleWildcard {
-			specificity -= 100
-		}
-	}
-
-	if wildcardStats.slashCount > 1 {
-		specificity += wildcardStats.slashCount * 50
-	}
-
-	return specificity
-}
-
-// analyzeWildcardPattern analyzes wildcard pattern characteristics
-func (pv *ParamValidator) analyzeWildcardPattern(pattern string) wildcardPatternStats {
-	var stats wildcardPatternStats
-
-	for i := 0; i < len(pattern); i++ {
-		switch pattern[i] {
-		case '*':
-			stats.count++
-			stats.hasWildcard = true
-			if i == len(pattern)-1 {
-				stats.lastCharIsWildcard = true
-			} else if i > 0 {
-				stats.hasMiddleWildcard = true
-			}
-		case '/':
-			stats.slashCount++
-		}
-	}
-
-	return stats
-}
-
-// countPathSegments counts segments in URL path
-func (pv *ParamValidator) countPathSegments(pattern string) int {
-	slashCount := strings.Count(pattern, "/")
-	if len(pattern) > 0 && pattern[0] != '/' {
-		return slashCount + 1
-	}
-	return slashCount
+	return pv.urlMatcher.GetMostSpecificRule(urlPath)
 }
 
 // urlMatchesPatternUnsafe checks if URL path matches pattern
 func (pv *ParamValidator) urlMatchesPatternUnsafe(urlPath, pattern string) bool {
-	urlPath = NormalizeURLPattern(urlPath)
-
-	switch {
-	case pattern == PatternAll || pattern == urlPath:
-		return true
-	case strings.HasSuffix(pattern, PatternAll):
-		return pv.matchPrefixPattern(urlPath, pattern)
-	case strings.Contains(pattern, "*"):
-		return pv.wildcardMatch(urlPath, pattern)
-	default:
-		return pattern == urlPath
-	}
-}
-
-// matchPrefixPattern matches URL against prefix pattern ending with wildcard
-func (pv *ParamValidator) matchPrefixPattern(urlPath, pattern string) bool {
-	prefix := strings.TrimSuffix(pattern, PatternAll)
-	if prefix == "" {
-		return true
-	}
-	prefix = strings.TrimSuffix(prefix, "/")
-	return strings.HasPrefix(urlPath, prefix)
-}
-
-// wildcardMatch performs efficient wildcard matching without allocations
-func (pv *ParamValidator) wildcardMatch(urlPath, pattern string) bool {
-
-	urlStart, patternStart := 0, 0
-	urlLen, patternLen := len(urlPath), len(pattern)
-	segmentCount := 0
-
-	for urlStart < urlLen && patternStart < patternLen {
-		urlEnd, patternEnd := pv.findSegmentEnds(urlPath, pattern, urlStart, patternStart)
-
-		if !pv.compareSegments(urlPath[urlStart:urlEnd], pattern[patternStart:patternEnd]) {
-			return false
-		}
-
-		urlStart, patternStart = pv.nextSegmentStart(urlPath, pattern, urlEnd, patternEnd)
-		segmentCount++
-	}
-
-	return urlStart >= urlLen && patternStart >= patternLen
-}
-
-// findSegmentEnds finds the end positions of current segments
-func (pv *ParamValidator) findSegmentEnds(urlPath, pattern string, urlStart, patternStart int) (int, int) {
-	urlEnd := urlStart
-	for urlEnd < len(urlPath) && urlPath[urlEnd] != '/' {
-		urlEnd++
-	}
-
-	patternEnd := patternStart
-	for patternEnd < len(pattern) && pattern[patternEnd] != '/' {
-		patternEnd++
-	}
-
-	return urlEnd, patternEnd
-}
-
-// compareSegments compares URL and pattern segments
-func (pv *ParamValidator) compareSegments(urlSeg, patternSeg string) bool {
-	if len(patternSeg) == 1 && patternSeg[0] == '*' {
-		return true // Wildcard matches any segment
-	}
-
-	if len(urlSeg) != len(patternSeg) {
-		return false
-	}
-
-	// Fast comparison for short segments
-	if len(urlSeg) <= 8 {
-		for i := 0; i < len(urlSeg); i++ {
-			if urlSeg[i] != patternSeg[i] {
-				return false
-			}
-		}
-		return true
-	}
-
-	return urlSeg == patternSeg
-}
-
-// nextSegmentStart advances to the next segment start position
-func (pv *ParamValidator) nextSegmentStart(urlPath, pattern string, urlEnd, patternEnd int) (int, int) {
-	urlStart := urlEnd
-	if urlStart < len(urlPath) && urlPath[urlStart] == '/' {
-		urlStart++
-	}
-
-	patternStart := patternEnd
-	if patternStart < len(pattern) && pattern[patternStart] == '/' {
-		patternStart++
-	}
-
-	return urlStart, patternStart
+	return urlMatchesPattern(urlPath, pattern)
 }
 
 // isValueValidUnsafe checks if value is valid according to rule
@@ -655,6 +485,7 @@ func (pv *ParamValidator) clearUnsafe() {
 		globalParams: make(map[string]*ParamRule),
 		urlRules:     make(map[string]*URLRule),
 	}
+	pv.urlMatcher.ClearRules() // Добавляем очистку matcher
 }
 
 // ClearRules clears all loaded validation rules
