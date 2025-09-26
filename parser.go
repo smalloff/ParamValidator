@@ -3,7 +3,6 @@ package paramvalidator
 import (
 	"fmt"
 	"sort"
-	"strconv"
 	"strings"
 )
 
@@ -478,7 +477,6 @@ func (rp *RuleParser) extractConstraint(ruleStr string, startBracket int) (strin
 }
 
 // createParamRule creates ParamRule from name and constraint
-// createParamRule creates ParamRule from name and constraint
 func (rp *RuleParser) createParamRule(paramName, constraintStr string) (*ParamRule, error) {
 	rule := &ParamRule{Name: paramName}
 
@@ -505,10 +503,6 @@ func (rp *RuleParser) createParamRule(paramName, constraintStr string) (*ParamRu
 		rule.Pattern = PatternAny
 	case constraintStr == "?":
 		rule.Pattern = PatternCallback
-	case rp.isRangeConstraint(constraintStr):
-		if err := rp.parseRangeConstraint(rule, constraintStr); err != nil {
-			return nil, err
-		}
 	case strings.Contains(constraintStr, ","):
 		if err := rp.parseEnumConstraint(rule, constraintStr); err != nil {
 			return nil, err
@@ -519,45 +513,6 @@ func (rp *RuleParser) createParamRule(paramName, constraintStr string) (*ParamRu
 	}
 
 	return rule, nil
-}
-
-// isRangeConstraint checks if constraint is a numeric range
-func (rp *RuleParser) isRangeConstraint(constraintStr string) bool {
-	// Support both formats: "1-10" and "1..10"
-	return (strings.Contains(constraintStr, "-") || strings.Contains(constraintStr, "..")) &&
-		!strings.Contains(constraintStr, ",")
-}
-
-// parseRangeConstraint parses numeric range constraint
-func (rp *RuleParser) parseRangeConstraint(rule *ParamRule, constraintStr string) error {
-	// Normalize to use hyphen as separator
-	normalized := strings.Replace(constraintStr, "..", "-", -1)
-	parts := strings.Split(normalized, "-")
-	if len(parts) != 2 {
-		return fmt.Errorf("invalid range format: %s", constraintStr)
-	}
-
-	minStr := strings.TrimSpace(parts[0])
-	maxStr := strings.TrimSpace(parts[1])
-
-	min, err := strconv.ParseInt(minStr, 10, 64)
-	if err != nil {
-		return fmt.Errorf("invalid min value in range: %s", minStr)
-	}
-
-	max, err := strconv.ParseInt(maxStr, 10, 64)
-	if err != nil {
-		return fmt.Errorf("invalid max value in range: %s", maxStr)
-	}
-
-	if min > max {
-		return fmt.Errorf("min value cannot be greater than max value: %d..%d", min, max)
-	}
-
-	rule.Pattern = PatternRange
-	rule.Min = min
-	rule.Max = max
-	return nil
 }
 
 // parseEnumConstraint parses enum constraint with allowed values
