@@ -276,7 +276,7 @@ func (pv *ParamValidator) parseAndValidateQueryParams(queryString string, params
 	isValid := true
 	allowAll := pv.isAllowAllParams(paramsRules)
 
-	err := pv.processQueryParams(queryString, func(key, value, originalKey, originalValue string) {
+	err := pv.processQueryParamsCommon(queryString, func(key, value, originalKey, originalValue string) {
 		if !allowAll && !pv.isParamAllowedUnsafe(key, value, paramsRules) {
 			isValid = false
 		}
@@ -288,7 +288,7 @@ func (pv *ParamValidator) parseAndValidateQueryParams(queryString string, params
 // parseAndFilterQueryParams parses and filters query parameters
 func (pv *ParamValidator) parseAndFilterQueryParams(queryString string, paramsRules map[string]*ParamRule) (string, bool, error) {
 	if queryString == "" {
-		return "", false, nil
+		return "", true, nil
 	}
 
 	var filteredParams strings.Builder
@@ -296,7 +296,7 @@ func (pv *ParamValidator) parseAndFilterQueryParams(queryString string, paramsRu
 	allowAll := pv.isAllowAllParams(paramsRules)
 	firstParam := true
 
-	err := pv.processQueryParams(queryString, func(key, value, originalKey, originalValue string) {
+	err := pv.processQueryParamsCommon(queryString, func(key, value, originalKey, originalValue string) {
 		if allowAll || pv.isParamAllowedUnsafe(key, value, paramsRules) {
 			if !firstParam {
 				filteredParams.WriteString("&")
@@ -317,8 +317,7 @@ func (pv *ParamValidator) parseAndFilterQueryParams(queryString string, paramsRu
 	return filteredParams.String(), isValid, err
 }
 
-// processQueryParams processes query parameters with a callback function
-func (pv *ParamValidator) processQueryParams(queryString string, processor func(key, value, originalKey, originalValue string)) error {
+func (pv *ParamValidator) processQueryParamsCommon(queryString string, processor func(key, value, originalKey, originalValue string)) error {
 	if queryString == "" {
 		return nil
 	}
@@ -343,7 +342,6 @@ func (pv *ParamValidator) processQueryParams(queryString string, processor func(
 	if paramCount > MaxParamValues {
 		return fmt.Errorf("too many parameters")
 	}
-
 	return nil
 }
 
