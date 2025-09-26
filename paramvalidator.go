@@ -136,7 +136,7 @@ func (pv *ParamValidator) getParamsForURLUnsafe(urlPath string) map[string]*Para
 	urlPath = NormalizeURLPattern(urlPath)
 	mostSpecificRule := pv.findMostSpecificURLRuleUnsafe(urlPath)
 
-	result := make(map[string]*ParamRule)
+	result := make(map[string]*ParamRule, 8)
 
 	// Add global parameters
 	for name, rule := range pv.compiledRules.globalParams {
