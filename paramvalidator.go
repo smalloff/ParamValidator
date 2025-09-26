@@ -7,29 +7,50 @@ import (
 	"strings"
 )
 
-// NewParamValidator creates a new parameter validator with optional initial rules
-// rulesStr: String containing validation rules in specific format
-// Returns initialized ParamValidator instance or error if parsing fails
-func NewParamValidator(rulesStr string, callback ...CallbackFunc) (*ParamValidator, error) {
+// WithCallback устанавливает callback-функцию для валидации
+func WithCallback(callback CallbackFunc) Option {
+	return func(pv *ParamValidator) {
+		pv.callbackFunc = callback
+	}
+}
+
+// WithPlugins регистрирует плагины для парсера правил
+func WithPlugins(plugins ...PluginConstraintParser) Option {
+	return func(pv *ParamValidator) {
+		if pv.parser == nil {
+			pv.parser = NewRuleParser()
+		}
+		for _, plugin := range plugins {
+			pv.parser.RegisterPlugin(plugin)
+		}
+	}
+}
+
+func NewParamValidator(rulesStr string, options ...Option) (*ParamValidator, error) {
 	pv := &ParamValidator{
 		globalParams:  make(map[string]*ParamRule),
 		urlRules:      make(map[string]*URLRule),
 		urlMatcher:    NewURLMatcher(),
 		compiledRules: &CompiledRules{},
 		initialized:   true,
-		parser:        NewRuleParser(),
+		parser:        NewRuleParser(), // парсер по умолчанию
 	}
 
-	if len(callback) > 0 && callback[0] != nil {
-		pv.callbackFunc = callback[0]
+	// Применяем опции
+	for _, option := range options {
+		option(pv)
 	}
 
 	if rulesStr != "" {
+		if err := pv.validateInputSize(rulesStr, MaxRulesSize); err != nil {
+			return nil, fmt.Errorf("rules string too large: %w", err)
+		}
+
 		if err := pv.ParseRules(rulesStr); err != nil {
-			fmt.Printf("Warning: Failed to parse initial rules: %v\n", err)
-			return nil, err
+			return nil, fmt.Errorf("failed to parse initial rules: %w", err)
 		}
 	}
+
 	return pv, nil
 }
 

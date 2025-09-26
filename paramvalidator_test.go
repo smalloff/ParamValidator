@@ -714,7 +714,7 @@ func TestCallbackPattern(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			pv, err := NewParamValidator(tt.rules, callbackFunc)
+			pv, err := NewParamValidator(tt.rules, WithCallback(callbackFunc))
 			if err != nil {
 				t.Fatalf("Failed to create validator: %v", err)
 			}

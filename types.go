@@ -7,6 +7,7 @@ type CallbackFunc func(paramName string, paramValue string) bool
 
 // RuleType represents type of validation rules
 type RuleType int
+type Option func(*ParamValidator)
 
 const (
 	RuleTypeGlobal RuleType = iota
