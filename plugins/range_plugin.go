@@ -1,4 +1,4 @@
-package paramvalidator
+package plugins
 
 import (
 	"fmt"

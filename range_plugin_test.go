@@ -2,10 +2,12 @@ package paramvalidator
 
 import (
 	"testing"
+
+	"github.com/smalloff/paramvalidator/plugins"
 )
 
 func TestRangePlugin(t *testing.T) {
-	plugin := NewRangePlugin()
+	plugin := plugins.NewRangePlugin()
 
 	tests := []struct {
 		name        string
@@ -216,7 +218,7 @@ func TestRangePlugin(t *testing.T) {
 
 func TestRangePluginIntegration(t *testing.T) {
 	// Создаем парсер и явно регистрируем плагин
-	rangePlugin := NewRangePlugin()
+	rangePlugin := plugins.NewRangePlugin()
 	parser := NewRuleParser(rangePlugin)
 
 	tests := []struct {
@@ -311,7 +313,7 @@ func TestRangePluginIntegration(t *testing.T) {
 }
 
 func BenchmarkRangePlugin(b *testing.B) {
-	plugin := NewRangePlugin()
+	plugin := plugins.NewRangePlugin()
 	validator, err := plugin.Parse("test", "1-100")
 	if err != nil {
 		b.Fatalf("Failed to create validator: %v", err)
@@ -324,7 +326,7 @@ func BenchmarkRangePlugin(b *testing.B) {
 }
 
 func BenchmarkRangePluginCanParse(b *testing.B) {
-	plugin := NewRangePlugin()
+	plugin := plugins.NewRangePlugin()
 
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {

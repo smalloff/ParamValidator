@@ -4,6 +4,8 @@ package paramvalidator
 import (
 	"fmt"
 	"testing"
+
+	"github.com/smalloff/paramvalidator/plugins"
 )
 
 // CustomPlugin тестовый плагин для демонстрации
@@ -105,8 +107,8 @@ func TestCustomPluginIntegration(t *testing.T) {
 
 func TestMultipleCustomPlugins(t *testing.T) {
 	parser := NewRuleParser(
-		NewComparisonPlugin(),
-		NewRegexPlugin(),
+		plugins.NewComparisonPlugin(),
+		plugins.NewRegexPlugin(),
 		NewCustomPlugin(),
 		NewLengthPlugin(),
 	)
@@ -166,8 +168,8 @@ func TestMultipleCustomPlugins(t *testing.T) {
 func TestPluginPriority(t *testing.T) {
 	// Важно: порядок регистрации плагинов определяет приоритет
 	parser := NewRuleParser(
-		NewComparisonPlugin(), // Более специфичный - первый
-		NewCatchAllPlugin(),   // Общий - последний
+		plugins.NewComparisonPlugin(), // Более специфичный - первый
+		NewCatchAllPlugin(),           // Общий - последний
 	)
 
 	// ">100" должен быть обработан ComparisonPlugin, а не CatchAllPlugin
@@ -185,7 +187,7 @@ func TestPluginPriority(t *testing.T) {
 
 // Тест для проверки, что стандартные правила все еще работают
 func TestStandardRulesStillWork(t *testing.T) {
-	parser := NewRuleParser(NewComparisonPlugin(), NewRegexPlugin())
+	parser := NewRuleParser(plugins.NewComparisonPlugin(), plugins.NewRegexPlugin())
 
 	tests := []struct {
 		name     string

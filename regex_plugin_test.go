@@ -2,10 +2,12 @@ package paramvalidator
 
 import (
 	"testing"
+
+	"github.com/smalloff/paramvalidator/plugins"
 )
 
 func TestRegexPlugin(t *testing.T) {
-	plugin := NewRegexPlugin()
+	plugin := plugins.NewRegexPlugin()
 
 	tests := []struct {
 		name        string
@@ -122,7 +124,7 @@ func TestRegexPlugin(t *testing.T) {
 }
 
 func TestRegexPluginIntegration(t *testing.T) {
-	parser := NewRuleParser(NewRegexPlugin())
+	parser := NewRuleParser(plugins.NewRegexPlugin())
 
 	tests := []struct {
 		name     string

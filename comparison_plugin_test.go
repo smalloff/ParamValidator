@@ -1,12 +1,13 @@
-// comparison_plugin_test.go
 package paramvalidator
 
 import (
 	"testing"
+
+	"github.com/smalloff/paramvalidator/plugins"
 )
 
 func TestComparisonPlugin(t *testing.T) {
-	plugin := NewComparisonPlugin()
+	plugin := plugins.NewComparisonPlugin()
 
 	tests := []struct {
 		name        string
@@ -197,7 +198,7 @@ func TestComparisonPlugin(t *testing.T) {
 
 func TestComparisonPluginIntegration(t *testing.T) {
 	// Create parser with comparison plugin
-	parser := NewRuleParser(NewComparisonPlugin())
+	parser := NewRuleParser(plugins.NewComparisonPlugin())
 
 	tests := []struct {
 		name     string

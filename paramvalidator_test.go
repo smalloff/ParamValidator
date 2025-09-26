@@ -5,6 +5,8 @@ import (
 	"strings"
 	"sync"
 	"testing"
+
+	"github.com/smalloff/paramvalidator/plugins"
 )
 
 func TestNewParamValidator(t *testing.T) {
@@ -751,7 +753,7 @@ func TestCallbackWithoutFunction(t *testing.T) {
 
 // Benchmark tests for plugins
 func BenchmarkRangePluginValidation(b *testing.B) {
-	rangePlugin := NewRangePlugin()
+	rangePlugin := plugins.NewRangePlugin()
 	parser := NewRuleParser(rangePlugin)
 
 	pv := &ParamValidator{
@@ -775,7 +777,7 @@ func BenchmarkRangePluginValidation(b *testing.B) {
 }
 
 func BenchmarkRangePluginNormalization(b *testing.B) {
-	rangePlugin := NewRangePlugin()
+	rangePlugin := plugins.NewRangePlugin()
 	parser := NewRuleParser(rangePlugin)
 
 	pv := &ParamValidator{
@@ -800,7 +802,7 @@ func BenchmarkRangePluginNormalization(b *testing.B) {
 
 func BenchmarkMultiplePlugins(b *testing.B) {
 	// Create multiple plugins
-	rangePlugin := NewRangePlugin()
+	rangePlugin := plugins.NewRangePlugin()
 
 	parser := NewRuleParser(rangePlugin)
 

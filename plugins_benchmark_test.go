@@ -3,10 +3,12 @@ package paramvalidator
 
 import (
 	"testing"
+
+	"github.com/smalloff/paramvalidator/plugins"
 )
 
 func BenchmarkComparisonPlugin(b *testing.B) {
-	plugin := NewComparisonPlugin()
+	plugin := plugins.NewComparisonPlugin()
 	validator, err := plugin.Parse("test", ">100")
 	if err != nil {
 		b.Fatalf("Failed to create validator: %v", err)
@@ -20,7 +22,7 @@ func BenchmarkComparisonPlugin(b *testing.B) {
 }
 
 func BenchmarkRegexPlugin(b *testing.B) {
-	plugin := NewRegexPlugin()
+	plugin := plugins.NewRegexPlugin()
 	validator, err := plugin.Parse("email", "/^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\\.[a-zA-Z]{2,}$/")
 	if err != nil {
 		b.Fatalf("Failed to create validator: %v", err)
@@ -35,8 +37,8 @@ func BenchmarkRegexPlugin(b *testing.B) {
 
 func BenchmarkPluginCanParse(b *testing.B) {
 	parser := NewRuleParser(
-		NewComparisonPlugin(),
-		NewRegexPlugin(),
+		plugins.NewComparisonPlugin(),
+		plugins.NewRegexPlugin(),
 	)
 
 	constraints := []string{

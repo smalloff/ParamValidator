@@ -1,5 +1,4 @@
-// regex_plugin.go
-package paramvalidator
+package plugins
 
 import (
 	"fmt"

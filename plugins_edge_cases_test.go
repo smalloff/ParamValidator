@@ -3,11 +3,13 @@ package paramvalidator
 
 import (
 	"testing"
+
+	"github.com/smalloff/paramvalidator/plugins"
 )
 
 // plugins_edge_cases_test.go - в функции TestPluginEdgeCases
 func TestPluginEdgeCases(t *testing.T) {
-	parser := NewRuleParser(NewComparisonPlugin(), NewRegexPlugin())
+	parser := NewRuleParser(plugins.NewComparisonPlugin(), plugins.NewRegexPlugin())
 
 	tests := []struct {
 		name        string
@@ -77,7 +79,7 @@ func TestPluginEdgeCases(t *testing.T) {
 
 // Дополнительный тест для специфических случаев сравнения
 func TestComparisonEdgeCases(t *testing.T) {
-	plugin := NewComparisonPlugin()
+	plugin := plugins.NewComparisonPlugin()
 
 	tests := []struct {
 		name        string
@@ -173,7 +175,7 @@ func TestComparisonEdgeCases(t *testing.T) {
 
 // Тест для проверки что стандартные правила не ломаются
 func TestStandardRulesNotBroken(t *testing.T) {
-	parser := NewRuleParser(NewComparisonPlugin(), NewRegexPlugin())
+	parser := NewRuleParser(plugins.NewComparisonPlugin(), plugins.NewRegexPlugin())
 
 	// Эти правила должны обрабатываться стандартным парсером, не плагинами
 	standardRules := []string{
