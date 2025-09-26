@@ -3,15 +3,21 @@ package plugins
 import (
 	"fmt"
 	"regexp"
+	"sync"
 )
 
 // RegexPlugin плагин для регулярных выражений: /pattern/
 type RegexPlugin struct {
-	name string
+	name    string
+	cache   map[string]*regexp.Regexp
+	cacheMu sync.RWMutex
 }
 
 func NewRegexPlugin() *RegexPlugin {
-	return &RegexPlugin{name: "regex"}
+	return &RegexPlugin{
+		name:  "regex",
+		cache: make(map[string]*regexp.Regexp),
+	}
 }
 
 func (rp *RegexPlugin) GetName() string {
@@ -32,17 +38,43 @@ func (rp *RegexPlugin) Parse(paramName, constraintStr string) (func(string) bool
 		return nil, fmt.Errorf("empty regex pattern")
 	}
 
+	// Пытаемся получить из кэша
+	rp.cacheMu.RLock()
+	if re, exists := rp.cache[pattern]; exists {
+		rp.cacheMu.RUnlock()
+		return rp.createValidator(re), nil
+	}
+	rp.cacheMu.RUnlock()
+
 	// Компилируем регулярное выражение
 	re, err := regexp.Compile(pattern)
 	if err != nil {
 		return nil, fmt.Errorf("invalid regex pattern: %v", err)
 	}
 
+	// Сохраняем в кэш
+	rp.cacheMu.Lock()
+	rp.cache[pattern] = re
+	rp.cacheMu.Unlock()
+
+	return rp.createValidator(re), nil
+}
+
+func (rp *RegexPlugin) createValidator(re *regexp.Regexp) func(string) bool {
 	return func(value string) bool {
 		// Пустая строка не должна совпадать с любым regex, кроме явно разрешающего
 		if value == "" {
 			return false
 		}
 		return re.MatchString(value)
-	}, nil
+	}
+}
+
+func (rp *RegexPlugin) Close() error {
+	rp.cacheMu.Lock()
+	defer rp.cacheMu.Unlock()
+
+	// Очищаем кэш
+	rp.cache = make(map[string]*regexp.Regexp)
+	return nil
 }

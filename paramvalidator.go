@@ -577,3 +577,38 @@ func (pv *ParamValidator) copyURLRuleUnsafe(rule *URLRule) *URLRule {
 
 	return ruleCopy
 }
+
+// Close освобождает ресурсы валидатора (включая плагины)
+func (pv *ParamValidator) Close() error {
+	pv.mu.Lock()
+	defer pv.mu.Unlock()
+
+	if !pv.initialized {
+		return nil
+	}
+
+	// Освобождаем ресурсы парсера (которые освободят ресурсы плагинов)
+	if pv.parser != nil {
+		if err := pv.parser.Close(); err != nil {
+			return fmt.Errorf("failed to close parser: %w", err)
+		}
+	}
+
+	// Дополнительная очистка ресурсов валидатора
+	pv.clearUnsafe()
+	pv.initialized = false
+
+	return nil
+}
+
+// Reset сбрасывает правила и освобождает ресурсы, но оставляет валидатор работоспособным
+func (pv *ParamValidator) Reset() {
+	pv.mu.Lock()
+	defer pv.mu.Unlock()
+
+	pv.clearUnsafe()
+
+	// Сбрасываем состояние, но оставляем initialized = true
+	pv.initialized = true
+	pv.callbackFunc = nil
+}

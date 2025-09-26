@@ -19,6 +19,11 @@ type PluginConstraintParser interface {
 	GetName() string
 }
 
+type PluginResourceManager interface {
+	// Close освобождает ресурсы плагина
+	Close() error
+}
+
 // RuleParser с поддержкой плагинов
 type RuleParser struct {
 	plugins []PluginConstraintParser
@@ -373,6 +378,23 @@ func (rp *RuleParser) parseSingleParamRuleUnsafe(ruleStr string) (*ParamRule, er
 	}
 
 	return rp.parseComplexParamRule(ruleStr, startBracket)
+}
+
+func (rp *RuleParser) Close() error {
+	var errors []error
+
+	for _, plugin := range rp.plugins {
+		if resourcePlugin, ok := plugin.(PluginResourceManager); ok {
+			if err := resourcePlugin.Close(); err != nil {
+				errors = append(errors, fmt.Errorf("plugin %s: %w", plugin.GetName(), err))
+			}
+		}
+	}
+
+	if len(errors) > 0 {
+		return fmt.Errorf("errors closing plugins: %v", errors)
+	}
+	return nil
 }
 
 // parseSimpleParamRule parses simple parameter rule without brackets
