@@ -7,20 +7,6 @@ import (
 	"strings"
 )
 
-const (
-	maxSegments      = 300
-	maxSegmentLength = 2048
-)
-
-// wildcardPatternStats holds analysis results for wildcard patterns
-type wildcardPatternStats struct {
-	count              int
-	slashCount         int
-	hasWildcard        bool
-	lastCharIsWildcard bool
-	hasMiddleWildcard  bool
-}
-
 // ValidateURL validates complete URL against loaded rules
 func (pv *ParamValidator) ValidateURL(fullURL string) bool {
 	if pv == nil || !pv.initialized || fullURL == "" {
@@ -218,22 +204,12 @@ func (pv *ParamValidator) matchPrefixPattern(urlPath, pattern string) bool {
 // wildcardMatch performs efficient wildcard matching without allocations
 func (pv *ParamValidator) wildcardMatch(urlPath, pattern string) bool {
 
-	// Quick length check
-	if len(urlPath) > maxSegments*maxSegmentLength || len(pattern) > maxSegments*maxSegmentLength {
-		return false
-	}
-
 	urlStart, patternStart := 0, 0
 	urlLen, patternLen := len(urlPath), len(pattern)
 	segmentCount := 0
 
-	for urlStart < urlLen && patternStart < patternLen && segmentCount < maxSegments {
+	for urlStart < urlLen && patternStart < patternLen {
 		urlEnd, patternEnd := pv.findSegmentEnds(urlPath, pattern, urlStart, patternStart)
-		urlSegLen, patternSegLen := urlEnd-urlStart, patternEnd-patternStart
-
-		if urlSegLen > maxSegmentLength || patternSegLen > maxSegmentLength {
-			return false
-		}
 
 		if !pv.compareSegments(urlPath[urlStart:urlEnd], pattern[patternStart:patternEnd]) {
 			return false
