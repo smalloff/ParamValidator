@@ -1,10 +1,12 @@
 package paramvalidator
 
 import (
+	"bytes"
 	"fmt"
 	"net/url"
 	"strings"
 	"sync"
+	"unsafe"
 )
 
 // WithCallback устанавливает callback-функцию для валидации
@@ -387,7 +389,11 @@ func (pv *ParamValidator) parseAndValidateQueryParamsWithMasks(queryString strin
 	isValid := true
 	allowAll := pv.isAllowAllParamsMasks(masks)
 
-	err := pv.processQueryParamsCommon(queryString, func(key, value, originalKey, originalValue string) {
+	err := pv.processQueryParamsCommon(queryString, func(keyBytes, valueBytes []byte) {
+		// Преобразуем байты в строки для проверки
+		key := unsafeGetString(keyBytes)
+		value := unsafeGetString(valueBytes)
+
 		if !allowAll && !pv.isParamAllowedWithMasks(key, value, masks, urlPath) {
 			isValid = false
 		}
@@ -420,7 +426,15 @@ func (pv *ParamValidator) parseAndFilterQueryParamsWithMasks(queryString string,
 	allowAll := pv.isAllowAllParamsMasks(masks)
 	firstParam := true
 
-	err := pv.processQueryParamsCommon(queryString, func(key, value, originalKey, originalValue string) {
+	err := pv.processQueryParamsCommon(queryString, func(keyBytes, valueBytes []byte) {
+		// Преобразуем байты в строки
+		key := unsafeGetString(keyBytes)
+		value := unsafeGetString(valueBytes)
+
+		// Восстанавливаем оригинальные ключ и значение из байтов
+		originalKey := string(keyBytes)
+		originalValue := string(valueBytes)
+
 		if allowAll || pv.isParamAllowedWithMasks(key, value, masks, urlPath) {
 			if !firstParam {
 				filteredParams.WriteString("&")
@@ -428,7 +442,7 @@ func (pv *ParamValidator) parseAndFilterQueryParamsWithMasks(queryString string,
 				firstParam = false
 			}
 
-			if originalValue == "" {
+			if len(valueBytes) == 0 {
 				filteredParams.WriteString(originalKey)
 			} else {
 				filteredParams.WriteString(originalKey + "=" + originalValue)
@@ -699,23 +713,32 @@ func (pv *ParamValidator) ValidateQueryParams(urlPath, queryString string) bool 
 	})
 }
 
-// processQueryParamsCommon обрабатывает параметры query string
-func (pv *ParamValidator) processQueryParamsCommon(queryString string, processor func(key, value, originalKey, originalValue string)) error {
+// processQueryParamsCommon быстрая обработка параметров через срезы байт
+func (pv *ParamValidator) processQueryParamsCommon(queryString string, processor func(key, value []byte)) error {
 	if queryString == "" {
 		return nil
 	}
 
+	queryBytes := unsafeGetBytes(queryString)
 	start := 0
 	paramCount := 0
 
-	for i := 0; i <= len(queryString); i++ {
-		if i == len(queryString) || queryString[i] == '&' {
+	for i := 0; i <= len(queryBytes); i++ {
+		if i == len(queryBytes) || queryBytes[i] == '&' {
 			if start < i && paramCount < MaxParamValues {
-				segment := queryString[start:i]
-				key, value, originalKey, originalValue, err := pv.parseParamSegment(segment)
-				if err == nil {
-					processor(key, value, originalKey, originalValue)
+				segment := queryBytes[start:i]
+				eqPos := bytes.IndexByte(segment, '=')
+
+				var key, value []byte
+				if eqPos == -1 {
+					key = segment
+					value = nil
+				} else {
+					key = segment[:eqPos]
+					value = segment[eqPos+1:]
 				}
+
+				processor(key, value)
 				paramCount++
 			}
 			start = i + 1
@@ -726,6 +749,90 @@ func (pv *ParamValidator) processQueryParamsCommon(queryString string, processor
 		return fmt.Errorf("too many parameters")
 	}
 	return nil
+}
+
+// unsafeGetBytes преобразует string в []byte без аллокации (ОСТОРОЖНО!)
+func unsafeGetBytes(s string) []byte {
+	return *(*[]byte)(unsafe.Pointer(&s))
+}
+
+// validateQueryParamsFastBytes быстрая валидация через байты
+func (pv *ParamValidator) validateQueryParamsFastBytes(queryString string, masks ParamMasks, urlPath string) bool {
+	queryBytes := unsafeGetBytes(queryString)
+	start := 0
+	paramCount := 0
+
+	for i := 0; i <= len(queryBytes); i++ {
+		if i == len(queryBytes) || queryBytes[i] == '&' {
+			if start < i {
+				if paramCount >= MaxParamValues {
+					return false
+				}
+
+				segment := queryBytes[start:i]
+				eqPos := bytes.IndexByte(segment, '=')
+				var key, value []byte
+
+				if eqPos == -1 {
+					key = segment
+					value = nil
+				} else {
+					key = segment[:eqPos]
+					value = segment[eqPos+1:]
+				}
+
+				// Преобразуем в string только когда нужно
+				if !pv.isParamAllowedFastBytes(key, value, masks, urlPath) {
+					return false
+				}
+
+				paramCount++
+			}
+			start = i + 1
+		}
+	}
+	return true
+}
+
+// isParamAllowedFastBytes оптимизированная проверка с байтами
+func (pv *ParamValidator) isParamAllowedFastBytes(keyBytes, valueBytes []byte, masks ParamMasks, urlPath string) bool {
+	// Быстрое преобразование в string для поиска
+	key := unsafeGetString(keyBytes)
+	idx := pv.compiledRules.paramIndex.GetIndex(key)
+	if idx == -1 {
+		return false
+	}
+
+	source := masks.GetRuleSource(idx)
+	if source == SourceNone {
+		return false
+	}
+
+	var rule *ParamRule
+	switch source {
+	case SourceSpecificURL:
+		if rule = pv.getParamFromSpecificURL(key, urlPath); rule != nil {
+			value := unsafeGetString(valueBytes)
+			return pv.isValueValidFast(rule, value)
+		}
+	case SourceURL:
+		if rule = pv.findURLRuleForParamFast(key, urlPath); rule != nil {
+			value := unsafeGetString(valueBytes)
+			return pv.isValueValidFast(rule, value)
+		}
+	case SourceGlobal:
+		if rule = pv.compiledRules.globalParams[key]; rule != nil {
+			value := unsafeGetString(valueBytes)
+			return pv.isValueValidFast(rule, value)
+		}
+	}
+
+	return false
+}
+
+// unsafeGetString преобразует []byte в string без аллокации
+func unsafeGetString(b []byte) string {
+	return *(*string)(unsafe.Pointer(&b))
 }
 
 // parseParamSegment parses a single parameter segment
