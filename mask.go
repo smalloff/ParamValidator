@@ -2,6 +2,8 @@ package paramvalidator
 
 import "sync"
 
+var bitCountTable [256]byte
+
 // NewParamMask создает новую пустую битовую маску
 func NewParamMask() ParamMask {
 	return ParamMask{}
@@ -101,11 +103,21 @@ func (pm ParamMask) Equals(other ParamMask) bool {
 	return true
 }
 
+func init() {
+	for i := range bitCountTable {
+		bitCountTable[i] = bitCountTable[i/2] + byte(i&1)
+	}
+}
+
 // Count возвращает количество установленных битов (ИСПРАВЛЕНО: получатель по значению)
 func (pm ParamMask) Count() int {
 	count := 0
 	for i := 0; i < 4; i++ {
-		count += countBits(pm.parts[i])
+		// Быстрый подсчет через таблицу
+		count += int(bitCountTable[byte(pm.parts[i]>>24)]) +
+			int(bitCountTable[byte(pm.parts[i]>>16)]) +
+			int(bitCountTable[byte(pm.parts[i]>>8)]) +
+			int(bitCountTable[byte(pm.parts[i])])
 	}
 	return count
 }
@@ -121,16 +133,6 @@ func (pm ParamMask) GetIndices() []int {
 		}
 	}
 	return indices
-}
-
-// countBits подсчитывает количество установленных битов в uint32
-func countBits(x uint32) int {
-	count := 0
-	for x != 0 {
-		count++
-		x &= x - 1
-	}
-	return count
 }
 
 // GetOrCreateIndex возвращает индекс параметра, создавая новый если нужно
