@@ -23,6 +23,11 @@ func NewURLMatcher() *URLMatcher {
 func (um *URLMatcher) AddRule(pattern string, rule *URLRule) {
 	um.mu.Lock()
 	defer um.mu.Unlock()
+
+	// Calculate specificity once and store it
+	if rule != nil {
+		rule.specificity = int16(calculateSpecificity(pattern))
+	}
 	um.urlRules[pattern] = rule
 }
 
@@ -63,14 +68,14 @@ func (um *URLMatcher) GetMostSpecificRule(urlPath string) *URLRule {
 	defer um.mu.RUnlock()
 
 	var mostSpecificRule *URLRule
-	maxSpecificity := -1
+	maxSpecificity := int16(-1)
 	urlPath = NormalizeURLPattern(urlPath)
 
 	for pattern, rule := range um.urlRules {
-		if um.urlMatchesPattern(urlPath, pattern) {
-			specificity := um.calculateSpecificity(pattern)
-			if specificity > maxSpecificity {
-				maxSpecificity = specificity
+		if rule != nil && um.urlMatchesPattern(urlPath, pattern) {
+			// Use pre-calculated specificity
+			if rule.specificity > maxSpecificity {
+				maxSpecificity = rule.specificity
 				mostSpecificRule = rule
 			}
 		}
@@ -82,10 +87,6 @@ func (um *URLMatcher) GetMostSpecificRule(urlPath string) *URLRule {
 // URL matching internals - these remain private
 func (um *URLMatcher) urlMatchesPattern(urlPath, pattern string) bool {
 	return urlMatchesPattern(urlPath, pattern)
-}
-
-func (um *URLMatcher) calculateSpecificity(pattern string) int {
-	return calculateSpecificity(pattern)
 }
 
 // Export URL matching functions for use by ParamValidator

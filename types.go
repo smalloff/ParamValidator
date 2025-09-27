@@ -62,9 +62,10 @@ type ParamRule struct {
 
 // URLRule defines validation rules for specific URL pattern
 type URLRule struct {
-	URLPattern string
-	Params     map[string]*ParamRule
-	ParamMask  ParamMask
+	URLPattern  string
+	Params      map[string]*ParamRule
+	ParamMask   ParamMask
+	specificity int16
 }
 
 // ParamMask represents a bitmask for parameter indexing
