@@ -109,7 +109,6 @@ func init() {
 	}
 }
 
-// Count возвращает количество установленных битов (ИСПРАВЛЕНО: получатель по значению)
 func (pm ParamMask) Count() int {
 	count := 0
 	for i := 0; i < 4; i++ {
@@ -182,7 +181,6 @@ func (pi *ParamIndex) GetIndex(paramName string) int {
 	return -1
 }
 
-// GetBitUnsafe быстрая версия без проверок границ
 func (pm ParamMask) GetBitUnsafe(index int) bool {
 	part := index / 32
 	bit := uint32(index % 32)
