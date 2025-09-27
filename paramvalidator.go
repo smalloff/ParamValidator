@@ -80,50 +80,170 @@ func (pv *ParamValidator) withSafeAccess(fn func() bool) bool {
 	return fn()
 }
 
-// processURL обрабатывает URL с безопасным доступом
-func (pv *ParamValidator) processURL(fullURL string, processor func(*url.URL) bool) bool {
-	return pv.withSafeAccess(func() bool {
-		if err := pv.checkSize(fullURL, MaxURLLength, "URL"); err != nil {
-			return false
-		}
-
-		u, err := url.Parse(fullURL)
-		if err != nil {
-			return false
-		}
-
-		return processor(u)
-	})
-}
-
 // ValidateURL validates complete URL against loaded rules
 func (pv *ParamValidator) ValidateURL(fullURL string) bool {
-	return pv.processURL(fullURL, func(u *url.URL) bool {
-		return pv.validateURLUnsafe(u)
-	})
+	if pv == nil || !pv.initialized || fullURL == "" {
+		return false
+	}
+
+	if len(fullURL) > MaxURLLength {
+		return false
+	}
+
+	u, err := url.Parse(fullURL)
+	if err != nil {
+		return false
+	}
+
+	pv.mu.RLock()
+	defer pv.mu.RUnlock()
+
+	return pv.validateURLUnsafe(u)
 }
 
 // validateURLUnsafe validates URL without locking using masks
 func (pv *ParamValidator) validateURLUnsafe(u *url.URL) bool {
-	masks := pv.getParamMasksForURL(u.Path)
-
-	// Проверяем разрешение всех параметров
-	if pv.isAllowAllParamsMasks(masks) {
-		return true
-	}
-
-	// Если нет правил для параметров, но есть query string - невалидно
-	if masks.CombinedMask().IsEmpty() && u.RawQuery != "" {
-		return false
-	}
-
-	// Если нет query string - валидно
+	// Быстрая проверка - если нет query параметров, всегда валидно
 	if u.RawQuery == "" {
 		return true
 	}
 
-	valid, err := pv.parseAndValidateQueryParamsWithMasks(u.RawQuery, masks, u.Path)
-	return err == nil && valid
+	if pv.compiledRules == nil || pv.compiledRules.paramIndex == nil {
+		return false
+	}
+
+	masks := pv.getParamMasksForURL(u.Path)
+
+	// Быстрая проверка на allow all
+	if idx := pv.compiledRules.paramIndex.GetIndex(PatternAll); idx != -1 && masks.CombinedMask().GetBit(idx) {
+		return true
+	}
+
+	if masks.CombinedMask().IsEmpty() {
+		return false
+	}
+
+	// Быстрая валидация параметров
+	return pv.validateQueryParamsFast(u.RawQuery, masks, u.Path)
+}
+
+// validateQueryParamsFast быстрая валидация параметров без аллокаций
+func (pv *ParamValidator) validateQueryParamsFast(queryString string, masks ParamMasks, urlPath string) bool {
+	start := 0
+	paramCount := 0
+
+	for i := 0; i <= len(queryString); i++ {
+		if i == len(queryString) || queryString[i] == '&' {
+			if start < i {
+				if paramCount >= MaxParamValues {
+					return false
+				}
+
+				segment := queryString[start:i]
+				eqPos := strings.IndexByte(segment, '=')
+				var key, value string
+
+				if eqPos == -1 {
+					key = segment
+					value = ""
+				} else {
+					key = segment[:eqPos]
+					value = segment[eqPos+1:]
+				}
+
+				if !pv.isParamAllowedFast(key, value, masks, urlPath) {
+					return false // Первый же невалидный параметр
+				}
+
+				paramCount++
+			}
+			start = i + 1
+		}
+	}
+	return true
+}
+
+// isParamAllowedFast оптимизированная проверка параметра
+func (pv *ParamValidator) isParamAllowedFast(paramName, paramValue string, masks ParamMasks, urlPath string) bool {
+	idx := pv.compiledRules.paramIndex.GetIndex(paramName)
+	if idx == -1 {
+		return false
+	}
+
+	source := masks.GetRuleSource(idx)
+	if source == SourceNone {
+		return false
+	}
+
+	var rule *ParamRule
+	switch source {
+	case SourceSpecificURL:
+		if rule = pv.getParamFromSpecificURL(paramName, urlPath); rule != nil {
+			return pv.isValueValidFast(rule, paramValue)
+		}
+	case SourceURL:
+		if rule = pv.findURLRuleForParamFast(paramName, urlPath); rule != nil {
+			return pv.isValueValidFast(rule, paramValue)
+		}
+	case SourceGlobal:
+		if rule = pv.compiledRules.globalParams[paramName]; rule != nil {
+			return pv.isValueValidFast(rule, paramValue)
+		}
+	}
+
+	return false
+}
+
+// getParamFromSpecificURL быстрый поиск в специфичном правиле
+func (pv *ParamValidator) getParamFromSpecificURL(paramName, urlPath string) *ParamRule {
+	if rule := pv.findMostSpecificURLRuleUnsafe(urlPath); rule != nil {
+		return rule.Params[paramName]
+	}
+	return nil
+}
+
+// findURLRuleForParamFast быстрый поиск правила для параметра
+func (pv *ParamValidator) findURLRuleForParamFast(paramName, urlPath string) *ParamRule {
+	// Используем urlMatcher для быстрого поиска
+	if pv.urlMatcher != nil {
+		if rules := pv.urlMatcher.GetMatchingRules(urlPath); len(rules) > 0 {
+			for _, rule := range rules {
+				if paramRule, exists := rule.Params[paramName]; exists {
+					return paramRule
+				}
+			}
+		}
+	}
+	return nil
+}
+
+// isValueValidFast быстрая проверка значения
+func (pv *ParamValidator) isValueValidFast(rule *ParamRule, value string) bool {
+	switch rule.Pattern {
+	case PatternKeyOnly:
+		return value == ""
+	case PatternAny:
+		return true
+	case PatternEnum:
+		for _, allowedValue := range rule.Values {
+			if value == allowedValue {
+				return true
+			}
+		}
+		return false
+	case PatternCallback:
+		if pv.callbackFunc != nil {
+			return pv.callbackFunc(rule.Name, value)
+		}
+		return false
+	case "plugin":
+		if rule.CustomValidator != nil {
+			return rule.CustomValidator(value)
+		}
+		return false
+	default:
+		return false
+	}
 }
 
 // isAllowAllParamsMasks checks if masks allow all parameters
@@ -137,7 +257,7 @@ func (pv *ParamValidator) isAllowAllParamsMasks(masks ParamMasks) bool {
 	return idx != -1 && masks.CombinedMask().GetBit(idx)
 }
 
-// getParamMasksForURL возвращает маски параметров для URL
+// getParamMasksForURL оптимизированная версия
 func (pv *ParamValidator) getParamMasksForURL(urlPath string) ParamMasks {
 	masks := ParamMasks{
 		Global:      NewParamMask(),
@@ -152,57 +272,40 @@ func (pv *ParamValidator) getParamMasksForURL(urlPath string) ParamMasks {
 	urlPath = NormalizeURLPattern(urlPath)
 
 	// 1. Глобальные параметры
-	masks.Global = pv.compiledRules.paramIndex.CreateMaskForParams(pv.compiledRules.globalParams)
+	for name := range pv.compiledRules.globalParams {
+		if idx := pv.compiledRules.paramIndex.GetIndex(name); idx != -1 {
+			masks.Global.SetBit(idx)
+		}
+	}
 
-	// 2. Находим самое специфичное правило
+	// 2. Самое специфичное правило
 	mostSpecificRule := pv.findMostSpecificURLRuleUnsafe(urlPath)
-
-	// 3. Для URL правил: добавляем только те параметры, которые НЕ переопределены в самом специфичном правиле
-	for pattern, urlRule := range pv.compiledRules.urlRules {
-		if pv.urlMatchesPatternUnsafe(urlPath, pattern) {
-			// Для каждого параметра в этом правиле проверяем, есть ли он в самом специфичном правиле
-			for paramName := range urlRule.Params {
-				idx := pv.compiledRules.paramIndex.GetIndex(paramName)
-				if idx == -1 {
-					continue
-				}
-
-				// Если этот параметр уже есть в самом специфичном правиле - пропускаем
-				if mostSpecificRule != nil {
-					if _, exists := mostSpecificRule.Params[paramName]; exists {
-						continue
-					}
-				}
-
-				// Добавляем параметр в URL маску
-				masks.URL.SetBit(idx)
+	if mostSpecificRule != nil {
+		for name := range mostSpecificRule.Params {
+			if idx := pv.compiledRules.paramIndex.GetIndex(name); idx != -1 {
+				masks.SpecificURL.SetBit(idx)
 			}
 		}
 	}
 
-	// 4. Добавляем параметры из самого специфичного правила
-	if mostSpecificRule != nil {
-		masks.SpecificURL = pv.compiledRules.paramIndex.CreateMaskForParams(mostSpecificRule.Params)
+	// 3. URL правила (исключая переопределенные в специфичном правиле)
+	for pattern, urlRule := range pv.compiledRules.urlRules {
+		if pv.urlMatchesPatternUnsafe(urlPath, pattern) {
+			for name := range urlRule.Params {
+				// Пропускаем если параметр уже в специфичном правиле
+				if mostSpecificRule != nil {
+					if _, exists := mostSpecificRule.Params[name]; exists {
+						continue
+					}
+				}
+				if idx := pv.compiledRules.paramIndex.GetIndex(name); idx != -1 {
+					masks.URL.SetBit(idx)
+				}
+			}
+		}
 	}
 
 	return masks
-}
-
-// addNonOverriddenParams добавляет параметры, не переопределенные в специфичном правиле
-func (pv *ParamValidator) addNonOverriddenParams(masks ParamMasks, urlRule *URLRule, mostSpecificRule *URLRule) {
-	for paramName := range urlRule.Params {
-		idx := pv.compiledRules.paramIndex.GetIndex(paramName)
-		if idx == -1 {
-			continue
-		}
-
-		// Если параметр уже есть в самом специфичном правиле - пропускаем
-		if _, exists := mostSpecificRule.Params[paramName]; exists {
-			continue
-		}
-
-		masks.URL.SetBit(idx)
-	}
 }
 
 // findParamRuleByMasks находит правило с учетом приоритетов через маски
@@ -419,51 +522,107 @@ func (pv *ParamValidator) validateParamUnsafe(urlPath, paramName, paramValue str
 	return pv.isParamAllowedWithMasks(paramName, paramValue, masks, urlPath)
 }
 
-// NormalizeURL filters and normalizes URL according to validation rules
+// NormalizeURL оптимизированная версия
 func (pv *ParamValidator) NormalizeURL(fullURL string) string {
 	if pv == nil || !pv.initialized || fullURL == "" {
 		return fullURL
 	}
 
-	var result string
-	pv.processURL(fullURL, func(u *url.URL) bool {
-		result = pv.normalizeURLUnsafe(u)
-		return true
-	})
+	if len(fullURL) > MaxURLLength {
+		return fullURL
+	}
 
-	return result
+	u, err := url.Parse(fullURL)
+	if err != nil {
+		return fullURL
+	}
+
+	pv.mu.RLock()
+	defer pv.mu.RUnlock()
+
+	return pv.normalizeURLFast(u)
 }
 
-// normalizeURLUnsafe normalizes URL using masks
-func (pv *ParamValidator) normalizeURLUnsafe(u *url.URL) string {
-	masks := pv.getParamMasksForURL(u.Path)
-
-	if pv.isAllowAllParamsMasks(masks) {
-		return u.String()
-	}
-
-	if masks.CombinedMask().IsEmpty() {
-		if u.RawQuery != "" {
-			return u.Path
-		}
-		return u.String()
-	}
-
+// normalizeURLFast быстрая нормализация
+func (pv *ParamValidator) normalizeURLFast(u *url.URL) string {
+	// Нет параметров - возвращаем как есть
 	if u.RawQuery == "" {
 		return u.String()
 	}
 
-	filteredParams, _, err := pv.parseAndFilterQueryParamsWithMasks(u.RawQuery, masks, u.Path)
-	if err != nil {
-		return u.Path
+	if pv.compiledRules == nil || pv.compiledRules.paramIndex == nil {
+		return u.Path // Нет правил - убираем параметры
 	}
 
-	if filteredParams != "" {
-		u.RawQuery = filteredParams
+	masks := pv.getParamMasksForURL(u.Path)
+
+	// Проверка на allow all
+	if idx := pv.compiledRules.paramIndex.GetIndex(PatternAll); idx != -1 && masks.CombinedMask().GetBit(idx) {
 		return u.String()
 	}
 
-	return u.Path
+	// Нет разрешенных параметров
+	if masks.CombinedMask().IsEmpty() {
+		return u.Path
+	}
+
+	// Фильтруем параметры
+	filtered := pv.filterQueryParamsFast(u.RawQuery, masks, u.Path)
+	if filtered == "" {
+		return u.Path
+	}
+
+	if filtered == u.RawQuery {
+		return u.String()
+	}
+
+	// Собираем URL оптимально
+	if u.Path == "" {
+		return "?" + filtered
+	}
+	return u.Path + "?" + filtered
+}
+
+// filterQueryParamsFast быстрая фильтрация параметров
+func (pv *ParamValidator) filterQueryParamsFast(queryString string, masks ParamMasks, urlPath string) string {
+	if queryString == "" {
+		return ""
+	}
+
+	var result strings.Builder
+	result.Grow(len(queryString)) // Предварительное выделение памяти
+	start := 0
+	firstParam := true
+
+	for i := 0; i <= len(queryString); i++ {
+		if i == len(queryString) || queryString[i] == '&' {
+			if start < i {
+				segment := queryString[start:i]
+				eqPos := strings.IndexByte(segment, '=')
+				var key, value string
+
+				if eqPos == -1 {
+					key = segment
+					value = ""
+				} else {
+					key = segment[:eqPos]
+					value = segment[eqPos+1:]
+				}
+
+				if pv.isParamAllowedFast(key, value, masks, urlPath) {
+					if !firstParam {
+						result.WriteByte('&')
+					} else {
+						firstParam = false
+					}
+					result.WriteString(segment)
+				}
+			}
+			start = i + 1
+		}
+	}
+
+	return result.String()
 }
 
 // FilterQueryParams filters query parameters string according to validation rules
