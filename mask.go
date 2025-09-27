@@ -199,7 +199,7 @@ func (pi *ParamIndex) CreateMaskForParams(params map[string]*ParamRule) ParamMas
 	mask := NewParamMask()
 	for paramName := range params {
 		if idx := pi.GetIndex(paramName); idx != -1 {
-			mask.SetBit(idx) // SetBit работает с указателем, но Go автоматически берет адрес
+			mask.SetBitUnsafe(idx) // Без проверок границ
 		}
 	}
 	return mask
