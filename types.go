@@ -1,6 +1,9 @@
 package paramvalidator
 
-import "sync"
+import (
+	"sync"
+	"sync/atomic"
+)
 
 // CallbackFunc defines function type for custom validation
 type CallbackFunc func(paramName string, paramValue string) bool
@@ -79,10 +82,9 @@ type CompiledRules struct {
 }
 
 type ParamIndex struct {
-	paramToIndex map[string]int // Имя параметра -> индекс
-	indexToParam map[int]string // Индекс -> имя параметра
-	nextIndex    int
-	mu           sync.RWMutex
+	paramToIndex sync.Map // string -> int (lock-free)
+	nextIndex    atomic.Int32
+	maxIndex     int32
 }
 
 // ParamValidator main struct for parameter validation

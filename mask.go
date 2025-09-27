@@ -1,5 +1,7 @@
 package paramvalidator
 
+import "sync"
+
 // NewParamMask создает новую пустую битовую маску
 func NewParamMask() ParamMask {
 	return ParamMask{}
@@ -8,9 +10,7 @@ func NewParamMask() ParamMask {
 // NewParamIndex создает новый индекс параметров
 func NewParamIndex() *ParamIndex {
 	return &ParamIndex{
-		paramToIndex: make(map[string]int),
-		indexToParam: make(map[int]string),
-		nextIndex:    0,
+		maxIndex: int32(MaxParamsCount),
 	}
 }
 
@@ -135,44 +135,49 @@ func countBits(x uint32) int {
 
 // GetOrCreateIndex возвращает индекс параметра, создавая новый если нужно
 func (pi *ParamIndex) GetOrCreateIndex(paramName string) int {
-	pi.mu.Lock()
-	defer pi.mu.Unlock()
-
-	if idx, exists := pi.paramToIndex[paramName]; exists {
-		return idx
+	if idx, ok := pi.paramToIndex.Load(paramName); ok {
+		return idx.(int)
 	}
 
-	if pi.nextIndex >= MaxParamsCount {
+	// Atomic создание нового индекса
+	newIdx := int(pi.nextIndex.Add(1) - 1)
+	if newIdx >= int(pi.maxIndex) {
 		return -1 // Достигнут лимит
 	}
 
-	idx := pi.nextIndex
-	pi.nextIndex++
-	pi.paramToIndex[paramName] = idx
-	pi.indexToParam[idx] = paramName
-	return idx
+	// Пытаемся сохранить, если другой горутина уже не сделала это
+	if actual, loaded := pi.paramToIndex.LoadOrStore(paramName, newIdx); loaded {
+		return actual.(int)
+	}
+
+	return newIdx
+}
+
+// GetParamName возвращает имя параметра по индексу (медленнее, но редко используется)
+func (pi *ParamIndex) GetParamName(index int) string {
+	var result string
+	pi.paramToIndex.Range(func(key, value interface{}) bool {
+		if value.(int) == index {
+			result = key.(string)
+			return false
+		}
+		return true
+	})
+	return result
+}
+
+// Clear очищает индекс
+func (pi *ParamIndex) Clear() {
+	pi.paramToIndex = sync.Map{}
+	pi.nextIndex.Store(0)
 }
 
 // GetIndex возвращает индекс параметра или -1 если не найден
 func (pi *ParamIndex) GetIndex(paramName string) int {
-	pi.mu.RLock()
-	defer pi.mu.RUnlock()
-
-	if idx, exists := pi.paramToIndex[paramName]; exists {
-		return idx
+	if idx, ok := pi.paramToIndex.Load(paramName); ok {
+		return idx.(int)
 	}
 	return -1
-}
-
-// GetParamName возвращает имя параметра по индексу
-func (pi *ParamIndex) GetParamName(index int) string {
-	pi.mu.RLock()
-	defer pi.mu.RUnlock()
-
-	if name, exists := pi.indexToParam[index]; exists {
-		return name
-	}
-	return ""
 }
 
 // CreateMaskForParams создает маску для списка параметров
@@ -197,16 +202,6 @@ func (pi *ParamIndex) GetParamsFromMask(mask ParamMask) []string {
 		}
 	}
 	return params
-}
-
-// Clear очищает индекс
-func (pi *ParamIndex) Clear() {
-	pi.mu.Lock()
-	defer pi.mu.Unlock()
-
-	pi.paramToIndex = make(map[string]int)
-	pi.indexToParam = make(map[int]string)
-	pi.nextIndex = 0
 }
 
 // CombinedMask возвращает объединенную маску с учетом приоритетов (ИСПРАВЛЕНО: получатель по значению)
