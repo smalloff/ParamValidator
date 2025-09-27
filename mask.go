@@ -180,6 +180,20 @@ func (pi *ParamIndex) GetIndex(paramName string) int {
 	return -1
 }
 
+// GetBitUnsafe быстрая версия без проверок границ
+func (pm ParamMask) GetBitUnsafe(index int) bool {
+	part := index / 32
+	bit := uint32(index % 32)
+	return (pm.parts[part] & (1 << bit)) != 0
+}
+
+// SetBitUnsafe быстрая версия без проверок
+func (pm *ParamMask) SetBitUnsafe(index int) {
+	part := index / 32
+	bit := uint32(index % 32)
+	pm.parts[part] |= (1 << bit)
+}
+
 // CreateMaskForParams создает маску для списка параметров
 func (pi *ParamIndex) CreateMaskForParams(params map[string]*ParamRule) ParamMask {
 	mask := NewParamMask()
@@ -215,13 +229,13 @@ func (pm ParamMasks) CombinedMask() ParamMask {
 // GetRuleSource возвращает источник правила для параметра (ИСПРАВЛЕНО: получатель по значению)
 func (pm ParamMasks) GetRuleSource(paramIndex int) RuleSource {
 	// ВАЖНО: проверяем в порядке приоритета
-	if pm.SpecificURL.GetBit(paramIndex) {
+	if pm.SpecificURL.GetBitUnsafe(paramIndex) {
 		return SourceSpecificURL
 	}
-	if pm.URL.GetBit(paramIndex) {
+	if pm.URL.GetBitUnsafe(paramIndex) {
 		return SourceURL
 	}
-	if pm.Global.GetBit(paramIndex) {
+	if pm.Global.GetBitUnsafe(paramIndex) {
 		return SourceGlobal
 	}
 	return SourceNone
