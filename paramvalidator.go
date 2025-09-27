@@ -758,6 +758,11 @@ func (pv *ParamValidator) ClearRules() {
 
 // clearUnsafe resets all rules without locking
 func (pv *ParamValidator) clearUnsafe() {
+	// Очищаем кэш парсера
+	if pv.parser != nil {
+		pv.parser.ClearCache()
+	}
+
 	pv.globalParams = make(map[string]*ParamRule)
 	pv.urlRules = make(map[string]*URLRule)
 	pv.compiledRules = &CompiledRules{
@@ -831,6 +836,10 @@ func (pv *ParamValidator) ParseRules(rulesStr string) error {
 
 	pv.mu.Lock()
 	defer pv.mu.Unlock()
+
+	if pv.parser != nil {
+		pv.parser.ClearCache()
+	}
 
 	globalParams, urlRules, err := pv.parser.parseRulesUnsafe(rulesStr)
 	if err != nil {

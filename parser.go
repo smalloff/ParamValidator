@@ -27,12 +27,14 @@ type PluginResourceManager interface {
 // RuleParser handles parsing of validation rules with plugin support
 type RuleParser struct {
 	plugins []PluginConstraintParser
+	cache   *ValidationCache
 }
 
 // NewRuleParser creates a new rule parser
 func NewRuleParser(plugins ...PluginConstraintParser) *RuleParser {
 	return &RuleParser{
 		plugins: plugins,
+		cache:   NewValidationCache(),
 	}
 }
 
@@ -43,8 +45,11 @@ func (rp *RuleParser) RegisterPlugin(plugin PluginConstraintParser) {
 
 // Close releases parser resources
 func (rp *RuleParser) Close() error {
-	var errors []error
+	if rp.cache != nil {
+		rp.cache.Clear()
+	}
 
+	var errors []error
 	for _, plugin := range rp.plugins {
 		if resourcePlugin, ok := plugin.(PluginResourceManager); ok {
 			if err := resourcePlugin.Close(); err != nil {
@@ -285,9 +290,13 @@ func (rp *RuleParser) extractURLAndParams(urlRuleStr string) (string, string) {
 	if strings.HasPrefix(cleanStr, "/") || strings.HasPrefix(cleanStr, "*") {
 		bracketDepth := 0
 		questionMarkPos := -1
+		breakMe := false
 
 		// Find the question mark outside of brackets
 		for i := 0; i < len(cleanStr); i++ {
+			if breakMe {
+				break
+			}
 			switch cleanStr[i] {
 			case '[':
 				bracketDepth++
@@ -298,7 +307,7 @@ func (rp *RuleParser) extractURLAndParams(urlRuleStr string) (string, string) {
 			case '?':
 				if bracketDepth == 0 {
 					questionMarkPos = i
-					break
+					breakMe = true
 				}
 			}
 		}
@@ -494,16 +503,29 @@ func (rp *RuleParser) extractConstraint(ruleStr string, startBracket int) (strin
 	return constraint, endBracket
 }
 
-// createParamRule creates ParamRule from name and constraint
+// createParamRule создает ParamRule с кэшированием функций плагинов
 func (rp *RuleParser) createParamRule(paramName, constraintStr string) (*ParamRule, error) {
 	rule := &ParamRule{Name: paramName}
 
-	// First check plugins
+	// First check plugins with caching
 	for _, plugin := range rp.plugins {
 		if plugin.CanParse(constraintStr) {
+			if rp.cache != nil {
+				if validatorFunc, found := rp.cache.Get(plugin.GetName(), paramName, constraintStr); found {
+					rule.Pattern = "plugin"
+					rule.CustomValidator = validatorFunc
+					return rule, nil
+				}
+			}
+
 			validatorFunc, err := plugin.Parse(paramName, constraintStr)
 			if err != nil {
-				return nil, fmt.Errorf("plugin %s failed to parse constraint '%s': %w", plugin.GetName(), constraintStr, err)
+				return nil, fmt.Errorf("plugin %s failed to parse constraint '%s': %w",
+					plugin.GetName(), constraintStr, err)
+			}
+
+			if rp.cache != nil {
+				rp.cache.Put(plugin.GetName(), paramName, constraintStr, validatorFunc)
 			}
 
 			rule.Pattern = "plugin"
@@ -512,7 +534,12 @@ func (rp *RuleParser) createParamRule(paramName, constraintStr string) (*ParamRu
 		}
 	}
 
-	// If no plugin matches, use standard logic
+	return rp.createStandardParamRule(paramName, constraintStr)
+}
+
+func (rp *RuleParser) createStandardParamRule(paramName, constraintStr string) (*ParamRule, error) {
+	rule := &ParamRule{Name: paramName}
+
 	switch {
 	case constraintStr == "":
 		rule.Pattern = PatternKeyOnly
@@ -556,4 +583,10 @@ func (rp *RuleParser) parseEnumConstraint(rule *ParamRule, constraintStr string)
 	// Sort for consistent behavior
 	sort.Strings(rule.Values)
 	return nil
+}
+
+func (rp *RuleParser) ClearCache() {
+	if rp.cache != nil {
+		rp.cache.Clear()
+	}
 }
