@@ -10,12 +10,14 @@ type CallbackFunc func(paramName string, paramValue string) bool
 
 // RuleType represents type of validation rules
 type RuleType int
-type Option func(*ParamValidator)
 
 const (
 	RuleTypeGlobal RuleType = iota
 	RuleTypeURL
 )
+
+// Option defines configuration function type for ParamValidator
+type Option func(*ParamValidator)
 
 // Pattern constants for validation
 const (
@@ -37,6 +39,16 @@ const (
 	MaxParamsCount     = 128
 )
 
+// RuleSource represents the source of parameter rule
+type RuleSource int
+
+const (
+	SourceNone RuleSource = iota
+	SourceGlobal
+	SourceURL
+	SourceSpecificURL
+)
+
 // ParamRule defines validation rule for single parameter
 type ParamRule struct {
 	Name            string
@@ -55,23 +67,16 @@ type URLRule struct {
 	ParamMask  ParamMask
 }
 
+// ParamMask represents a bitmask for parameter indexing
 type ParamMask struct {
 	parts [4]uint32
 }
 
-type RuleSource int
-
-const (
-	SourceNone RuleSource = iota
-	SourceGlobal
-	SourceURL
-	SourceSpecificURL
-)
-
+// ParamMasks contains masks for different rule sources with priorities
 type ParamMasks struct {
-	Global      ParamMask // Глобальные параметры (низший приоритет)
-	URL         ParamMask // Обычные URL правила (средний приоритет)
-	SpecificURL ParamMask // Специфичные URL правила (высший приоритет)
+	Global      ParamMask // Global parameters (lowest priority)
+	URL         ParamMask // Regular URL rules (medium priority)
+	SpecificURL ParamMask // Specific URL rules (highest priority)
 }
 
 // CompiledRules contains pre-compiled rules for faster access
@@ -81,6 +86,7 @@ type CompiledRules struct {
 	paramIndex   *ParamIndex
 }
 
+// ParamIndex provides lock-free parameter indexing
 type ParamIndex struct {
 	paramToIndex sync.Map // string -> int (lock-free)
 	nextIndex    atomic.Int32
@@ -100,6 +106,7 @@ type ParamValidator struct {
 	paramIndex    *ParamIndex
 }
 
+// wildcardPatternStats contains statistics for URL pattern matching optimization
 type wildcardPatternStats struct {
 	count              int
 	hasWildcard        bool

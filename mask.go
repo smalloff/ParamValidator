@@ -4,19 +4,19 @@ import "sync"
 
 var bitCountTable [256]byte
 
-// NewParamMask создает новую пустую битовую маску
+// NewParamMask creates a new empty bit mask
 func NewParamMask() ParamMask {
 	return ParamMask{}
 }
 
-// NewParamIndex создает новый индекс параметров
+// NewParamIndex creates a new parameter index
 func NewParamIndex() *ParamIndex {
 	return &ParamIndex{
 		maxIndex: int32(MaxParamsCount),
 	}
 }
 
-// SetBit устанавливает бит по индексу
+// SetBit sets the bit at the specified index
 func (pm *ParamMask) SetBit(index int) {
 	if index < 0 || index >= 128 {
 		return
@@ -26,7 +26,7 @@ func (pm *ParamMask) SetBit(index int) {
 	pm.parts[part] |= (1 << bit)
 }
 
-// ClearBit очищает бит по индексу
+// ClearBit clears the bit at the specified index
 func (pm *ParamMask) ClearBit(index int) {
 	if index < 0 || index >= 128 {
 		return
@@ -36,7 +36,7 @@ func (pm *ParamMask) ClearBit(index int) {
 	pm.parts[part] &^= (1 << bit)
 }
 
-// GetBit возвращает значение бита по индексу (ИСПРАВЛЕНО: получатель по значению)
+// GetBit returns the value of the bit at the specified index
 func (pm ParamMask) GetBit(index int) bool {
 	if index < 0 || index >= 128 {
 		return false
@@ -46,7 +46,7 @@ func (pm ParamMask) GetBit(index int) bool {
 	return (pm.parts[part] & (1 << bit)) != 0
 }
 
-// IsEmpty проверяет, пуста ли маска (ИСПРАВЛЕНО: получатель по значению)
+// IsEmpty checks if the mask is empty
 func (pm ParamMask) IsEmpty() bool {
 	for i := 0; i < 4; i++ {
 		if pm.parts[i] != 0 {
@@ -56,7 +56,7 @@ func (pm ParamMask) IsEmpty() bool {
 	return true
 }
 
-// Union объединяет две маски (логическое ИЛИ) (ИСПРАВЛЕНО: получатель по значению)
+// Union combines two masks (logical OR)
 func (pm ParamMask) Union(other ParamMask) ParamMask {
 	var result ParamMask
 	for i := 0; i < 4; i++ {
@@ -65,7 +65,7 @@ func (pm ParamMask) Union(other ParamMask) ParamMask {
 	return result
 }
 
-// Intersection пересекает две маски (логическое И) (ИСПРАВЛЕНО: получатель по значению)
+// Intersection intersects two masks (logical AND)
 func (pm ParamMask) Intersection(other ParamMask) ParamMask {
 	var result ParamMask
 	for i := 0; i < 4; i++ {
@@ -74,7 +74,7 @@ func (pm ParamMask) Intersection(other ParamMask) ParamMask {
 	return result
 }
 
-// Difference возвращает разность масок (pm AND NOT other) (ИСПРАВЛЕНО: получатель по значению)
+// Difference returns the difference of masks (pm AND NOT other)
 func (pm ParamMask) Difference(other ParamMask) ParamMask {
 	var result ParamMask
 	for i := 0; i < 4; i++ {
@@ -83,7 +83,7 @@ func (pm ParamMask) Difference(other ParamMask) ParamMask {
 	return result
 }
 
-// Contains проверяет, содержит ли маска все биты другой маски (ИСПРАВЛЕНО: получатель по значению)
+// Contains checks if the mask contains all bits of another mask
 func (pm ParamMask) Contains(other ParamMask) bool {
 	for i := 0; i < 4; i++ {
 		if (other.parts[i] &^ pm.parts[i]) != 0 {
@@ -93,7 +93,7 @@ func (pm ParamMask) Contains(other ParamMask) bool {
 	return true
 }
 
-// Equals проверяет равенство масок (ИСПРАВЛЕНО: получатель по значению)
+// Equals checks if masks are equal
 func (pm ParamMask) Equals(other ParamMask) bool {
 	for i := 0; i < 4; i++ {
 		if pm.parts[i] != other.parts[i] {
@@ -109,10 +109,11 @@ func init() {
 	}
 }
 
+// Count returns the number of set bits in the mask
 func (pm ParamMask) Count() int {
 	count := 0
 	for i := 0; i < 4; i++ {
-		// Быстрый подсчет через таблицу
+		// Fast counting using lookup table
 		count += int(bitCountTable[byte(pm.parts[i]>>24)]) +
 			int(bitCountTable[byte(pm.parts[i]>>16)]) +
 			int(bitCountTable[byte(pm.parts[i]>>8)]) +
@@ -121,7 +122,7 @@ func (pm ParamMask) Count() int {
 	return count
 }
 
-// GetIndices возвращает индексы установленных битов (ИСПРАВЛЕНО: получатель по значению)
+// GetIndices returns indices of set bits
 func (pm ParamMask) GetIndices() []int {
 	var indices []int
 	for i := 0; i < 4; i++ {
@@ -134,19 +135,19 @@ func (pm ParamMask) GetIndices() []int {
 	return indices
 }
 
-// GetOrCreateIndex возвращает индекс параметра, создавая новый если нужно
+// GetOrCreateIndex returns parameter index, creating new one if needed
 func (pi *ParamIndex) GetOrCreateIndex(paramName string) int {
 	if idx, ok := pi.paramToIndex.Load(paramName); ok {
 		return idx.(int)
 	}
 
-	// Atomic создание нового индекса
+	// Atomic creation of new index
 	newIdx := int(pi.nextIndex.Add(1) - 1)
 	if newIdx >= int(pi.maxIndex) {
-		return -1 // Достигнут лимит
+		return -1 // Limit reached
 	}
 
-	// Пытаемся сохранить, если другой горутина уже не сделала это
+	// Try to store, unless another goroutine already did it
 	if actual, loaded := pi.paramToIndex.LoadOrStore(paramName, newIdx); loaded {
 		return actual.(int)
 	}
@@ -154,7 +155,7 @@ func (pi *ParamIndex) GetOrCreateIndex(paramName string) int {
 	return newIdx
 }
 
-// GetParamName возвращает имя параметра по индексу (медленнее, но редко используется)
+// GetParamName returns parameter name by index (slower, rarely used)
 func (pi *ParamIndex) GetParamName(index int) string {
 	var result string
 	pi.paramToIndex.Range(func(key, value interface{}) bool {
@@ -167,13 +168,13 @@ func (pi *ParamIndex) GetParamName(index int) string {
 	return result
 }
 
-// Clear очищает индекс
+// Clear clears the index
 func (pi *ParamIndex) Clear() {
 	pi.paramToIndex = sync.Map{}
 	pi.nextIndex.Store(0)
 }
 
-// GetIndex возвращает индекс параметра или -1 если не найден
+// GetIndex returns parameter index or -1 if not found
 func (pi *ParamIndex) GetIndex(paramName string) int {
 	if idx, ok := pi.paramToIndex.Load(paramName); ok {
 		return idx.(int)
@@ -181,31 +182,32 @@ func (pi *ParamIndex) GetIndex(paramName string) int {
 	return -1
 }
 
+// GetBitUnsafe fast version without bounds checking
 func (pm ParamMask) GetBitUnsafe(index int) bool {
 	part := index / 32
 	bit := uint32(index % 32)
 	return (pm.parts[part] & (1 << bit)) != 0
 }
 
-// SetBitUnsafe быстрая версия без проверок
+// SetBitUnsafe fast version without bounds checking
 func (pm *ParamMask) SetBitUnsafe(index int) {
 	part := index / 32
 	bit := uint32(index % 32)
 	pm.parts[part] |= (1 << bit)
 }
 
-// CreateMaskForParams создает маску для списка параметров
+// CreateMaskForParams creates mask for parameter list
 func (pi *ParamIndex) CreateMaskForParams(params map[string]*ParamRule) ParamMask {
 	mask := NewParamMask()
 	for paramName := range params {
 		if idx := pi.GetIndex(paramName); idx != -1 {
-			mask.SetBitUnsafe(idx) // Без проверок границ
+			mask.SetBitUnsafe(idx) // Without bounds checking
 		}
 	}
 	return mask
 }
 
-// GetParamsFromMask возвращает имена параметров из маски
+// GetParamsFromMask returns parameter names from mask
 func (pi *ParamIndex) GetParamsFromMask(mask ParamMask) []string {
 	indices := mask.GetIndices()
 	params := make([]string, 0, len(indices))
@@ -218,17 +220,17 @@ func (pi *ParamIndex) GetParamsFromMask(mask ParamMask) []string {
 	return params
 }
 
-// CombinedMask возвращает объединенную маску с учетом приоритетов (ИСПРАВЛЕНО: получатель по значению)
+// CombinedMask returns combined mask considering priorities
 func (pm ParamMasks) CombinedMask() ParamMask {
-	// SpecificURL имеет высший приоритет
+	// SpecificURL has highest priority
 	result := pm.Global.Union(pm.URL)
-	result = result.Union(pm.SpecificURL) // SpecificURL перезаписывает конфликтующие параметры
+	result = result.Union(pm.SpecificURL) // SpecificURL overwrites conflicting parameters
 	return result
 }
 
-// GetRuleSource возвращает источник правила для параметра (ИСПРАВЛЕНО: получатель по значению)
+// GetRuleSource returns rule source for parameter
 func (pm ParamMasks) GetRuleSource(paramIndex int) RuleSource {
-	// ВАЖНО: проверяем в порядке приоритета
+	// IMPORTANT: check in priority order
 	if pm.SpecificURL.GetBitUnsafe(paramIndex) {
 		return SourceSpecificURL
 	}

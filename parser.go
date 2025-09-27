@@ -6,32 +6,27 @@ import (
 	"strings"
 )
 
-// RuleParser handles parsing of validation rules
-// PluginConstraintParser интерфейс для парсеров кастомных ограничений
+// PluginConstraintParser interface for custom constraint parsers
 type PluginConstraintParser interface {
-	// CanParse проверяет, может ли плагин обработать эту constraint
+	// CanParse checks if plugin can handle this constraint
 	CanParse(constraintStr string) bool
 
-	// Parse создает функцию валидации для параметра
+	// Parse creates validation function for parameter
 	Parse(paramName, constraintStr string) (func(string) bool, error)
 
-	// GetName возвращает имя плагина для отладки
+	// GetName returns plugin name for debugging
 	GetName() string
 }
 
+// PluginResourceManager interface for plugin resource management
 type PluginResourceManager interface {
-	// Close освобождает ресурсы плагина
+	// Close releases plugin resources
 	Close() error
 }
 
-// RuleParser с поддержкой плагинов
+// RuleParser handles parsing of validation rules with plugin support
 type RuleParser struct {
 	plugins []PluginConstraintParser
-}
-
-// RegisterPlugin регистрирует новый плагин
-func (rp *RuleParser) RegisterPlugin(plugin PluginConstraintParser) {
-	rp.plugins = append(rp.plugins, plugin)
 }
 
 // NewRuleParser creates a new rule parser
@@ -39,6 +34,29 @@ func NewRuleParser(plugins ...PluginConstraintParser) *RuleParser {
 	return &RuleParser{
 		plugins: plugins,
 	}
+}
+
+// RegisterPlugin registers a new plugin
+func (rp *RuleParser) RegisterPlugin(plugin PluginConstraintParser) {
+	rp.plugins = append(rp.plugins, plugin)
+}
+
+// Close releases parser resources
+func (rp *RuleParser) Close() error {
+	var errors []error
+
+	for _, plugin := range rp.plugins {
+		if resourcePlugin, ok := plugin.(PluginResourceManager); ok {
+			if err := resourcePlugin.Close(); err != nil {
+				errors = append(errors, fmt.Errorf("plugin %s: %w", plugin.GetName(), err))
+			}
+		}
+	}
+
+	if len(errors) > 0 {
+		return fmt.Errorf("errors closing plugins: %v", errors)
+	}
+	return nil
 }
 
 // sanitizeParamName validates and cleans parameter name
@@ -88,6 +106,7 @@ func (rp *RuleParser) parseRulesUnsafe(rulesStr string) (map[string]*ParamRule, 
 		if err != nil {
 			return nil, nil, err
 		}
+		// Merge results
 		for k, v := range parsedURLRules {
 			urlRules[k] = v
 		}
@@ -244,6 +263,7 @@ func (rp *RuleParser) splitURLRules(rulesStr string) []string {
 	var builder strings.Builder
 	builder.Grow(len(rulesStr))
 
+	// Remove whitespace for cleaner parsing
 	for _, r := range rulesStr {
 		if r != ' ' && r != '\n' {
 			builder.WriteRune(r)
@@ -265,13 +285,9 @@ func (rp *RuleParser) extractURLAndParams(urlRuleStr string) (string, string) {
 	if strings.HasPrefix(cleanStr, "/") || strings.HasPrefix(cleanStr, "*") {
 		bracketDepth := 0
 		questionMarkPos := -1
-		breakOut := false
 
-		// First, find the question mark outside of brackets
+		// Find the question mark outside of brackets
 		for i := 0; i < len(cleanStr); i++ {
-			if breakOut {
-				break
-			}
 			switch cleanStr[i] {
 			case '[':
 				bracketDepth++
@@ -282,18 +298,18 @@ func (rp *RuleParser) extractURLAndParams(urlRuleStr string) (string, string) {
 			case '?':
 				if bracketDepth == 0 {
 					questionMarkPos = i
-					breakOut = true
+					break
 				}
 			}
 		}
 
 		if questionMarkPos != -1 {
-			// We have a URL with parameters: /path?param=value
+			// URL with parameters: /path?param=value
 			urlPattern := strings.TrimSpace(cleanStr[:questionMarkPos])
 			paramsStr := strings.TrimSpace(cleanStr[questionMarkPos+1:])
 			return urlPattern, paramsStr
 		} else {
-			// No question mark, check if we have brackets directly after URL
+			// No question mark, check for brackets directly after URL
 			bracketPos := strings.Index(cleanStr, "[")
 			if bracketPos != -1 {
 				// URL pattern with inline parameters: /path[param=value]
@@ -348,6 +364,7 @@ func (rp *RuleParser) parseSingleParamRuleUnsafe(ruleStr string) (*ParamRule, er
 		return nil, nil
 	}
 
+	// Handle special patterns first
 	if strings.HasSuffix(ruleStr, "=[]") {
 		paramName := strings.TrimSuffix(ruleStr, "=[]")
 		paramName, err := rp.sanitizeParamName(paramName)
@@ -378,23 +395,6 @@ func (rp *RuleParser) parseSingleParamRuleUnsafe(ruleStr string) (*ParamRule, er
 	}
 
 	return rp.parseComplexParamRule(ruleStr, startBracket)
-}
-
-func (rp *RuleParser) Close() error {
-	var errors []error
-
-	for _, plugin := range rp.plugins {
-		if resourcePlugin, ok := plugin.(PluginResourceManager); ok {
-			if err := resourcePlugin.Close(); err != nil {
-				errors = append(errors, fmt.Errorf("plugin %s: %w", plugin.GetName(), err))
-			}
-		}
-	}
-
-	if len(errors) > 0 {
-		return fmt.Errorf("errors closing plugins: %v", errors)
-	}
-	return nil
 }
 
 // parseSimpleParamRule parses simple parameter rule without brackets
@@ -440,7 +440,6 @@ func (rp *RuleParser) parseComplexParamRule(ruleStr string, startBracket int) (*
 	if idx := strings.Index(paramName, "?"); idx != -1 {
 		paramName = paramName[idx+1:]
 	}
-
 	if idx := strings.Index(paramName, "&"); idx != -1 {
 		paramName = paramName[idx+1:]
 	}
@@ -499,7 +498,7 @@ func (rp *RuleParser) extractConstraint(ruleStr string, startBracket int) (strin
 func (rp *RuleParser) createParamRule(paramName, constraintStr string) (*ParamRule, error) {
 	rule := &ParamRule{Name: paramName}
 
-	// Сначала проверяем плагины
+	// First check plugins
 	for _, plugin := range rp.plugins {
 		if plugin.CanParse(constraintStr) {
 			validatorFunc, err := plugin.Parse(paramName, constraintStr)
@@ -508,12 +507,12 @@ func (rp *RuleParser) createParamRule(paramName, constraintStr string) (*ParamRu
 			}
 
 			rule.Pattern = "plugin"
-			rule.CustomValidator = validatorFunc // ВАЖНО: сохраняем функцию
+			rule.CustomValidator = validatorFunc
 			return rule, nil
 		}
 	}
 
-	// Если ни один плагин не подошел, используем стандартную логику
+	// If no plugin matches, use standard logic
 	switch {
 	case constraintStr == "":
 		rule.Pattern = PatternKeyOnly
@@ -554,7 +553,7 @@ func (rp *RuleParser) parseEnumConstraint(rule *ParamRule, constraintStr string)
 		return fmt.Errorf("no valid values in enum constraint")
 	}
 
-	// Sort for consistent behavior (optional)
+	// Sort for consistent behavior
 	sort.Strings(rule.Values)
 	return nil
 }
