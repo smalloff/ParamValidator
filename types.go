@@ -94,7 +94,7 @@ type ParamValidator struct {
 	urlMatcher    *URLMatcher
 	compiledRules *CompiledRules
 	callbackFunc  CallbackFunc
-	initialized   bool
+	initialized   atomic.Bool
 	mu            sync.RWMutex
 	parser        *RuleParser
 	paramIndex    *ParamIndex

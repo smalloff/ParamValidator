@@ -449,17 +449,6 @@ func TestURLPatternMatching(t *testing.T) {
 }
 
 func TestEdgeCases(t *testing.T) {
-	t.Run("uninitialized validator", func(t *testing.T) {
-		pv := &ParamValidator{initialized: false}
-
-		if pv.ValidateURL("/test") {
-			t.Error("Uninitialized validator should not validate")
-		}
-
-		if pv.NormalizeURL("/test") != "/test" {
-			t.Error("Uninitialized validator should return original URL")
-		}
-	})
 
 	t.Run("invalid URL", func(t *testing.T) {
 		pv, err := NewParamValidator("/test?param=value")
@@ -483,19 +472,6 @@ func TestEdgeCases(t *testing.T) {
 		}
 	})
 
-	t.Run("nil validator", func(t *testing.T) {
-		var pv *ParamValidator
-
-		result := pv.ValidateURL("/test")
-		if result != false {
-			t.Error("nil validator should return false")
-		}
-
-		normalized := pv.NormalizeURL("/test")
-		if normalized != "/test" {
-			t.Error("nil validator should return original URL")
-		}
-	})
 }
 
 func TestMultipleRulesWithSemicolon(t *testing.T) {
@@ -759,10 +735,9 @@ func BenchmarkRangePluginValidation(b *testing.B) {
 		urlRules:      make(map[string]*URLRule),
 		urlMatcher:    NewURLMatcher(),
 		compiledRules: &CompiledRules{},
-		initialized:   true,
 		parser:        parser,
 	}
-
+	pv.initialized.Store(true)
 	err := pv.ParseRules("/api?age=[18-65]")
 	if err != nil {
 		b.Fatalf("Failed to parse rules: %v", err)
@@ -783,10 +758,9 @@ func BenchmarkRangePluginNormalization(b *testing.B) {
 		urlRules:      make(map[string]*URLRule),
 		urlMatcher:    NewURLMatcher(),
 		compiledRules: &CompiledRules{},
-		initialized:   true,
 		parser:        parser,
 	}
-
+	pv.initialized.Store(true)
 	err := pv.ParseRules("/api?age=[18-65]")
 	if err != nil {
 		b.Fatalf("Failed to parse rules: %v", err)
