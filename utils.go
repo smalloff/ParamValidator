@@ -7,17 +7,21 @@ import (
 
 // normalizeURLPattern cleans and standardizes URL pattern
 func NormalizeURLPattern(pattern string) string {
-	pattern = strings.TrimSpace(pattern)
 	if pattern == "" {
 		return ""
 	}
 
-	if strings.Contains(pattern, "*") {
+	// Быстрая проверка на wildcard
+	if len(pattern) > 0 && pattern[0] == '*' {
 		return pattern
 	}
 
-	if !strings.HasPrefix(pattern, "/") {
-		pattern = "/" + pattern
+	// Избегать path.Clean для простых случаев
+	if !strings.Contains(pattern, "./") && !strings.Contains(pattern, "//") {
+		if pattern[0] != '/' {
+			return "/" + pattern
+		}
+		return pattern
 	}
 
 	cleaned := path.Clean(pattern)

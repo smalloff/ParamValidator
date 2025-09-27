@@ -437,15 +437,12 @@ func (rp *RuleParser) parseComplexParamRule(ruleStr string, startBracket int) (*
 	}
 
 	// For URL rules, extract only the actual parameter name (after last ? or &)
-	if strings.Contains(paramName, "?") {
-		parts := strings.Split(paramName, "?")
-		if len(parts) > 1 {
-			paramName = parts[len(parts)-1]
-		}
+	if idx := strings.Index(paramName, "?"); idx != -1 {
+		paramName = paramName[idx+1:]
 	}
-	if strings.Contains(paramName, "&") {
-		parts := strings.Split(paramName, "&")
-		paramName = parts[len(parts)-1]
+
+	if idx := strings.Index(paramName, "&"); idx != -1 {
+		paramName = paramName[idx+1:]
 	}
 
 	paramName, err := rp.sanitizeParamName(paramName)

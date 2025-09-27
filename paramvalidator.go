@@ -278,10 +278,6 @@ func (pv *ParamValidator) getParamMasksForURL(urlPath string) ParamMasks {
 		return masks
 	}
 
-	if pv.compiledRules == nil || pv.compiledRules.paramIndex == nil {
-		return masks
-	}
-
 	urlPath = NormalizeURLPattern(urlPath)
 
 	// 1. Глобальные параметры
