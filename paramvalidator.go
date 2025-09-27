@@ -9,6 +9,14 @@ import (
 	"unsafe"
 )
 
+var builderPool = sync.Pool{
+	New: func() interface{} {
+		b := &strings.Builder{}
+		b.Grow(128)
+		return b
+	},
+}
+
 // WithCallback устанавливает callback-функцию для валидации
 func WithCallback(callback CallbackFunc) Option {
 	return func(pv *ParamValidator) {
@@ -270,6 +278,10 @@ func (pv *ParamValidator) getParamMasksForURL(urlPath string) ParamMasks {
 		return masks
 	}
 
+	if pv.compiledRules == nil || pv.compiledRules.paramIndex == nil {
+		return masks
+	}
+
 	urlPath = NormalizeURLPattern(urlPath)
 
 	// 1. Глобальные параметры
@@ -399,14 +411,6 @@ func (pv *ParamValidator) parseAndValidateQueryParamsWithMasks(queryString strin
 	})
 
 	return isValid, err
-}
-
-var builderPool = sync.Pool{
-	New: func() interface{} {
-		b := &strings.Builder{}
-		b.Grow(256)
-		return b
-	},
 }
 
 // parseAndFilterQueryParamsWithMasks фильтрует параметры с использованием масок
