@@ -1,9 +1,7 @@
-// comparison_plugin.go
 package plugins
 
 import (
 	"fmt"
-	"regexp"
 	"strconv"
 	"strings"
 )
@@ -22,8 +20,6 @@ func (cp *ComparisonPlugin) GetName() string {
 }
 
 func (cp *ComparisonPlugin) CanParse(constraintStr string) bool {
-	// Более "жадная" проверка: если строка начинается с < или >,
-	// считаем что это может быть оператор сравнения
 	if len(constraintStr) == 0 {
 		return false
 	}
@@ -33,44 +29,19 @@ func (cp *ComparisonPlugin) CanParse(constraintStr string) bool {
 }
 
 func (cp *ComparisonPlugin) Parse(paramName, constraintStr string) (func(string) bool, error) {
-	// Строгая валидация формата с помощью regex
-	pattern := `^([<>]=?)(-?\d+)$`
-	re := regexp.MustCompile(pattern)
-	matches := re.FindStringSubmatch(constraintStr)
-
-	if len(matches) != 3 {
-		// Даем подробное сообщение об ошибке для различных некорректных форматов
-		if len(constraintStr) == 1 {
-			return nil, fmt.Errorf("incomplete comparison operator '%s': missing number", constraintStr)
-		}
-
-		// Проверяем различные случаи ошибок
-		if strings.HasPrefix(constraintStr, ">>") {
-			return nil, fmt.Errorf("invalid double operator '>>', use single '>'")
-		}
-		if strings.HasPrefix(constraintStr, "<<") {
-			return nil, fmt.Errorf("invalid double operator '<<', use single '<'")
-		}
-		if strings.HasPrefix(constraintStr, "><") || strings.HasPrefix(constraintStr, "<>") {
-			return nil, fmt.Errorf("invalid operator combination '%s', use either '>' or '<'", constraintStr[:2])
-		}
-		if (strings.HasPrefix(constraintStr, ">=") || strings.HasPrefix(constraintStr, "<=")) && len(constraintStr) == 2 {
-			return nil, fmt.Errorf("incomplete operator '%s': missing number after =", constraintStr)
-		}
-
-		// Проверяем оператор без числа
-		if constraintStr == ">" || constraintStr == "<" || constraintStr == ">=" || constraintStr == "<=" {
-			return nil, fmt.Errorf("incomplete comparison operator '%s': missing number", constraintStr)
-		}
-
-		// Общая ошибка для других случаев
-		return nil, fmt.Errorf("invalid comparison format: '%s'. Expected formats: >N, <N, >=N, <=N where N is a number", constraintStr)
+	if len(constraintStr) == 0 {
+		return nil, fmt.Errorf("empty constraint")
 	}
 
-	operator := matches[1]
-	threshold, err := strconv.ParseInt(matches[2], 10, 64)
+	// Быстрая проверка с помощью строкового поиска
+	operator, numStr, err := cp.parseComparison(constraintStr)
 	if err != nil {
-		return nil, fmt.Errorf("invalid number in comparison: %s", matches[2])
+		return nil, err
+	}
+
+	threshold, err := strconv.ParseInt(numStr, 10, 64)
+	if err != nil {
+		return nil, fmt.Errorf("invalid number in comparison: %s", numStr)
 	}
 
 	return func(value string) bool {
@@ -92,4 +63,67 @@ func (cp *ComparisonPlugin) Parse(paramName, constraintStr string) (func(string)
 			return false
 		}
 	}, nil
+}
+
+// parseComparison парсит оператор сравнения с помощью быстрого строкового поиска
+func (cp *ComparisonPlugin) parseComparison(constraintStr string) (string, string, error) {
+	str := strings.TrimSpace(constraintStr)
+
+	// Проверяем различные случаи ошибок
+	if len(str) == 1 {
+		return "", "", fmt.Errorf("incomplete comparison operator '%s': missing number", str)
+	}
+
+	if strings.HasPrefix(str, ">>") {
+		return "", "", fmt.Errorf("invalid double operator '>>', use single '>'")
+	}
+	if strings.HasPrefix(str, "<<") {
+		return "", "", fmt.Errorf("invalid double operator '<<', use single '<'")
+	}
+	if strings.HasPrefix(str, "><") || strings.HasPrefix(str, "<>") {
+		return "", "", fmt.Errorf("invalid operator combination '%s', use either '>' or '<'", str[:2])
+	}
+
+	// Операторы без числа
+	if str == ">" || str == "<" || str == ">=" || str == "<=" {
+		return "", "", fmt.Errorf("incomplete comparison operator '%s': missing number", str)
+	}
+
+	// Парсим оператор и число
+	var operator string
+	var numStr string
+
+	if strings.HasPrefix(str, ">=") {
+		operator = ">="
+		numStr = str[2:]
+	} else if strings.HasPrefix(str, "<=") {
+		operator = "<="
+		numStr = str[2:]
+	} else if strings.HasPrefix(str, ">") {
+		operator = ">"
+		numStr = str[1:]
+	} else if strings.HasPrefix(str, "<") {
+		operator = "<"
+		numStr = str[1:]
+	} else {
+		return "", "", fmt.Errorf("invalid comparison format: '%s'. Expected formats: >N, <N, >=N, <=N where N is a number", str)
+	}
+
+	// Проверяем что число валидно
+	numStr = strings.TrimSpace(numStr)
+	if numStr == "" {
+		return "", "", fmt.Errorf("missing number after operator '%s'", operator)
+	}
+
+	// Проверяем что в строке только цифры и возможный знак минуса
+	for i, ch := range numStr {
+		if ch == '-' && i == 0 {
+			continue // минус только в начале
+		}
+		if ch < '0' || ch > '9' {
+			return "", "", fmt.Errorf("invalid character in number: '%c'", ch)
+		}
+	}
+
+	return operator, numStr, nil
 }

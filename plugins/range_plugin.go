@@ -19,8 +19,6 @@ func (rp *RangePlugin) GetName() string {
 	return rp.name
 }
 
-// range_plugin.go
-
 func (rp *RangePlugin) CanParse(constraintStr string) bool {
 	if constraintStr == "" {
 		return false
