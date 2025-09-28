@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"regexp"
 	"strconv"
+	"strings"
 )
 
 // ComparisonPlugin плагин для операторов сравнения: >5, <10, >=100, <=50
@@ -43,21 +44,23 @@ func (cp *ComparisonPlugin) Parse(paramName, constraintStr string) (func(string)
 			return nil, fmt.Errorf("incomplete comparison operator '%s': missing number", constraintStr)
 		}
 
-		firstChar := constraintStr[0]
-		secondChar := constraintStr[1]
-
 		// Проверяем различные случаи ошибок
-		if firstChar == '>' && secondChar == '>' {
+		if strings.HasPrefix(constraintStr, ">>") {
 			return nil, fmt.Errorf("invalid double operator '>>', use single '>'")
 		}
-		if firstChar == '<' && secondChar == '<' {
+		if strings.HasPrefix(constraintStr, "<<") {
 			return nil, fmt.Errorf("invalid double operator '<<', use single '<'")
 		}
-		if (firstChar == '>' && secondChar == '<') || (firstChar == '<' && secondChar == '>') {
+		if strings.HasPrefix(constraintStr, "><") || strings.HasPrefix(constraintStr, "<>") {
 			return nil, fmt.Errorf("invalid operator combination '%s', use either '>' or '<'", constraintStr[:2])
 		}
-		if secondChar == '=' && len(constraintStr) == 2 {
+		if (strings.HasPrefix(constraintStr, ">=") || strings.HasPrefix(constraintStr, "<=")) && len(constraintStr) == 2 {
 			return nil, fmt.Errorf("incomplete operator '%s': missing number after =", constraintStr)
+		}
+
+		// Проверяем оператор без числа
+		if constraintStr == ">" || constraintStr == "<" || constraintStr == ">=" || constraintStr == "<=" {
+			return nil, fmt.Errorf("incomplete comparison operator '%s': missing number", constraintStr)
 		}
 
 		// Общая ошибка для других случаев

@@ -373,6 +373,8 @@ func (rp *RuleParser) parseSingleParamRuleUnsafe(ruleStr string) (*ParamRule, er
 		return nil, nil
 	}
 
+	ruleStr = strings.ReplaceAll(ruleStr, "![*]", "[]")
+
 	inverted := false
 	if strings.Contains(ruleStr, "![") {
 		inverted = true
@@ -480,8 +482,15 @@ func (rp *RuleParser) parseComplexParamRule(ruleStr string, startBracket int, in
 	}
 
 	rule, err := rp.createParamRule(paramName, constraintStr)
+	if err != nil {
+		return nil, err
+	}
+	if rule == nil {
+		return nil, fmt.Errorf("failed to create rule for parameter %s with constraint %s", paramName, constraintStr)
+	}
+
 	rule.Inverted = inverted
-	return rule, err
+	return rule, nil
 }
 
 // extractConstraint extracts content between brackets

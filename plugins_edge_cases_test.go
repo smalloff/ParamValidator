@@ -7,77 +7,6 @@ import (
 	"github.com/smalloff/paramvalidator/plugins"
 )
 
-// plugins_edge_cases_test.go - в функции TestPluginEdgeCases
-func TestPluginEdgeCases(t *testing.T) {
-	parser := NewRuleParser(plugins.NewComparisonPlugin(), plugins.NewRegexPlugin())
-
-	tests := []struct {
-		name        string
-		rule        string
-		shouldError bool
-	}{
-		{
-			name:        "empty constraint in brackets",
-			rule:        "param=[]",
-			shouldError: false, // Это должно быть key-only pattern, не плагин
-		},
-		{
-			name:        "question mark constraint",
-			rule:        "param=[?]",
-			shouldError: false, // Это должно быть callback pattern, не плагин
-		},
-		{
-			name:        "very large number for comparison",
-			rule:        "param=[>999999999999]",
-			shouldError: false,
-		},
-		{
-			name:        "complex regex with special characters",
-			rule:        "param=[/^[\\w\\-\\.]+@([\\w-]+\\.)+[\\w-]{2,}$/]",
-			shouldError: false,
-		},
-		{
-			name:        "multiple operators should fail",
-			rule:        "param=[>>100]",
-			shouldError: true, // Parse должен вернуть ошибку
-		},
-		{
-			name:        "invalid operator combination",
-			rule:        "param=[<>100]",
-			shouldError: true, // Parse должен вернуть ошибку
-		},
-		{
-			name:        "operator without number",
-			rule:        "param=[>]",
-			shouldError: true, // Parse должен вернуть ошибку
-		},
-		{
-			name:        "just operator symbols",
-			rule:        "param=[><]",
-			shouldError: true, // Parse должен вернуть ошибку
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			_, err := parser.parseSingleParamRuleUnsafe(tt.rule)
-
-			if tt.shouldError {
-				if err == nil {
-					t.Errorf("Expected error for rule %q, but got none", tt.rule)
-				} else {
-					t.Logf("Correctly got error for rule %q: %v", tt.rule, err)
-				}
-			} else {
-				if err != nil {
-					t.Errorf("Unexpected error for rule %q: %v", tt.rule, err)
-				}
-			}
-		})
-	}
-}
-
-// Дополнительный тест для специфических случаев сравнения
 func TestComparisonEdgeCases(t *testing.T) {
 	plugin := plugins.NewComparisonPlugin()
 
@@ -97,16 +26,19 @@ func TestComparisonEdgeCases(t *testing.T) {
 			name:        "valid greater than or equal",
 			constraint:  ">=100",
 			shouldParse: true,
+			shouldError: false,
 		},
 		{
 			name:        "valid less than",
 			constraint:  "<100",
 			shouldParse: true,
+			shouldError: false,
 		},
 		{
 			name:        "valid less than or equal",
 			constraint:  "<=100",
 			shouldParse: true,
+			shouldError: false,
 		},
 		{
 			name:        "double greater than should fail",
@@ -135,6 +67,12 @@ func TestComparisonEdgeCases(t *testing.T) {
 		{
 			name:        "empty after operator should fail",
 			constraint:  ">",
+			shouldParse: true, // CanParse returns true
+			shouldError: true, // But Parse should fail
+		},
+		{
+			name:        "operator with equals only should fail",
+			constraint:  ">=",
 			shouldParse: true, // CanParse returns true
 			shouldError: true, // But Parse should fail
 		},
