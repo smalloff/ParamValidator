@@ -32,6 +32,7 @@ func TestComparisonPlugin(t *testing.T) {
 			value:       "5",
 			shouldParse: true,
 			expected:    false,
+			shouldError: false,
 		},
 		{
 			name:        "greater than equal invalid",
@@ -39,6 +40,7 @@ func TestComparisonPlugin(t *testing.T) {
 			value:       "4",
 			shouldParse: true,
 			expected:    false,
+			shouldError: false,
 		},
 
 		// Greater than or equal
@@ -48,6 +50,7 @@ func TestComparisonPlugin(t *testing.T) {
 			value:       "5",
 			shouldParse: true,
 			expected:    true,
+			shouldError: false,
 		},
 		{
 			name:        "greater than or equal valid higher",
@@ -55,6 +58,7 @@ func TestComparisonPlugin(t *testing.T) {
 			value:       "6",
 			shouldParse: true,
 			expected:    true,
+			shouldError: false,
 		},
 		{
 			name:        "greater than or equal invalid",
@@ -62,6 +66,7 @@ func TestComparisonPlugin(t *testing.T) {
 			value:       "4",
 			shouldParse: true,
 			expected:    false,
+			shouldError: false,
 		},
 
 		// Less than
@@ -71,6 +76,7 @@ func TestComparisonPlugin(t *testing.T) {
 			value:       "9",
 			shouldParse: true,
 			expected:    true,
+			shouldError: false,
 		},
 		{
 			name:        "less than invalid",
@@ -78,6 +84,7 @@ func TestComparisonPlugin(t *testing.T) {
 			value:       "10",
 			shouldParse: true,
 			expected:    false,
+			shouldError: false,
 		},
 		{
 			name:        "less than equal invalid",
@@ -85,6 +92,7 @@ func TestComparisonPlugin(t *testing.T) {
 			value:       "11",
 			shouldParse: true,
 			expected:    false,
+			shouldError: false,
 		},
 
 		// Less than or equal
@@ -94,6 +102,7 @@ func TestComparisonPlugin(t *testing.T) {
 			value:       "10",
 			shouldParse: true,
 			expected:    true,
+			shouldError: false,
 		},
 		{
 			name:        "less than or equal valid lower",
@@ -101,6 +110,7 @@ func TestComparisonPlugin(t *testing.T) {
 			value:       "9",
 			shouldParse: true,
 			expected:    true,
+			shouldError: false,
 		},
 		{
 			name:        "less than or equal invalid",
@@ -108,6 +118,7 @@ func TestComparisonPlugin(t *testing.T) {
 			value:       "11",
 			shouldParse: true,
 			expected:    false,
+			shouldError: false,
 		},
 
 		// Negative numbers
@@ -117,6 +128,7 @@ func TestComparisonPlugin(t *testing.T) {
 			value:       "-4",
 			shouldParse: true,
 			expected:    true,
+			shouldError: false,
 		},
 		{
 			name:        "negative numbers invalid",
@@ -124,32 +136,101 @@ func TestComparisonPlugin(t *testing.T) {
 			value:       "-6",
 			shouldParse: true,
 			expected:    false,
+			shouldError: false,
+		},
+		{
+			name:        "negative range valid",
+			constraint:  ">=-100",
+			value:       "-50",
+			shouldParse: true,
+			expected:    true,
+			shouldError: false,
+		},
+
+		// Large numbers
+		{
+			name:        "large numbers valid",
+			constraint:  ">100",
+			value:       "150",
+			shouldParse: true,
+			expected:    true,
+			shouldError: false,
+		},
+		{
+			name:        "large numbers invalid",
+			constraint:  "<1000000",
+			value:       "1000001",
+			shouldParse: true,
+			expected:    false,
+			shouldError: false,
+		},
+
+		// Equal boundary
+		{
+			name:        "equal boundary valid",
+			constraint:  ">=0",
+			value:       "0",
+			shouldParse: true,
+			expected:    true,
+			shouldError: false,
+		},
+		{
+			name:        "equal boundary invalid",
+			constraint:  ">=0",
+			value:       "-1",
+			shouldParse: true,
+			expected:    false,
+			shouldError: false,
 		},
 
 		// Invalid formats
 		{
-			name:        "invalid format multiple operators",
-			constraint:  ">>5",
-			shouldParse: true, // CanParse returns true (starts with >)
+			name:        "double operator should fail",
+			constraint:  ">>10",
+			shouldParse: true, // CanParse returns true
 			shouldError: true, // But Parse should fail
 		},
 		{
-			name:        "invalid format no number",
-			constraint:  ">",
-			shouldParse: true, // CanParse returns true (starts with >)
+			name:        "double less than should fail",
+			constraint:  "<<100",
+			shouldParse: true, // CanParse returns true
 			shouldError: true, // But Parse should fail
 		},
 		{
-			name:        "invalid format text",
+			name:        "mixed operators should fail",
+			constraint:  "><100",
+			shouldParse: true, // CanParse returns true
+			shouldError: true, // But Parse should fail
+		},
+		{
+			name:        "operator with text should fail",
 			constraint:  ">abc",
-			shouldParse: true, // CanParse returns true (starts with >)
+			shouldParse: true, // CanParse returns true
+			shouldError: true, // But Parse should fail
+		},
+		{
+			name:        "empty after operator should fail",
+			constraint:  ">",
+			shouldParse: true, // CanParse returns true
+			shouldError: true, // But Parse should fail
+		},
+		{
+			name:        "operator with equals only should fail",
+			constraint:  ">=",
+			shouldParse: true, // CanParse returns true
 			shouldError: true, // But Parse should fail
 		},
 		{
 			name:        "empty constraint",
 			constraint:  "",
-			shouldParse: false, // Empty string - CanParse returns false
+			shouldParse: false,
 			shouldError: true,
+		},
+		{
+			name:        "very large number should fail",
+			constraint:  ">9999999999",
+			shouldParse: true, // CanParse returns true
+			shouldError: true, // But Parse should fail
 		},
 	}
 
@@ -164,14 +245,18 @@ func TestComparisonPlugin(t *testing.T) {
 			}
 
 			if !tt.shouldParse {
-				return // Skip validation tests for constraints that shouldn't parse
+				// Если не должен парситься, проверяем что Parse возвращает ошибку
+				_, err := plugin.Parse("test_param", tt.constraint)
+				if err == nil {
+					t.Errorf("Parse(%q) should fail for non-parsable constraint", tt.constraint)
+				}
+				return
 			}
 
 			// Test Parse
 			validator, err := plugin.Parse("test_param", tt.constraint)
 
 			if tt.shouldError {
-				// We expect an error
 				if err == nil {
 					t.Errorf("Parse(%q) should have failed but succeeded", tt.constraint)
 				} else {
@@ -179,14 +264,13 @@ func TestComparisonPlugin(t *testing.T) {
 				}
 				return
 			} else {
-				// We don't expect an error
 				if err != nil {
 					t.Errorf("Parse(%q) failed: %v", tt.constraint, err)
 					return
 				}
 			}
 
-			// Test validation (only for successful parses)
+			// Test validation
 			result := validator(tt.value)
 			if result != tt.expected {
 				t.Errorf("Validator(%q) for constraint %q = %v, expected %v",
@@ -197,8 +281,9 @@ func TestComparisonPlugin(t *testing.T) {
 }
 
 func TestComparisonPluginIntegration(t *testing.T) {
-	// Create parser with comparison plugin
-	parser := NewRuleParser(plugins.NewComparisonPlugin())
+	// Создаем парсер и явно регистрируем плагин
+	comparisonPlugin := plugins.NewComparisonPlugin()
+	parser := NewRuleParser(comparisonPlugin)
 
 	tests := []struct {
 		name     string
@@ -207,30 +292,89 @@ func TestComparisonPluginIntegration(t *testing.T) {
 		expected bool
 	}{
 		{
-			name:     "greater than in rule",
+			name:     "greater than in param rule",
 			rule:     "age=[>18]",
-			value:    "20",
+			value:    "25",
 			expected: true,
 		},
 		{
-			name:     "less than in rule",
+			name:     "greater than in param rule too young",
+			rule:     "age=[>18]",
+			value:    "16",
+			expected: false,
+		},
+		{
+			name:     "less than in param rule",
 			rule:     "price=[<1000]",
 			value:    "500",
 			expected: true,
 		},
 		{
-			name:     "greater than or equal in URL rule",
-			rule:     "/users?min_age=[>=21]",
-			value:    "21",
+			name:     "less than in param rule too expensive",
+			rule:     "price=[<1000]",
+			value:    "1500",
+			expected: false,
+		},
+		{
+			name:     "greater or equal in param rule",
+			rule:     "score=[>=50]",
+			value:    "50",
 			expected: true,
+		},
+		{
+			name:     "greater or equal in param rule below",
+			rule:     "score=[>=50]",
+			value:    "49",
+			expected: false,
+		},
+		{
+			name:     "less or equal in param rule",
+			rule:     "quantity=[<=10]",
+			value:    "10",
+			expected: true,
+		},
+		{
+			name:     "less or equal in param rule above",
+			rule:     "quantity=[<=10]",
+			value:    "11",
+			expected: false,
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			paramRule, err := parser.parseSingleParamRuleUnsafe(tt.rule)
+			// Парсим полные правила
+			globalParams, urlRules, err := parser.parseRulesUnsafe(tt.rule)
 			if err != nil {
 				t.Fatalf("Failed to parse rule %q: %v", tt.rule, err)
+			}
+
+			// Ищем правило параметра
+			var paramRule *ParamRule
+			for _, rule := range globalParams {
+				if rule != nil {
+					paramRule = rule
+					break
+				}
+			}
+
+			if paramRule == nil {
+				// Проверяем URL rules
+				for _, urlRule := range urlRules {
+					for _, rule := range urlRule.Params {
+						if rule != nil {
+							paramRule = rule
+							break
+						}
+					}
+					if paramRule != nil {
+						break
+					}
+				}
+			}
+
+			if paramRule == nil {
+				t.Fatalf("No parameter rule found for %q", tt.rule)
 			}
 
 			if paramRule.Pattern != "plugin" {
@@ -247,5 +391,36 @@ func TestComparisonPluginIntegration(t *testing.T) {
 					tt.value, result, tt.expected)
 			}
 		})
+	}
+}
+
+func BenchmarkComparisonPlugin(b *testing.B) {
+	plugin := plugins.NewComparisonPlugin()
+	validator, err := plugin.Parse("test", ">100")
+	if err != nil {
+		b.Fatalf("Failed to create validator: %v", err)
+	}
+
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		validator("150")
+	}
+}
+
+func BenchmarkComparisonPluginCanParse(b *testing.B) {
+	plugin := plugins.NewComparisonPlugin()
+
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		plugin.CanParse(">100")
+	}
+}
+
+func BenchmarkComparisonPluginParse(b *testing.B) {
+	plugin := plugins.NewComparisonPlugin()
+
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		plugin.Parse("test", ">100")
 	}
 }
