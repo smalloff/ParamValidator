@@ -1,9 +1,8 @@
-// length_plugin_zero_alloc.go
+// length_plugin_optimized.go
 package plugins
 
 import (
 	"fmt"
-	"unicode/utf8"
 )
 
 const maxLengthValue = 1000000 // Максимальное значение для длины
@@ -138,18 +137,23 @@ func (lp *LengthPlugin) parseOperator(expr string) (string, int) {
 func (lp *LengthPlugin) createValidator(operator string, length int) func(string) bool {
 	switch operator {
 	case "=":
-		return func(value string) bool { return utf8.RuneCountInString(value) == length }
+		return func(value string) bool { return stringLength(value) == length }
 	case ">":
-		return func(value string) bool { return utf8.RuneCountInString(value) > length }
+		return func(value string) bool { return stringLength(value) > length }
 	case ">=":
-		return func(value string) bool { return utf8.RuneCountInString(value) >= length }
+		return func(value string) bool { return stringLength(value) >= length }
 	case "<":
-		return func(value string) bool { return utf8.RuneCountInString(value) < length }
+		return func(value string) bool { return stringLength(value) < length }
 	case "<=":
-		return func(value string) bool { return utf8.RuneCountInString(value) <= length }
+		return func(value string) bool { return stringLength(value) <= length }
 	case "!=":
-		return func(value string) bool { return utf8.RuneCountInString(value) != length }
+		return func(value string) bool { return stringLength(value) != length }
 	default:
 		return func(value string) bool { return false }
 	}
+}
+
+// Закрытие ресурсов
+func (lp *LengthPlugin) Close() error {
+	return nil
 }
