@@ -785,8 +785,6 @@ func (pv *ParamValidator) copyParamRuleUnsafe(rule *ParamRule) *ParamRule {
 	ruleCopy := &ParamRule{
 		Name:            rule.Name,
 		Pattern:         rule.Pattern,
-		Min:             rule.Min,
-		Max:             rule.Max,
 		CustomValidator: rule.CustomValidator,
 	}
 

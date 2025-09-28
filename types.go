@@ -53,8 +53,6 @@ const (
 type ParamRule struct {
 	Name            string
 	Pattern         string
-	Min             int64
-	Max             int64
 	Values          []string
 	CustomValidator func(string) bool
 	BitmaskIndex    int
