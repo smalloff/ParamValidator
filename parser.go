@@ -373,6 +373,12 @@ func (rp *RuleParser) parseSingleParamRuleUnsafe(ruleStr string) (*ParamRule, er
 		return nil, nil
 	}
 
+	inverted := false
+	if strings.Contains(ruleStr, "![") {
+		inverted = true
+		ruleStr = strings.Replace(ruleStr, "![", "[", 1)
+	}
+
 	// Handle special patterns first
 	if strings.HasSuffix(ruleStr, "=[]") {
 		paramName := strings.TrimSuffix(ruleStr, "=[]")
@@ -381,8 +387,9 @@ func (rp *RuleParser) parseSingleParamRuleUnsafe(ruleStr string) (*ParamRule, er
 			return nil, fmt.Errorf("invalid parameter name in key-only rule: %w", err)
 		}
 		return &ParamRule{
-			Name:    paramName,
-			Pattern: PatternKeyOnly,
+			Name:     paramName,
+			Pattern:  PatternKeyOnly,
+			Inverted: inverted,
 		}, nil
 	}
 
@@ -393,8 +400,9 @@ func (rp *RuleParser) parseSingleParamRuleUnsafe(ruleStr string) (*ParamRule, er
 			return nil, fmt.Errorf("invalid parameter name in callback rule: %w", err)
 		}
 		return &ParamRule{
-			Name:    paramName,
-			Pattern: PatternCallback,
+			Name:     paramName,
+			Pattern:  PatternCallback,
+			Inverted: inverted,
 		}, nil
 	}
 
@@ -403,7 +411,7 @@ func (rp *RuleParser) parseSingleParamRuleUnsafe(ruleStr string) (*ParamRule, er
 		return rp.parseSimpleParamRule(ruleStr)
 	}
 
-	return rp.parseComplexParamRule(ruleStr, startBracket)
+	return rp.parseComplexParamRule(ruleStr, startBracket, inverted)
 }
 
 // parseSimpleParamRule parses simple parameter rule without brackets
@@ -436,7 +444,7 @@ func (rp *RuleParser) parseSimpleParamRule(ruleStr string) (*ParamRule, error) {
 }
 
 // parseComplexParamRule parses parameter rule with bracket constraints
-func (rp *RuleParser) parseComplexParamRule(ruleStr string, startBracket int) (*ParamRule, error) {
+func (rp *RuleParser) parseComplexParamRule(ruleStr string, startBracket int, inverted bool) (*ParamRule, error) {
 	paramName := strings.TrimSpace(ruleStr[:startBracket])
 
 	// Remove trailing "=" if present (for URL rules like /path?param=[value])
@@ -465,12 +473,15 @@ func (rp *RuleParser) parseComplexParamRule(ruleStr string, startBracket int) (*
 
 	if constraintStr == "" {
 		return &ParamRule{
-			Name:    paramName,
-			Pattern: PatternAny,
+			Name:     paramName,
+			Pattern:  PatternAny,
+			Inverted: inverted,
 		}, nil
 	}
 
-	return rp.createParamRule(paramName, constraintStr)
+	rule, err := rp.createParamRule(paramName, constraintStr)
+	rule.Inverted = inverted
+	return rule, err
 }
 
 // extractConstraint extracts content between brackets

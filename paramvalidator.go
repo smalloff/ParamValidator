@@ -225,31 +225,45 @@ func (pv *ParamValidator) findURLRuleForParamFast(paramName, urlPath string) *Pa
 
 // isValueValidFast fast value validation
 func (pv *ParamValidator) isValueValidFast(rule *ParamRule, value string) bool {
-	switch rule.Pattern {
-	case PatternKeyOnly:
-		return value == ""
-	case PatternAny:
-		return true
-	case PatternEnum:
-		for _, allowedValue := range rule.Values {
-			if value == allowedValue {
-				return true
-			}
-		}
-		return false
-	case PatternCallback:
-		if pv.callbackFunc != nil {
-			return pv.callbackFunc(rule.Name, value)
-		}
-		return false
-	case "plugin":
-		if rule.CustomValidator != nil {
-			return rule.CustomValidator(value)
-		}
-		return false
-	default:
+	if rule == nil {
 		return false
 	}
+
+	var result bool
+
+	switch rule.Pattern {
+	case PatternKeyOnly:
+		result = value == ""
+	case PatternAny:
+		result = true
+	case PatternEnum:
+		result = false
+		for _, allowedValue := range rule.Values {
+			if value == allowedValue {
+				result = true
+				break
+			}
+		}
+	case PatternCallback:
+		if pv.callbackFunc != nil {
+			result = pv.callbackFunc(rule.Name, value)
+		} else {
+			result = false
+		}
+	case "plugin":
+		if rule.CustomValidator != nil {
+			result = rule.CustomValidator(value)
+		} else {
+			result = false
+		}
+	default:
+		result = false
+	}
+
+	if rule.Inverted {
+		return !result
+	}
+	return result
 }
 
 // isAllowAllParamsMasks checks if masks allow all parameters
@@ -467,31 +481,41 @@ func (pv *ParamValidator) isValueValidUnsafe(rule *ParamRule, value string) bool
 		return false
 	}
 
+	var result bool
+
 	switch rule.Pattern {
 	case PatternKeyOnly:
-		return value == ""
+		result = value == ""
 	case PatternAny:
-		return true
+		result = true
 	case PatternEnum:
+		result = false
 		for _, allowedValue := range rule.Values {
 			if value == allowedValue {
-				return true
+				result = true
+				break
 			}
 		}
-		return false
 	case PatternCallback:
 		if pv.callbackFunc != nil {
-			return pv.callbackFunc(rule.Name, value)
+			result = pv.callbackFunc(rule.Name, value)
+		} else {
+			result = false
 		}
-		return false
 	case "plugin":
 		if rule.CustomValidator != nil {
-			return rule.CustomValidator(value)
+			result = rule.CustomValidator(value)
+		} else {
+			result = false
 		}
-		return false
 	default:
-		return false
+		result = false
 	}
+
+	if rule.Inverted {
+		return !result
+	}
+	return result
 }
 
 // ValidateParam validates single parameter value for specific URL path
@@ -786,6 +810,7 @@ func (pv *ParamValidator) copyParamRuleUnsafe(rule *ParamRule) *ParamRule {
 		Name:            rule.Name,
 		Pattern:         rule.Pattern,
 		CustomValidator: rule.CustomValidator,
+		Inverted:        rule.Inverted,
 	}
 
 	if rule.Values != nil {

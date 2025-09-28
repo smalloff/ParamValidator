@@ -27,6 +27,7 @@ const (
 	PatternRange    = "range"
 	PatternEnum     = "enum"
 	PatternCallback = "callback"
+	PatternInverted = "inverted"
 )
 
 // Validation limits
@@ -56,6 +57,7 @@ type ParamRule struct {
 	Values          []string
 	CustomValidator func(string) bool
 	BitmaskIndex    int
+	Inverted        bool
 }
 
 // URLRule defines validation rules for specific URL pattern
