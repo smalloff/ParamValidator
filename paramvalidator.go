@@ -6,6 +6,7 @@ import (
 	"net/url"
 	"strings"
 	"sync"
+	"unicode/utf8"
 	"unsafe"
 )
 
@@ -77,6 +78,11 @@ func (pv *ParamValidator) checkSize(input string, maxSize int, inputType string)
 	if len(input) > maxSize {
 		return fmt.Errorf("%s size %d exceeds maximum allowed size %d", inputType, len(input), maxSize)
 	}
+
+	if !utf8.ValidString(input) {
+		return fmt.Errorf("%s contains invalid UTF-8 sequence", inputType)
+	}
+
 	return nil
 }
 
@@ -101,8 +107,16 @@ func (pv *ParamValidator) ValidateURL(fullURL string) bool {
 		return false
 	}
 
+	if !utf8.ValidString(fullURL) {
+		return false
+	}
+
 	u, err := url.Parse(fullURL)
 	if err != nil {
+		return false
+	}
+
+	if u.Scheme != "" && u.Scheme != "http" && u.Scheme != "https" {
 		return false
 	}
 
@@ -246,13 +260,27 @@ func (pv *ParamValidator) isValueValidFast(rule *ParamRule, value string) bool {
 		}
 	case PatternCallback:
 		if pv.callbackFunc != nil {
-			result = pv.callbackFunc(rule.Name, value)
+			func() {
+				defer func() {
+					if r := recover(); r != nil {
+						result = false
+					}
+				}()
+				result = pv.callbackFunc(rule.Name, value)
+			}()
 		} else {
 			result = false
 		}
 	case "plugin":
 		if rule.CustomValidator != nil {
-			result = rule.CustomValidator(value)
+			func() {
+				defer func() {
+					if r := recover(); r != nil {
+						result = false
+					}
+				}()
+				result = rule.CustomValidator(value)
+			}()
 		} else {
 			result = false
 		}

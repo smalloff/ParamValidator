@@ -32,11 +32,11 @@ const (
 
 // Validation limits
 const (
-	MaxURLLength       = 2048
-	MaxParamNameLength = 100
-	MaxParamValues     = 100
-	MaxRulesSize       = 100 * 1024
-	MaxPatternLength   = 200
+	MaxURLLength       = 4096
+	MaxParamNameLength = 256
+	MaxParamValues     = 500
+	MaxRulesSize       = 10000
+	MaxPatternLength   = 1024
 	MaxParamsCount     = 128
 )
 

@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"sort"
 	"strings"
+	"unicode/utf8"
 )
 
 // PluginConstraintParser interface for custom constraint parsers
@@ -94,10 +95,35 @@ func (rp *RuleParser) isValidParamName(name string) bool {
 	return true
 }
 
+func (rp *RuleParser) isValidURLPattern(pattern string) bool {
+	if pattern == "" || len(pattern) > MaxURLLength {
+		return false
+	}
+
+	// Запрещаем опасные паттерны
+	if strings.Contains(pattern, "..") ||
+		strings.Contains(pattern, "//") ||
+		strings.HasPrefix(pattern, "javascript:") ||
+		strings.HasPrefix(pattern, "data:") ||
+		strings.HasPrefix(pattern, "file:") {
+		return false
+	}
+
+	return true
+}
+
 // parseRulesUnsafe parses rules string without locking
 func (rp *RuleParser) parseRulesUnsafe(rulesStr string) (map[string]*ParamRule, map[string]*URLRule, error) {
 	if rulesStr == "" {
 		return make(map[string]*ParamRule), make(map[string]*URLRule), nil
+	}
+
+	if len(rulesStr) > MaxRulesSize {
+		return nil, nil, fmt.Errorf("rules size %d exceeds maximum %d", len(rulesStr), MaxRulesSize)
+	}
+
+	if !utf8.ValidString(rulesStr) {
+		return nil, nil, fmt.Errorf("rules contain invalid UTF-8 sequence")
 	}
 
 	globalParams := make(map[string]*ParamRule)
@@ -286,7 +312,10 @@ func (rp *RuleParser) splitURLRules(rulesStr string) []string {
 // extractURLAndParams separates URL pattern from parameters string
 func (rp *RuleParser) extractURLAndParams(urlRuleStr string) (string, string) {
 	cleanStr := strings.ReplaceAll(urlRuleStr, " ", "")
-
+	cleanStr = strings.ReplaceAll(cleanStr, "**", "*")
+	if !rp.isValidURLPattern(cleanStr) {
+		return "", ""
+	}
 	if strings.HasPrefix(cleanStr, "/") || strings.HasPrefix(cleanStr, "*") {
 		bracketDepth := 0
 		questionMarkPos := -1
@@ -372,7 +401,7 @@ func (rp *RuleParser) parseSingleParamRuleUnsafe(ruleStr string) (*ParamRule, er
 	if ruleStr == "" {
 		return nil, nil
 	}
-
+	ruleStr = strings.ReplaceAll(ruleStr, "**", "*")
 	ruleStr = strings.ReplaceAll(ruleStr, "![*]", "[]")
 
 	inverted := false
