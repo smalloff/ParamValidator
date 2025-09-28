@@ -360,7 +360,6 @@ func TestPluginConcurrentSafety(t *testing.T) {
 }
 
 // TestPluginBoundaryConditions тестирует граничные условия
-// TestPluginBoundaryConditions тестирует граничные условия
 func TestPluginBoundaryConditions(t *testing.T) {
 	plugin := plugins.NewPatternPlugin()
 
