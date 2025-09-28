@@ -2,8 +2,6 @@ package plugins
 
 import (
 	"fmt"
-	"strconv"
-	"strings"
 )
 
 // RangePlugin плагин для диапазонов чисел: 1-10, 5..100, -50..50
@@ -20,109 +18,87 @@ func (rp *RangePlugin) GetName() string {
 }
 
 func (rp *RangePlugin) CanParse(constraintStr string) bool {
-	if constraintStr == "" {
+	if len(constraintStr) < 3 {
 		return false
 	}
 
-	// Быстрая проверка на наличие запрещенных символов
-	if strings.Contains(constraintStr, ",") {
-		return false
-	}
-
-	// Проверяем разделители
-	hasDots := strings.Contains(constraintStr, "..")
-	hasDash := strings.Contains(constraintStr, "-")
-
-	if !hasDots && !hasDash {
-		return false
-	}
-
-	// Используем индексы вместо Split чтобы избежать аллокаций
-	var minStr, maxStr string
-
-	if hasDots {
-		dotIndex := strings.Index(constraintStr, "..")
-		if dotIndex == -1 || dotIndex == 0 || dotIndex == len(constraintStr)-2 {
-			return false
-		}
-		minStr = strings.TrimSpace(constraintStr[:dotIndex])
-		maxStr = strings.TrimSpace(constraintStr[dotIndex+2:])
-	} else {
-		dashIndex := strings.Index(constraintStr, "-")
-		if dashIndex == -1 || dashIndex == 0 || dashIndex == len(constraintStr)-1 {
-			return false
-		}
-		minStr = strings.TrimSpace(constraintStr[:dashIndex])
-		maxStr = strings.TrimSpace(constraintStr[dashIndex+1:])
-	}
-
-	return rp.looksLikeNumber(minStr) && rp.looksLikeNumber(maxStr)
-}
-
-// looksLikeNumber можно сделать еще быстрее
-func (rp *RangePlugin) looksLikeNumber(s string) bool {
-	if s == "" {
-		return false
-	}
-
-	start := 0
-	if s[0] == '-' {
-		if len(s) == 1 {
-			return false
-		}
-		start = 1
-	}
-
-	// Быстрая проверка без range
-	for i := start; i < len(s); i++ {
-		if s[i] < '0' || s[i] > '9' {
-			return false
+	// Просто ищем любой из разделителей
+	for i := 0; i < len(constraintStr); i++ {
+		if constraintStr[i] == '-' || constraintStr[i] == '.' {
+			return true
 		}
 	}
 
-	return true
+	return false
 }
 
 func (rp *RangePlugin) Parse(paramName, constraintStr string) (func(string) bool, error) {
-	// Определяем разделитель и разбиваем
-	var parts []string
-	if strings.Contains(constraintStr, "..") {
-		parts = strings.Split(constraintStr, "..")
-	} else {
-		parts = strings.Split(constraintStr, "-")
-	}
+	// Находим разделитель за один проход
+	sepPos := -1
+	sepType := byte(0)
 
-	if len(parts) != 2 {
-		return nil, fmt.Errorf("invalid range format: %s, expected min-max or min..max", constraintStr)
-	}
-
-	minStr := strings.TrimSpace(parts[0])
-	maxStr := strings.TrimSpace(parts[1])
-
-	if minStr == "" || maxStr == "" {
-		return nil, fmt.Errorf("empty min or max value in range: %s", constraintStr)
-	}
-
-	min, err := strconv.ParseInt(minStr, 10, 64)
-	if err != nil {
-		return nil, fmt.Errorf("invalid min value in range: %s", minStr)
-	}
-
-	max, err := strconv.ParseInt(maxStr, 10, 64)
-	if err != nil {
-		return nil, fmt.Errorf("invalid max value in range: %s", maxStr)
-	}
-
-	if min > max {
-		return nil, fmt.Errorf("min value cannot be greater than max value: %d > %d", min, max)
-	}
-
-	// Создаем функцию валидации
-	return func(value string) bool {
-		num, err := strconv.ParseInt(value, 10, 64)
-		if err != nil {
-			return false
+	for i := 1; i < len(constraintStr)-1; i++ {
+		if constraintStr[i] == '.' && i < len(constraintStr)-1 && constraintStr[i+1] == '.' {
+			sepPos = i
+			sepType = '.'
+			break
 		}
-		return num >= min && num <= max
+		if constraintStr[i] == '-' && (constraintStr[i-1] >= '0' && constraintStr[i-1] <= '9') {
+			sepPos = i
+			sepType = '-'
+			// continue, ищем ".." в приоритете
+		}
+	}
+
+	if sepPos == -1 {
+		return nil, fmt.Errorf("invalid range format: %s", constraintStr)
+	}
+
+	// Быстро извлекаем подстроки без триминга
+	var minStr, maxStr string
+	if sepType == '.' {
+		minStr = constraintStr[:sepPos]
+		maxStr = constraintStr[sepPos+2:]
+	} else {
+		minStr = constraintStr[:sepPos]
+		maxStr = constraintStr[sepPos+1:]
+	}
+
+	// Парсим числа как в LengthPlugin
+	min, minOk := fastAtoi(minStr)
+	max, maxOk := fastAtoi(maxStr)
+
+	if !minOk || !maxOk || min > max {
+		return nil, fmt.Errorf("invalid range: %s", constraintStr)
+	}
+
+	return func(value string) bool {
+		num, ok := fastAtoi(value)
+		return ok && num >= min && num <= max
 	}, nil
+}
+
+// fastAtoi как в LengthPlugin
+func fastAtoi(s string) (int, bool) {
+	if len(s) == 0 {
+		return 0, false
+	}
+
+	result := 0
+	start := 0
+	if s[0] == '-' {
+		start = 1
+	}
+
+	for i := start; i < len(s); i++ {
+		if s[i] < '0' || s[i] > '9' {
+			return 0, false
+		}
+		result = result*10 + int(s[i]-'0')
+	}
+
+	if start == 1 {
+		return -result, true
+	}
+	return result, true
 }

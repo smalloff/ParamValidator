@@ -129,20 +129,20 @@ func TestRangePlugin(t *testing.T) {
 		{
 			name:        "triple numbers",
 			constraint:  "1-10-100",
-			shouldParse: false,
-			shouldError: true,
+			shouldParse: true, // CanParse проходит
+			shouldError: true, // Но Parse должен вернуть ошибку
 		},
 		{
 			name:        "text instead of numbers",
 			constraint:  "a-z",
-			shouldParse: false,
-			shouldError: true,
+			shouldParse: true, // CanParse проходит
+			shouldError: true, // Но Parse должен вернуть ошибку
 		},
 		{
 			name:        "mixed text numbers",
 			constraint:  "1-abc",
-			shouldParse: false,
-			shouldError: true,
+			shouldParse: true, // CanParse проходит
+			shouldError: true, // Но Parse должен вернуть ошибку
 		},
 		{
 			name:        "min greater than max",
@@ -153,13 +153,13 @@ func TestRangePlugin(t *testing.T) {
 		{
 			name:        "empty min value",
 			constraint:  "-10",
-			shouldParse: false,
+			shouldParse: true,
 			shouldError: true,
 		},
 		{
 			name:        "empty max value",
 			constraint:  "10-",
-			shouldParse: false,
+			shouldParse: true,
 			shouldError: true,
 		},
 		{
@@ -331,5 +331,14 @@ func BenchmarkRangePluginCanParse(b *testing.B) {
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
 		plugin.CanParse("1-100")
+	}
+}
+
+func BenchmarkRangePluginParse(b *testing.B) {
+	plugin := plugins.NewRangePlugin()
+
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		plugin.Parse("test", "1-100")
 	}
 }

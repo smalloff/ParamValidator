@@ -73,7 +73,6 @@ func (lp *LengthPlugin) parseRangeNoAlloc(s string, dotPos int) (func(string) bo
 	}, nil
 }
 
-// parseOperatorNoAlloc - полностью без аллокаций
 func (lp *LengthPlugin) parseOperatorNoAlloc(expr string) (func(string) bool, error) {
 	if len(expr) == 0 {
 		return nil, fmt.Errorf("empty expression")
