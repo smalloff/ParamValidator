@@ -1008,13 +1008,4 @@ func (pv *ParamValidator) Reset() {
 	pv.clearUnsafe()
 	pv.initialized.Store(true)
 	pv.callbackFunc = nil
-	if pv.builderPool == nil {
-		pv.builderPool = &sync.Pool{
-			New: func() interface{} {
-				b := &strings.Builder{}
-				b.Grow(512)
-				return b
-			},
-		}
-	}
 }
