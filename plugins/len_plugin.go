@@ -75,7 +75,7 @@ func (lp *LengthPlugin) parseRangeNoAlloc(s string, dotPos int) (func(string) bo
 	}
 
 	return func(value string) bool {
-		length := utf8.RuneCountInString(value)
+		length := stringLength(value)
 		return length >= min && length <= max
 	}, nil
 }

@@ -38,3 +38,12 @@ func parseNumber(s string) (int, bool) {
 	}
 	return result, true
 }
+
+func stringLength(s string) int {
+    for i := 0; i < len(s); i++ {
+        if s[i] >= utf8.RuneSelf {
+            return utf8.RuneCountInString(s) // Fallback для Unicode
+        }
+    }
+    return len(s) // Быстрый путь для ASCII
+}
