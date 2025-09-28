@@ -40,13 +40,10 @@ func parseNumber(s string) (int, bool) {
 }
 
 func stringLength(s string) int {
-	// Быстрый путь для ASCII строк
 	for i := 0; i < len(s); i++ {
 		if s[i] >= utf8.RuneSelf {
-			// Нашли не-ASCII символ, используем полный подсчет
 			return utf8.RuneCountInString(s)
 		}
 	}
-	// Вся строка ASCII - возвращаем длину в байтах
 	return len(s)
 }
