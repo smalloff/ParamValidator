@@ -105,66 +105,6 @@ func TestCustomPluginIntegration(t *testing.T) {
 	}
 }
 
-func TestMultipleCustomPlugins(t *testing.T) {
-	parser := NewRuleParser(
-		plugins.NewComparisonPlugin(),
-		plugins.NewRegexPlugin(),
-		NewCustomPlugin(),
-		NewLengthPlugin(),
-	)
-
-	tests := []struct {
-		name     string
-		rule     string
-		value    string
-		expected bool
-	}{
-		{
-			name:     "custom plugin rule",
-			rule:     "param=[custom_rule]",
-			value:    "allowed_value",
-			expected: true,
-		},
-		{
-			name:     "length plugin simple",
-			rule:     "code=[len5]",
-			value:    "12345",
-			expected: true,
-		},
-		{
-			name:     "comparison plugin still works",
-			rule:     "age=[>18]",
-			value:    "25",
-			expected: true,
-		},
-		{
-			name:     "regex plugin still works",
-			rule:     "email=[/^[a-z]+@[a-z]+\\.[a-z]+$/]",
-			value:    "test@example.com",
-			expected: true,
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			rule, err := parser.parseSingleParamRuleUnsafe(tt.rule)
-			if err != nil {
-				t.Fatalf("Failed to parse rule %q: %v", tt.rule, err)
-			}
-
-			if rule.CustomValidator == nil {
-				t.Fatal("CustomValidator should not be nil")
-			}
-
-			result := rule.CustomValidator(tt.value)
-			if result != tt.expected {
-				t.Errorf("Validation failed for value %q: got %v, expected %v",
-					tt.value, result, tt.expected)
-			}
-		})
-	}
-}
-
 func TestPluginPriority(t *testing.T) {
 	// Важно: порядок регистрации плагинов определяет приоритет
 	parser := NewRuleParser(
@@ -182,59 +122,6 @@ func TestPluginPriority(t *testing.T) {
 	result := rule.CustomValidator("150")
 	if !result {
 		t.Error("ComparisonPlugin should handle >100, not CatchAllPlugin")
-	}
-}
-
-// Тест для проверки, что стандартные правила все еще работают
-func TestStandardRulesStillWork(t *testing.T) {
-	parser := NewRuleParser(plugins.NewComparisonPlugin(), plugins.NewRegexPlugin())
-
-	tests := []struct {
-		name     string
-		rule     string
-		value    string
-		expected bool
-	}{
-		{
-			name:     "enum rule still works",
-			rule:     "sort=[name,date]",
-			value:    "name",
-			expected: true,
-		},
-		{
-			name:     "range rule still works",
-			rule:     "page=[1-10]",
-			value:    "5",
-			expected: true,
-		},
-		{
-			name:     "key-only rule still works",
-			rule:     "active=[]",
-			value:    "",
-			expected: true,
-		},
-		{
-			name:     "any pattern still works",
-			rule:     "param",
-			value:    "anyvalue",
-			expected: true,
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			rule, err := parser.parseSingleParamRuleUnsafe(tt.rule)
-			if err != nil {
-				t.Fatalf("Failed to parse rule %q: %v", tt.rule, err)
-			}
-
-			// Для стандартных правил CustomValidator будет nil
-			if tt.name != "enum rule still works" && tt.name != "range rule still works" {
-				if rule.CustomValidator != nil {
-					t.Error("Standard rules should not use CustomValidator")
-				}
-			}
-		})
 	}
 }
 

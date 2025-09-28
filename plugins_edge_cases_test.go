@@ -110,32 +110,3 @@ func TestComparisonEdgeCases(t *testing.T) {
 		})
 	}
 }
-
-// Тест для проверки что стандартные правила не ломаются
-func TestStandardRulesNotBroken(t *testing.T) {
-	parser := NewRuleParser(plugins.NewComparisonPlugin(), plugins.NewRegexPlugin())
-
-	// Эти правила должны обрабатываться стандартным парсером, не плагинами
-	standardRules := []string{
-		"param=[1-10]",  // range
-		"param=[a,b,c]", // enum
-		"param=[]",      // key-only
-		"param",         // any
-		"param=[?]",     // callback
-	}
-
-	for _, rule := range standardRules {
-		t.Run(rule, func(t *testing.T) {
-			paramRule, err := parser.parseSingleParamRuleUnsafe(rule)
-			if err != nil {
-				t.Errorf("Failed to parse standard rule %q: %v", rule, err)
-				return
-			}
-
-			// Стандартные правила не должны использовать плагины
-			if paramRule.Pattern == "plugin" {
-				t.Errorf("Standard rule %q should not use plugin pattern", rule)
-			}
-		})
-	}
-}

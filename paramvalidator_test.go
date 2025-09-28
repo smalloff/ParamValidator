@@ -773,14 +773,13 @@ func BenchmarkRangePluginNormalization(b *testing.B) {
 }
 
 func BenchmarkValidateWithMultiplePlugins(b *testing.B) {
-	// Создаем правила, которые используют все три плагина
-	rules := `/api?age=[range:18-65]&email=[regex:^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$]&score=[comparison:>50]&name=[regex:^[a-zA-Z ]{2,50}$]&quantity=[range:1-100]&rating=[comparison:>=3.5]`
+	// Создаем правила, которые используют все плагины
+	rules := `/api?age=[18-65]&score=[>50]&quantity=[1-100]&rating=[>=3]`
 
 	pv, err := NewParamValidator(rules,
 		WithPlugins(
 			plugins.NewComparisonPlugin(),
 			plugins.NewRangePlugin(),
-			plugins.NewRegexPlugin(),
 		))
 	if err != nil {
 		b.Fatalf("Failed to create validator: %v", err)
@@ -788,9 +787,9 @@ func BenchmarkValidateWithMultiplePlugins(b *testing.B) {
 
 	// Тестовые URL для валидации
 	testURLs := []string{
-		"/api?age=25&email=test@example.com&score=75&name=John Doe&quantity=10&rating=4.2",
-		"/api?age=30&email=user@domain.com&score=60&name=Jane Smith&quantity=50&rating=3.8",
-		"/api?age=22&email=admin@test.org&score=80&name=Bob Wilson&quantity=25&rating=4.5",
+		"/api?age=25&score=75&quantity=10&rating=4",
+		"/api?age=30score=60&quantity=50&rating=3",
+		"/api?age=22&score=80&quantity=25&rating=4",
 	}
 
 	b.ResetTimer()
@@ -802,14 +801,13 @@ func BenchmarkValidateWithMultiplePlugins(b *testing.B) {
 }
 
 func BenchmarkNormalizeWithMultiplePlugins(b *testing.B) {
-	// Создаем правила, которые используют все три плагина
-	rules := `/api?age=[18-65]&email=[^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$]&score=[>50]&name=[^[a-zA-Z ]{2,50}$]&quantity=[1-100]&rating=[>=3]`
+	// Создаем правила, которые используют все плагины
+	rules := `/api?age=[18-65]&score=[>50]&quantity=[1-100]&rating=[>=3]`
 
 	pv, err := NewParamValidator(rules,
 		WithPlugins(
 			plugins.NewComparisonPlugin(),
 			plugins.NewRangePlugin(),
-			plugins.NewRegexPlugin(),
 		))
 	if err != nil {
 		b.Fatalf("Failed to create validator: %v", err)
@@ -817,9 +815,9 @@ func BenchmarkNormalizeWithMultiplePlugins(b *testing.B) {
 
 	// Тестовые URL для валидации
 	testURLs := []string{
-		"/api?age=25&email=test@example.com&score=75&name=John Doe&quantity=10&rating=4.2",
-		"/api?age=30&email=user@domain.com&score=60&name=Jane Smith&quantity=50&rating=3.8",
-		"/api?age=22&email=admin@test.org&score=80&name=Bob Wilson&quantity=25&rating=4.5",
+		"/api?age=25&score=75&quantity=10&rating=4",
+		"/api?age=30&score=60&quantity=50&rating=3",
+		"/api?age=22&score=80&quantity=25&rating=5",
 	}
 
 	b.ResetTimer()
