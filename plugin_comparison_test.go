@@ -531,19 +531,13 @@ func BenchmarkComparisonPluginParse(b *testing.B) {
 
 func BenchmarkComparisonPluginNormalization(b *testing.B) {
 	comparisonPlugin := plugins.NewComparisonPlugin()
-	parser := NewRuleParser(comparisonPlugin)
-
-	pv := &ParamValidator{
-		globalParams:  make(map[string]*ParamRule),
-		urlRules:      make(map[string]*URLRule),
-		urlMatcher:    NewURLMatcher(),
-		compiledRules: &CompiledRules{},
-		parser:        parser,
-	}
-	pv.initialized.Store(true)
-	err := pv.ParseRules("/api?score=[>50]&quantity=[<=10]")
+	pv, err := NewParamValidator("", WithPlugins(comparisonPlugin))
 	if err != nil {
-		b.Fatalf("Failed to parse rules: %v", err)
+		b.Fatalf("Failed to create validator: %v", err)
+	}
+	err = pv.ParseRules("/api?score=[>50]&quantity=[<=10]")
+	if err != nil {
+		b.Fatalf("Failed to create validator: %v", err)
 	}
 
 	b.ResetTimer()
@@ -554,19 +548,13 @@ func BenchmarkComparisonPluginNormalization(b *testing.B) {
 
 func BenchmarkComparisonPluginFilterQueryParams(b *testing.B) {
 	comparisonPlugin := plugins.NewComparisonPlugin()
-	parser := NewRuleParser(comparisonPlugin)
-
-	pv := &ParamValidator{
-		globalParams:  make(map[string]*ParamRule),
-		urlRules:      make(map[string]*URLRule),
-		urlMatcher:    NewURLMatcher(),
-		compiledRules: &CompiledRules{},
-		parser:        parser,
-	}
-	pv.initialized.Store(true)
-	err := pv.ParseRules("/api?score=[>50]&quantity=[<=10]")
+	pv, err := NewParamValidator("", WithPlugins(comparisonPlugin))
 	if err != nil {
-		b.Fatalf("Failed to parse rules: %v", err)
+		b.Fatalf("Failed to create validator: %v", err)
+	}
+	err = pv.ParseRules("/api?score=[>50]&quantity=[<=10]")
+	if err != nil {
+		b.Fatalf("Failed to create validator: %v", err)
 	}
 
 	b.ResetTimer()
@@ -577,19 +565,13 @@ func BenchmarkComparisonPluginFilterQueryParams(b *testing.B) {
 
 func BenchmarkComparisonPluginValidateQueryParams(b *testing.B) {
 	comparisonPlugin := plugins.NewComparisonPlugin()
-	parser := NewRuleParser(comparisonPlugin)
-
-	pv := &ParamValidator{
-		globalParams:  make(map[string]*ParamRule),
-		urlRules:      make(map[string]*URLRule),
-		urlMatcher:    NewURLMatcher(),
-		compiledRules: &CompiledRules{},
-		parser:        parser,
-	}
-	pv.initialized.Store(true)
-	err := pv.ParseRules("/api?score=[>50]&quantity=[<=10]")
+	pv, err := NewParamValidator("", WithPlugins(comparisonPlugin))
 	if err != nil {
-		b.Fatalf("Failed to parse rules: %v", err)
+		b.Fatalf("Failed to create validator: %v", err)
+	}
+	err = pv.ParseRules("/api?score=[>50]&quantity=[<=10]")
+	if err != nil {
+		b.Fatalf("Failed to create validator: %v", err)
 	}
 
 	b.ResetTimer()

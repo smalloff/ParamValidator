@@ -45,6 +45,13 @@ func NewParamValidator(rulesStr string, options ...Option) (*ParamValidator, err
 		urlMatcher:   NewURLMatcher(),
 		paramIndex:   NewParamIndex(),
 		parser:       NewRuleParser(),
+		builderPool: &sync.Pool{
+			New: func() interface{} {
+				b := &strings.Builder{}
+				b.Grow(256)
+				return b
+			},
+		},
 	}
 	pv.initialized.Store(true)
 
@@ -594,52 +601,57 @@ func (pv *ParamValidator) NormalizeURL(fullURL string) string {
 
 // normalizeURLFast fast normalization
 func (pv *ParamValidator) normalizeURLFast(u *url.URL) string {
-	// No parameters - return as is
 	if u.RawQuery == "" {
 		return u.String()
 	}
 
 	if pv.compiledRules == nil || pv.compiledRules.paramIndex == nil {
-		return u.Path // No rules - remove parameters
+		return u.Path
 	}
 
 	masks := pv.getParamMasksForURL(u.Path)
 
-	// Check for allow all
+	// Быстрые проверки
 	if idx := pv.compiledRules.paramIndex.GetIndex(PatternAll); idx != -1 && masks.CombinedMask().GetBit(idx) {
 		return u.String()
 	}
 
-	// No allowed parameters
 	if masks.CombinedMask().IsEmpty() {
 		return u.Path
 	}
 
-	// Filter parameters
-	filtered := pv.filterQueryParamsFast(u.RawQuery, masks, u.Path)
-	if filtered == "" {
-		return u.Path
+	// Использовать один builder для всей операции
+	builder := pv.builderPool.Get().(*strings.Builder)
+	defer pv.builderPool.Put(builder)
+	builder.Reset()
+
+	// Построить путь
+	builder.WriteString(u.Path)
+
+	// Фильтровать параметры используя тот же builder
+	filteredQuery := pv.filterQueryParamsFast(u.RawQuery, masks, u.Path, builder)
+
+	if filteredQuery != "" {
+		// Переиспользовать builder
+		builder.Reset()
+		builder.WriteString(u.Path)
+		builder.WriteByte('?')
+		builder.WriteString(filteredQuery)
+		return builder.String()
 	}
 
-	if filtered == u.RawQuery {
-		return u.String()
-	}
-
-	// Build URL optimally
-	if u.Path == "" {
-		return "?" + filtered
-	}
-	return u.Path + "?" + filtered
+	return u.Path
 }
 
 // filterQueryParamsFast fast parameter filtering
-func (pv *ParamValidator) filterQueryParamsFast(queryString string, masks ParamMasks, urlPath string) string {
+func (pv *ParamValidator) filterQueryParamsFast(queryString string, masks ParamMasks, urlPath string, builder *strings.Builder) string {
 	if queryString == "" {
 		return ""
 	}
 
-	var result strings.Builder
-	result.Grow(len(queryString)) // Pre-allocate memory
+	builder.Reset()
+	builder.Grow(len(queryString)) // Pre-allocate memory
+
 	start := 0
 	firstParam := true
 
@@ -660,18 +672,18 @@ func (pv *ParamValidator) filterQueryParamsFast(queryString string, masks ParamM
 
 				if pv.isParamAllowedFast(key, value, masks, urlPath) {
 					if !firstParam {
-						result.WriteByte('&')
+						builder.WriteByte('&')
 					} else {
 						firstParam = false
 					}
-					result.WriteString(segment)
+					builder.WriteString(segment)
 				}
 			}
 			start = i + 1
 		}
 	}
 
-	return result.String()
+	return builder.String()
 }
 
 // FilterQueryParams filters query parameters string according to validation rules
@@ -996,4 +1008,13 @@ func (pv *ParamValidator) Reset() {
 	pv.clearUnsafe()
 	pv.initialized.Store(true)
 	pv.callbackFunc = nil
+	if pv.builderPool == nil {
+		pv.builderPool = &sync.Pool{
+			New: func() interface{} {
+				b := &strings.Builder{}
+				b.Grow(512)
+				return b
+			},
+		}
+	}
 }

@@ -461,21 +461,14 @@ func BenchmarkPatternPluginParse(b *testing.B) {
 
 func BenchmarkPatternPluginNormalization(b *testing.B) {
 	patternPlugin := plugins.NewPatternPlugin()
-	parser := NewRuleParser(patternPlugin)
-
-	pv := &ParamValidator{
-		globalParams:  make(map[string]*ParamRule),
-		urlRules:      make(map[string]*URLRule),
-		urlMatcher:    NewURLMatcher(),
-		compiledRules: &CompiledRules{},
-		parser:        parser,
+	pv, err := NewParamValidator("", WithPlugins(patternPlugin))
+	if err != nil {
+		b.Fatalf("Failed to create validator: %v", err)
 	}
-	pv.initialized.Store(true)
-	err := pv.ParseRules("/api?file=[img_*]&id=[*user*]")
+	err = pv.ParseRules("/api?file=[img_*]&id=[*user*]")
 	if err != nil {
 		b.Fatalf("Failed to parse rules: %v", err)
 	}
-
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
 		pv.NormalizeURL("/api?file=img_photo.jpg&id=new_user_123&invalid=value")
@@ -484,21 +477,19 @@ func BenchmarkPatternPluginNormalization(b *testing.B) {
 
 func BenchmarkPatternPluginFilterQueryParams(b *testing.B) {
 	patternPlugin := plugins.NewPatternPlugin()
-	parser := NewRuleParser(patternPlugin)
 
-	pv := &ParamValidator{
-		globalParams:  make(map[string]*ParamRule),
-		urlRules:      make(map[string]*URLRule),
-		urlMatcher:    NewURLMatcher(),
-		compiledRules: &CompiledRules{},
-		parser:        parser,
-	}
-	pv.initialized.Store(true)
-	err := pv.ParseRules("/api?file=[img_*]&id=[*user*]")
+	pv, err := NewParamValidator("", WithPlugins(patternPlugin))
 	if err != nil {
-		b.Fatalf("Failed to parse rules: %v", err)
+		b.Fatalf("Failed to create validator: %v", err)
 	}
+	err = pv.ParseRules("/api?file=[img_*]&id=[*user*]")
 
+	if err != nil {
+		b.Fatalf(
+			"Failed to parse rules: %v",
+			err,
+		)
+	}
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
 		pv.FilterQueryParams("/api", "file=img_photo.jpg&id=new_user_123&invalid=value")
@@ -507,17 +498,12 @@ func BenchmarkPatternPluginFilterQueryParams(b *testing.B) {
 
 func BenchmarkPatternPluginValidateQueryParams(b *testing.B) {
 	patternPlugin := plugins.NewPatternPlugin()
-	parser := NewRuleParser(patternPlugin)
-
-	pv := &ParamValidator{
-		globalParams:  make(map[string]*ParamRule),
-		urlRules:      make(map[string]*URLRule),
-		urlMatcher:    NewURLMatcher(),
-		compiledRules: &CompiledRules{},
-		parser:        parser,
+	pv, err := NewParamValidator("", WithPlugins(patternPlugin))
+	if err != nil {
+		b.Fatalf("Failed to create validator: %v", err)
 	}
 	pv.initialized.Store(true)
-	err := pv.ParseRules("/api?file=[img_*]&id=[*user*]")
+	err = pv.ParseRules("/api?file=[img_*]&id=[*user*]")
 	if err != nil {
 		b.Fatalf("Failed to parse rules: %v", err)
 	}

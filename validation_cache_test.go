@@ -92,38 +92,6 @@ func TestValidationCacheKeyUniqueness(t *testing.T) {
 	}
 }
 
-// TestValidationCacheStats tests cache statistics
-func TestValidationCacheStats(t *testing.T) {
-	cache := NewValidationCache()
-
-	// Add validators from different plugins
-	cache.Put("rangePlugin", "age", "1-100", func(string) bool { return true })
-	cache.Put("rangePlugin", "score", "0-1000", func(string) bool { return true })
-	cache.Put("regexPlugin", "email", ".*@.*", func(string) bool { return true })
-	cache.Put("customPlugin", "token", "secret", func(string) bool { return true })
-
-	stats := cache.GetStats()
-
-	if stats["size"] != 4 {
-		t.Errorf("Expected stats size 4, got %v", stats["size"])
-	}
-
-	pluginStats, ok := stats["plugins"].(map[string]int)
-	if !ok {
-		t.Fatal("Plugin stats should be a map")
-	}
-
-	if pluginStats["rangePlugin"] != 2 {
-		t.Errorf("Expected 2 validators for rangePlugin, got %d", pluginStats["rangePlugin"])
-	}
-	if pluginStats["regexPlugin"] != 1 {
-		t.Errorf("Expected 1 validator for regexPlugin, got %d", pluginStats["regexPlugin"])
-	}
-	if pluginStats["customPlugin"] != 1 {
-		t.Errorf("Expected 1 validator for customPlugin, got %d", pluginStats["customPlugin"])
-	}
-}
-
 // TestValidationCacheConcurrent tests concurrent cache access
 func TestValidationCacheConcurrent(t *testing.T) {
 	cache := NewValidationCache()

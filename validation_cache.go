@@ -60,20 +60,3 @@ func (vc *ValidationCache) Size() int {
 	})
 	return count
 }
-
-// GetStats returns cache statistics for monitoring
-func (vc *ValidationCache) GetStats() map[string]interface{} {
-	stats := make(map[string]interface{})
-	stats["size"] = vc.Size()
-
-	// Collect per-plugin statistics
-	pluginStats := make(map[string]int)
-	vc.cache.Range(func(key, value interface{}) bool {
-		cacheKey := key.(cacheKey)
-		pluginStats[cacheKey.pluginName]++
-		return true
-	})
-	stats["plugins"] = pluginStats
-
-	return stats
-}

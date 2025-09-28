@@ -632,17 +632,12 @@ func BenchmarkRangePluginParse(b *testing.B) {
 
 func BenchmarkRangePluginNormalization(b *testing.B) {
 	rangePlugin := plugins.NewRangePlugin()
-	parser := NewRuleParser(rangePlugin)
-
-	pv := &ParamValidator{
-		globalParams:  make(map[string]*ParamRule),
-		urlRules:      make(map[string]*URLRule),
-		urlMatcher:    NewURLMatcher(),
-		compiledRules: &CompiledRules{},
-		parser:        parser,
+	pv, err := NewParamValidator("", WithPlugins(rangePlugin))
+	if err != nil {
+		b.Fatalf("Failed to create validator: %v", err)
 	}
 	pv.initialized.Store(true)
-	err := pv.ParseRules("/api?age=[18-65]&price=[100..1000]")
+	err = pv.ParseRules("/api?age=[18-65]&price=[100..1000]")
 	if err != nil {
 		b.Fatalf("Failed to parse rules: %v", err)
 	}
@@ -655,17 +650,11 @@ func BenchmarkRangePluginNormalization(b *testing.B) {
 
 func BenchmarkRangePluginFilterQueryParams(b *testing.B) {
 	rangePlugin := plugins.NewRangePlugin()
-	parser := NewRuleParser(rangePlugin)
-
-	pv := &ParamValidator{
-		globalParams:  make(map[string]*ParamRule),
-		urlRules:      make(map[string]*URLRule),
-		urlMatcher:    NewURLMatcher(),
-		compiledRules: &CompiledRules{},
-		parser:        parser,
+	pv, err := NewParamValidator("", WithPlugins(rangePlugin))
+	if err != nil {
+		b.Fatalf("Failed to create validator: %v", err)
 	}
-	pv.initialized.Store(true)
-	err := pv.ParseRules("/api?age=[18-65]&price=[100..1000]")
+	err = pv.ParseRules("/api?age=[18-65]&price=[100..1000]")
 	if err != nil {
 		b.Fatalf("Failed to parse rules: %v", err)
 	}
@@ -678,17 +667,12 @@ func BenchmarkRangePluginFilterQueryParams(b *testing.B) {
 
 func BenchmarkRangePluginValidateQueryParams(b *testing.B) {
 	rangePlugin := plugins.NewRangePlugin()
-	parser := NewRuleParser(rangePlugin)
 
-	pv := &ParamValidator{
-		globalParams:  make(map[string]*ParamRule),
-		urlRules:      make(map[string]*URLRule),
-		urlMatcher:    NewURLMatcher(),
-		compiledRules: &CompiledRules{},
-		parser:        parser,
+	pv, err := NewParamValidator("", WithPlugins(rangePlugin))
+	if err != nil {
+		b.Fatalf("Failed to create validator: %v", err)
 	}
-	pv.initialized.Store(true)
-	err := pv.ParseRules("/api?age=[18-65]&price=[100..1000]")
+	err = pv.ParseRules("/api?age=[18-65]&price=[100..1000]")
 	if err != nil {
 		b.Fatalf("Failed to parse rules: %v", err)
 	}

@@ -389,14 +389,10 @@ func BenchmarkPluginEdgeCases(b *testing.B) {
 }
 
 func BenchmarkPluginRealWorldScenario(b *testing.B) {
-	// Реалистичный сценарий с множеством правил
-	parser := NewRuleParser(
-		plugins.NewComparisonPlugin(),
-		plugins.NewLengthPlugin(),
-		plugins.NewRangePlugin(),
-		plugins.NewPatternPlugin(),
-	)
-
+	pv, err := NewParamValidator("", WithPlugins(plugins.NewComparisonPlugin(), plugins.NewLengthPlugin(), plugins.NewRangePlugin(), plugins.NewPatternPlugin()))
+	if err != nil {
+		b.Fatalf("Failed to create validator: %v", err)
+	}
 	// Реалистичные правила для API
 	rules := `
 		age=[18-65];
@@ -406,17 +402,7 @@ func BenchmarkPluginRealWorldScenario(b *testing.B) {
 		/search?q=[len1..100]&page=[1-100]&sort=[name,date,price];
 	`
 
-	pv := &ParamValidator{
-		globalParams:  make(map[string]*ParamRule),
-		urlRules:      make(map[string]*URLRule),
-		urlMatcher:    NewURLMatcher(),
-		compiledRules: &CompiledRules{},
-		parser:        parser,
-	}
-	pv.initialized.Store(true)
-
-	// Парсим правила один раз
-	err := pv.ParseRules(rules)
+	err = pv.ParseRules(rules)
 	if err != nil {
 		b.Fatalf("Failed to parse rules: %v", err)
 	}

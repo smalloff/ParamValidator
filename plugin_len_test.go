@@ -613,19 +613,13 @@ func BenchmarkLengthPluginParse(b *testing.B) {
 
 func BenchmarkLengthPluginNormalization(b *testing.B) {
 	lengthPlugin := plugins.NewLengthPlugin()
-	parser := NewRuleParser(lengthPlugin)
-
-	pv := &ParamValidator{
-		globalParams:  make(map[string]*ParamRule),
-		urlRules:      make(map[string]*URLRule),
-		urlMatcher:    NewURLMatcher(),
-		compiledRules: &CompiledRules{},
-		parser:        parser,
-	}
-	pv.initialized.Store(true)
-	err := pv.ParseRules("/api?username=[len>5]&code=[len5..10]")
+	pv, err := NewParamValidator("", WithPlugins(lengthPlugin))
 	if err != nil {
-		b.Fatalf("Failed to parse rules: %v", err)
+		b.Fatalf("Failed to create validator: %v", err)
+	}
+	err = pv.ParseRules("/api?username=[len>5]&code=[len5..10]")
+	if err != nil {
+		b.Fatalf("Failed to create validator: %v", err)
 	}
 
 	b.ResetTimer()
@@ -636,19 +630,13 @@ func BenchmarkLengthPluginNormalization(b *testing.B) {
 
 func BenchmarkLengthPluginFilterQueryParams(b *testing.B) {
 	lengthPlugin := plugins.NewLengthPlugin()
-	parser := NewRuleParser(lengthPlugin)
-
-	pv := &ParamValidator{
-		globalParams:  make(map[string]*ParamRule),
-		urlRules:      make(map[string]*URLRule),
-		urlMatcher:    NewURLMatcher(),
-		compiledRules: &CompiledRules{},
-		parser:        parser,
-	}
-	pv.initialized.Store(true)
-	err := pv.ParseRules("/api?username=[len>5]&code=[len5..10]")
+	pv, err := NewParamValidator("", WithPlugins(lengthPlugin))
 	if err != nil {
-		b.Fatalf("Failed to parse rules: %v", err)
+		b.Fatalf("Failed to create validator: %v", err)
+	}
+	err = pv.ParseRules("/api?username=[len>5]&code=[len5..10]")
+	if err != nil {
+		b.Fatalf("Failed to create validator: %v", err)
 	}
 
 	b.ResetTimer()
@@ -659,19 +647,13 @@ func BenchmarkLengthPluginFilterQueryParams(b *testing.B) {
 
 func BenchmarkLengthPluginValidateQueryParams(b *testing.B) {
 	lengthPlugin := plugins.NewLengthPlugin()
-	parser := NewRuleParser(lengthPlugin)
-
-	pv := &ParamValidator{
-		globalParams:  make(map[string]*ParamRule),
-		urlRules:      make(map[string]*URLRule),
-		urlMatcher:    NewURLMatcher(),
-		compiledRules: &CompiledRules{},
-		parser:        parser,
-	}
-	pv.initialized.Store(true)
-	err := pv.ParseRules("/api?username=[len>5]&code=[len5..10]")
+	pv, err := NewParamValidator("", WithPlugins(lengthPlugin))
 	if err != nil {
-		b.Fatalf("Failed to parse rules: %v", err)
+		b.Fatalf("Failed to create validator: %v", err)
+	}
+	err = pv.ParseRules("/api?username=[len>5]&code=[len5..10]")
+	if err != nil {
+		b.Fatalf("Failed to create validator: %v", err)
 	}
 
 	b.ResetTimer()
