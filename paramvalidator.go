@@ -10,12 +10,19 @@ import (
 	"unsafe"
 )
 
-var builderPool = sync.Pool{
+var byteSlicePool = sync.Pool{
 	New: func() interface{} {
-		b := &strings.Builder{}
-		b.Grow(128)
-		return b
+		return make([]byte, 0, 256)
 	},
+}
+
+func getByteSlice() []byte {
+	return byteSlicePool.Get().([]byte)
+}
+
+func putByteSlice(b []byte) {
+	b = b[:0] // reset
+	byteSlicePool.Put(b)
 }
 
 // WithCallback sets the callback function for validation
@@ -45,13 +52,6 @@ func NewParamValidator(rulesStr string, options ...Option) (*ParamValidator, err
 		urlMatcher:   NewURLMatcher(),
 		paramIndex:   NewParamIndex(),
 		parser:       NewRuleParser(),
-		builderPool: &sync.Pool{
-			New: func() interface{} {
-				b := &strings.Builder{}
-				b.Grow(256)
-				return b
-			},
-		},
 	}
 	pv.initialized.Store(true)
 
@@ -453,50 +453,6 @@ func (pv *ParamValidator) parseAndValidateQueryParamsWithMasks(queryString strin
 	return isValid, err
 }
 
-// parseAndFilterQueryParamsWithMasks filters parameters using masks
-func (pv *ParamValidator) parseAndFilterQueryParamsWithMasks(queryString string, masks ParamMasks, urlPath string) (string, bool, error) {
-	if queryString == "" {
-		return "", true, nil
-	}
-
-	filteredParams := builderPool.Get().(*strings.Builder)
-	defer func() {
-		filteredParams.Reset()
-		builderPool.Put(filteredParams)
-	}()
-
-	isValid := true
-	allowAll := pv.isAllowAllParamsMasks(masks)
-	firstParam := true
-
-	err := pv.processQueryParamsCommon(queryString, func(keyBytes, valueBytes []byte) {
-		key := unsafeGetString(keyBytes)
-		value := unsafeGetString(valueBytes)
-
-		// Restore original key and value from bytes
-		originalKey := string(keyBytes)
-		originalValue := string(valueBytes)
-
-		if allowAll || pv.isParamAllowedWithMasks(key, value, masks, urlPath) {
-			if !firstParam {
-				filteredParams.WriteString("&")
-			} else {
-				firstParam = false
-			}
-
-			if len(valueBytes) == 0 {
-				filteredParams.WriteString(originalKey)
-			} else {
-				filteredParams.WriteString(originalKey + "=" + originalValue)
-			}
-		} else if !allowAll {
-			isValid = false
-		}
-	})
-
-	return filteredParams.String(), isValid, err
-}
-
 // findMostSpecificURLRuleUnsafe finds most specific matching URL rule
 func (pv *ParamValidator) findMostSpecificURLRuleUnsafe(urlPath string) *URLRule {
 	if pv.urlMatcher == nil {
@@ -620,38 +576,38 @@ func (pv *ParamValidator) normalizeURLFast(u *url.URL) string {
 		return u.Path
 	}
 
-	// Использовать один builder для всей операции
-	builder := pv.builderPool.Get().(*strings.Builder)
-	defer pv.builderPool.Put(builder)
-	builder.Reset()
-
-	// Построить путь
-	builder.WriteString(u.Path)
-
-	// Фильтровать параметры используя тот же builder
-	filteredQuery := pv.filterQueryParamsFast(u.RawQuery, masks, u.Path, builder)
-
-	if filteredQuery != "" {
-		// Переиспользовать builder
-		builder.Reset()
-		builder.WriteString(u.Path)
-		builder.WriteByte('?')
-		builder.WriteString(filteredQuery)
-		return builder.String()
+	// Вместо билдера - использовать byte slice
+	filteredQuery := pv.filterQueryParamsFast(u.RawQuery, masks, u.Path)
+	if filteredQuery == "" {
+		return u.Path
 	}
 
-	return u.Path
+	if len(u.Path)+1+len(filteredQuery) < 64 {
+		// Используем stack allocation для коротких строк
+		var buf [256]byte
+		n := copy(buf[:], u.Path)
+		buf[n] = '?'
+		n++
+		n += copy(buf[n:], filteredQuery)
+		return string(buf[:n])
+	}
+
+	// Для длинных URL - одна аллокация
+	result := make([]byte, len(u.Path)+1+len(filteredQuery))
+	copy(result, u.Path)
+	result[len(u.Path)] = '?'
+	copy(result[len(u.Path)+1:], filteredQuery)
+	return string(result)
 }
 
 // filterQueryParamsFast fast parameter filtering
-func (pv *ParamValidator) filterQueryParamsFast(queryString string, masks ParamMasks, urlPath string, builder *strings.Builder) string {
+func (pv *ParamValidator) filterQueryParamsFast(queryString string, masks ParamMasks, urlPath string) string {
 	if queryString == "" {
 		return ""
 	}
 
-	builder.Reset()
-	builder.Grow(len(queryString)) // Pre-allocate memory
-
+	// Предварительный расчет размера
+	buf := make([]byte, 0, len(queryString))
 	start := 0
 	firstParam := true
 
@@ -659,31 +615,36 @@ func (pv *ParamValidator) filterQueryParamsFast(queryString string, masks ParamM
 		if i == len(queryString) || queryString[i] == '&' {
 			if start < i {
 				segment := queryString[start:i]
-				eqPos := strings.IndexByte(segment, '=')
-				var key, value string
 
-				if eqPos == -1 {
-					key = segment
-					value = ""
-				} else {
-					key = segment[:eqPos]
-					value = segment[eqPos+1:]
-				}
-
-				if pv.isParamAllowedFast(key, value, masks, urlPath) {
+				if pv.isParamAllowedSegment(segment, masks, urlPath) {
 					if !firstParam {
-						builder.WriteByte('&')
+						buf = append(buf, '&')
 					} else {
 						firstParam = false
 					}
-					builder.WriteString(segment)
+					buf = append(buf, segment...)
 				}
 			}
 			start = i + 1
 		}
 	}
 
-	return builder.String()
+	return string(buf)
+}
+
+func (pv *ParamValidator) isParamAllowedSegment(segment string, masks ParamMasks, urlPath string) bool {
+	eqPos := strings.IndexByte(segment, '=')
+	var key, value string
+
+	if eqPos == -1 {
+		key = segment
+		value = ""
+	} else {
+		key = segment[:eqPos]
+		value = segment[eqPos+1:]
+	}
+
+	return pv.isParamAllowedFast(key, value, masks, urlPath)
 }
 
 // FilterQueryParams filters query parameters string according to validation rules
@@ -692,38 +653,19 @@ func (pv *ParamValidator) FilterQueryParams(urlPath, queryString string) string 
 		return ""
 	}
 
-	var result string
-	pv.withSafeAccess(func() bool {
-		if err := pv.checkSize(urlPath, MaxURLLength, "URL path"); err != nil {
-			result = ""
-			return false
-		}
-
-		result = pv.filterQueryParamsUnsafe(urlPath, queryString)
-		return true
-	})
-
-	return result
-}
-
-// filterQueryParamsUnsafe filters query parameters using masks
-func (pv *ParamValidator) filterQueryParamsUnsafe(urlPath, queryString string) string {
-	masks := pv.getParamMasksForURL(urlPath)
-
-	if pv.isAllowAllParamsMasks(masks) {
-		return queryString
-	}
-
-	if masks.CombinedMask().IsEmpty() {
+	// Быстрая проверка без блокировки
+	if !pv.initialized.Load() {
 		return ""
 	}
 
-	filteredParams, _, err := pv.parseAndFilterQueryParamsWithMasks(queryString, masks, urlPath)
-	if err != nil {
+	pv.mu.RLock()
+	defer pv.mu.RUnlock()
+
+	if err := pv.checkSize(urlPath, MaxURLLength, "URL path"); err != nil {
 		return ""
 	}
 
-	return filteredParams
+	return pv.filterQueryParamsFast(queryString, pv.getParamMasksForURL(urlPath), urlPath)
 }
 
 // ValidateQueryParams validates query parameters string for URL path

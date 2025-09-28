@@ -105,7 +105,6 @@ type ParamValidator struct {
 	mu            sync.RWMutex
 	parser        *RuleParser
 	paramIndex    *ParamIndex
-	builderPool   *sync.Pool
 }
 
 // wildcardPatternStats contains statistics for URL pattern matching optimization
