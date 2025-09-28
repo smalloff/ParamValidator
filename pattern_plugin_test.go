@@ -346,6 +346,88 @@ func TestPatternPluginIntegration(t *testing.T) {
 	}
 }
 
+func TestPatternEdgeCases(t *testing.T) {
+	plugin := plugins.NewPatternPlugin()
+
+	tests := []struct {
+		name        string
+		constraint  string
+		shouldParse bool
+		shouldError bool
+	}{
+		{
+			name:        "valid prefix pattern",
+			constraint:  "start*",
+			shouldParse: true,
+			shouldError: false,
+		},
+		{
+			name:        "valid suffix pattern",
+			constraint:  "*end",
+			shouldParse: true,
+			shouldError: false,
+		},
+		{
+			name:        "valid contains pattern",
+			constraint:  "*val*",
+			shouldParse: true,
+			shouldError: false,
+		},
+		{
+			name:        "any string pattern",
+			constraint:  "*",
+			shouldParse: true,
+			shouldError: false,
+		},
+		{
+			name:        "multiple wildcards only",
+			constraint:  "**",
+			shouldParse: true,
+			shouldError: false,
+		},
+		{
+			name:        "empty constraint should not parse",
+			constraint:  "",
+			shouldParse: false,
+			shouldError: true,
+		},
+		{
+			name:        "complex multiple parts",
+			constraint:  "*one*two*three*",
+			shouldParse: true,
+			shouldError: false,
+		},
+		{
+			name:        "pattern with special characters",
+			constraint:  "*.*+?[](){}|^$\\*",
+			shouldParse: true,
+			shouldError: false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			canParse := plugin.CanParse(tt.constraint)
+			if canParse != tt.shouldParse {
+				t.Errorf("CanParse(%q) = %v, expected %v",
+					tt.constraint, canParse, tt.shouldParse)
+			}
+
+			_, err := plugin.Parse("test", tt.constraint)
+
+			if tt.shouldError {
+				if err == nil {
+					t.Errorf("Parse(%q) should fail but succeeded", tt.constraint)
+				}
+			} else {
+				if err != nil {
+					t.Errorf("Parse(%q) failed but should succeed: %v", tt.constraint, err)
+				}
+			}
+		})
+	}
+}
+
 func BenchmarkPatternPlugin(b *testing.B) {
 	plugin := plugins.NewPatternPlugin()
 	validator, err := plugin.Parse("test", "img_*")

@@ -486,6 +486,100 @@ func TestLengthPluginIntegration(t *testing.T) {
 	}
 }
 
+func TestLengthEdgeCases(t *testing.T) {
+	plugin := plugins.NewLengthPlugin()
+
+	tests := []struct {
+		name        string
+		constraint  string
+		shouldParse bool
+		shouldError bool
+	}{
+		{
+			name:        "valid len greater than",
+			constraint:  "len>5",
+			shouldParse: true,
+			shouldError: false,
+		},
+		{
+			name:        "valid len range",
+			constraint:  "len5..10",
+			shouldParse: true,
+			shouldError: false,
+		},
+		{
+			name:        "double operator should fail",
+			constraint:  "len>>5",
+			shouldParse: true,
+			shouldError: true,
+		},
+		{
+			name:        "invalid range min greater than max",
+			constraint:  "len10..5",
+			shouldParse: true,
+			shouldError: true,
+		},
+		{
+			name:        "negative length should fail",
+			constraint:  "len>-5",
+			shouldParse: true,
+			shouldError: true,
+		},
+		{
+			name:        "empty after len should fail",
+			constraint:  "len",
+			shouldParse: false,
+			shouldError: true,
+		},
+		{
+			name:        "very large number should fail",
+			constraint:  "len>9999999999",
+			shouldParse: true,
+			shouldError: true,
+		},
+		{
+			name:        "invalid characters should fail",
+			constraint:  "len>5abc",
+			shouldParse: true,
+			shouldError: true,
+		},
+		{
+			name:        "unsupported prefix should not parse",
+			constraint:  "length>5",
+			shouldParse: false,
+			shouldError: true,
+		},
+		{
+			name:        "simple operator without len should not parse",
+			constraint:  ">5",
+			shouldParse: false,
+			shouldError: true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			canParse := plugin.CanParse(tt.constraint)
+			if canParse != tt.shouldParse {
+				t.Errorf("CanParse(%q) = %v, expected %v",
+					tt.constraint, canParse, tt.shouldParse)
+			}
+
+			_, err := plugin.Parse("test", tt.constraint)
+
+			if tt.shouldError {
+				if err == nil {
+					t.Errorf("Parse(%q) should fail but succeeded", tt.constraint)
+				}
+			} else {
+				if err != nil {
+					t.Errorf("Parse(%q) failed but should succeed: %v", tt.constraint, err)
+				}
+			}
+		})
+	}
+}
+
 func BenchmarkLengthPlugin(b *testing.B) {
 	plugin := plugins.NewLengthPlugin()
 	validator, err := plugin.Parse("test", "len>5")

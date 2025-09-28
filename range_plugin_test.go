@@ -503,6 +503,102 @@ func TestRangePluginIntegration(t *testing.T) {
 	}
 }
 
+// Добавить в конец range_plugin_test.go
+
+func TestRangeEdgeCases(t *testing.T) {
+	plugin := plugins.NewRangePlugin()
+
+	tests := []struct {
+		name        string
+		constraint  string
+		shouldParse bool
+		shouldError bool
+	}{
+		{
+			name:        "valid range with hyphen",
+			constraint:  "1-10",
+			shouldParse: true,
+			shouldError: false,
+		},
+		{
+			name:        "valid range with dots",
+			constraint:  "1..10",
+			shouldParse: true,
+			shouldError: false,
+		},
+		{
+			name:        "negative range valid",
+			constraint:  "-10..10",
+			shouldParse: true,
+			shouldError: false,
+		},
+		{
+			name:        "all negative range valid",
+			constraint:  "-50..-10",
+			shouldParse: true,
+			shouldError: false,
+		},
+		{
+			name:        "min greater than max should fail",
+			constraint:  "10..1",
+			shouldParse: true,
+			shouldError: true,
+		},
+		{
+			name:        "empty min value should fail",
+			constraint:  "..10",
+			shouldParse: true,
+			shouldError: true,
+		},
+		{
+			name:        "empty max value should fail",
+			constraint:  "10..",
+			shouldParse: true,
+			shouldError: true,
+		},
+		{
+			name:        "text instead of numbers should fail",
+			constraint:  "a..z",
+			shouldParse: true,
+			shouldError: true,
+		},
+		{
+			name:        "very large numbers should fail",
+			constraint:  "1..9999999999",
+			shouldParse: true,
+			shouldError: true,
+		},
+		{
+			name:        "triple numbers should fail",
+			constraint:  "1-10-100",
+			shouldParse: true,
+			shouldError: true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			canParse := plugin.CanParse(tt.constraint)
+			if canParse != tt.shouldParse {
+				t.Errorf("CanParse(%q) = %v, expected %v",
+					tt.constraint, canParse, tt.shouldParse)
+			}
+
+			_, err := plugin.Parse("test", tt.constraint)
+
+			if tt.shouldError {
+				if err == nil {
+					t.Errorf("Parse(%q) should fail but succeeded", tt.constraint)
+				}
+			} else {
+				if err != nil {
+					t.Errorf("Parse(%q) failed but should succeed: %v", tt.constraint, err)
+				}
+			}
+		})
+	}
+}
+
 func BenchmarkRangePlugin(b *testing.B) {
 	plugin := plugins.NewRangePlugin()
 	validator, err := plugin.Parse("test", "1-100")
