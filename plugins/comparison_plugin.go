@@ -6,6 +6,11 @@ import (
 	"strings"
 )
 
+const (
+	maxComparisonNumberLength = 10      // Максимальная длина числа (включая знак)
+	maxComparisonValue        = 1000000 // Максимальное значение для сравнения
+)
+
 // ComparisonPlugin плагин для операторов сравнения: >5, <10, >=100, <=50
 type ComparisonPlugin struct {
 	name string
@@ -29,7 +34,8 @@ func (cp *ComparisonPlugin) CanParse(constraintStr string) bool {
 }
 
 func (cp *ComparisonPlugin) Parse(paramName, constraintStr string) (func(string) bool, error) {
-	if len(constraintStr) == 0 {
+	lenConstraintStr := len(constraintStr)
+	if lenConstraintStr == 0 {
 		return nil, fmt.Errorf("empty constraint")
 	}
 
@@ -39,14 +45,34 @@ func (cp *ComparisonPlugin) Parse(paramName, constraintStr string) (func(string)
 		return nil, err
 	}
 
+	// Проверяем длину числа
+	if len(numStr) > maxComparisonNumberLength {
+		return nil, fmt.Errorf("number too long in comparison: %s", numStr)
+	}
+
 	threshold, err := strconv.ParseInt(numStr, 10, 64)
 	if err != nil {
 		return nil, fmt.Errorf("invalid number in comparison: %s", numStr)
 	}
 
+	// Проверяем ограничения на числа
+	if threshold > maxComparisonValue || threshold < -maxComparisonValue {
+		return nil, fmt.Errorf("comparison value out of range: %d (allowed: -%d to %d)",
+			threshold, maxComparisonValue, maxComparisonValue)
+	}
+
 	return func(value string) bool {
+		// Проверяем длину входного значения
+		if len(value) > maxComparisonNumberLength {
+			return false
+		}
 		num, err := strconv.ParseInt(value, 10, 64)
 		if err != nil {
+			return false
+		}
+
+		// Проверяем ограничения на числа
+		if num > maxComparisonValue || num < -maxComparisonValue {
 			return false
 		}
 
@@ -113,6 +139,11 @@ func (cp *ComparisonPlugin) parseComparison(constraintStr string) (string, strin
 	numStr = strings.TrimSpace(numStr)
 	if numStr == "" {
 		return "", "", fmt.Errorf("missing number after operator '%s'", operator)
+	}
+
+	// Проверяем длину числа
+	if len(numStr) > maxComparisonNumberLength {
+		return "", "", fmt.Errorf("number too long: '%s'", numStr)
 	}
 
 	// Проверяем что в строке только цифры и возможный знак минуса

@@ -1,9 +1,12 @@
+// pattern_plugin.go
 package plugins
 
 import (
 	"fmt"
 	"strings"
 )
+
+const maxPatternLength = 1000 // Максимальная длина паттерна
 
 // PatternPlugin плагин для простых шаблонов с wildcard *
 type PatternPlugin struct {
@@ -19,7 +22,12 @@ func (pp *PatternPlugin) GetName() string {
 }
 
 func (pp *PatternPlugin) CanParse(constraintStr string) bool {
-	if constraintStr == "" {
+	if constraintStr == "" || len(constraintStr) > maxPatternLength {
+		return false
+	}
+
+	// Проверяем валидность UTF-8
+	if !isValidUTF8(constraintStr) {
 		return false
 	}
 
@@ -38,6 +46,15 @@ func (pp *PatternPlugin) Parse(paramName, constraintStr string) (func(string) bo
 		return nil, fmt.Errorf("empty pattern")
 	}
 
+	if len(constraintStr) > maxPatternLength {
+		return nil, fmt.Errorf("pattern too long: %d characters", len(constraintStr))
+	}
+
+	// Проверяем валидность UTF-8
+	if !isValidUTF8(constraintStr) {
+		return nil, fmt.Errorf("invalid UTF-8 in pattern")
+	}
+
 	// Предварительно анализируем паттерн
 	hasLeadingStar := constraintStr[0] == '*'
 	hasTrailingStar := constraintStr[len(constraintStr)-1] == '*'
@@ -45,13 +62,19 @@ func (pp *PatternPlugin) Parse(paramName, constraintStr string) (func(string) bo
 	// Если паттерн простой (один *), обрабатываем специально
 	if hasLeadingStar && hasTrailingStar && len(constraintStr) == 2 {
 		// Паттерн "**" - любая строка включая пустую
-		return func(value string) bool { return true }, nil
+		return func(value string) bool {
+			// Проверяем длину значения
+			return len(value) <= maxPatternLength*10 // Разумное ограничение
+		}, nil
 	}
 
 	if hasLeadingStar && !hasTrailingStar && strings.Count(constraintStr, "*") == 1 {
 		// Паттерн "*suffix" - проверяем суффикс
 		suffix := constraintStr[1:]
 		return func(value string) bool {
+			if len(value) > maxPatternLength*10 {
+				return false
+			}
 			return strings.HasSuffix(value, suffix)
 		}, nil
 	}
@@ -60,6 +83,9 @@ func (pp *PatternPlugin) Parse(paramName, constraintStr string) (func(string) bo
 		// Паттерн "prefix*" - проверяем префикс
 		prefix := constraintStr[:len(constraintStr)-1]
 		return func(value string) bool {
+			if len(value) > maxPatternLength*10 {
+				return false
+			}
 			return strings.HasPrefix(value, prefix)
 		}, nil
 	}
@@ -71,6 +97,11 @@ func (pp *PatternPlugin) Parse(paramName, constraintStr string) (func(string) bo
 
 func (pp *PatternPlugin) createValidator(parts []string) func(string) bool {
 	return func(value string) bool {
+		// Проверяем длину значения
+		if len(value) > maxPatternLength*10 {
+			return false
+		}
+
 		// Специальный случай: только wildcard "*" - совпадает с любой строкой
 		if len(parts) == 2 && parts[0] == "" && parts[1] == "" {
 			return true

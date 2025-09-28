@@ -1,7 +1,13 @@
+// range_plugin.go
 package plugins
 
 import (
 	"fmt"
+)
+
+const (
+	maxRangeNumberLength = 10      // Максимальная длина числа (включая знак)
+	maxRangeValue        = 1000000 // Максимальное значение для диапазона
 )
 
 // RangePlugin плагин для диапазонов чисел: 1-10, 5..100, -50..50
@@ -64,41 +70,38 @@ func (rp *RangePlugin) Parse(paramName, constraintStr string) (func(string) bool
 		maxStr = constraintStr[sepPos+1:]
 	}
 
+	// Проверяем длину чисел
+	if len(minStr) > maxRangeNumberLength || len(maxStr) > maxRangeNumberLength {
+		return nil, fmt.Errorf("number too long in range: %s", constraintStr)
+	}
+
 	// Парсим числа как в LengthPlugin
-	min, minOk := fastAtoi(minStr)
-	max, maxOk := fastAtoi(maxStr)
+	min, minOk := parseNumber(minStr)
+	max, maxOk := parseNumber(maxStr)
 
 	if !minOk || !maxOk || min > max {
 		return nil, fmt.Errorf("invalid range: %s", constraintStr)
 	}
 
+	// Проверяем ограничения на числа
+	if min > maxRangeValue || max > maxRangeValue || min < -maxRangeValue || max < -maxRangeValue {
+		return nil, fmt.Errorf("range values out of range: %d..%d (allowed: -%d to %d)",
+			min, max, maxRangeValue, maxRangeValue)
+	}
+
 	return func(value string) bool {
-		num, ok := fastAtoi(value)
-		return ok && num >= min && num <= max
-	}, nil
-}
-
-// fastAtoi как в LengthPlugin
-func fastAtoi(s string) (int, bool) {
-	if len(s) == 0 {
-		return 0, false
-	}
-
-	result := 0
-	start := 0
-	if s[0] == '-' {
-		start = 1
-	}
-
-	for i := start; i < len(s); i++ {
-		if s[i] < '0' || s[i] > '9' {
-			return 0, false
+		// Проверяем длину входного значения
+		if len(value) > maxRangeNumberLength {
+			return false
 		}
-		result = result*10 + int(s[i]-'0')
-	}
-
-	if start == 1 {
-		return -result, true
-	}
-	return result, true
+		num, ok := parseNumber(value)
+		if !ok {
+			return false
+		}
+		// Проверяем ограничения на числа
+		if num > maxRangeValue || num < -maxRangeValue {
+			return false
+		}
+		return num >= min && num <= max
+	}, nil
 }

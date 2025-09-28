@@ -6,6 +6,8 @@ import (
 	"unicode/utf8"
 )
 
+const maxLengthValue = 1000000 // Максимальное значение для длины
+
 type LengthPlugin struct {
 	name string
 }
@@ -56,11 +58,16 @@ func (lp *LengthPlugin) findDoubleDot(s string) int {
 
 // parseRangeNoAlloc - полностью без аллокаций
 func (lp *LengthPlugin) parseRangeNoAlloc(s string, dotPos int) (func(string) bool, error) {
-	min, minOk := lp.atoiNoAlloc(s[:dotPos])
-	max, maxOk := lp.atoiNoAlloc(s[dotPos+2:])
+	min, minOk := parseNumber(s[:dotPos])
+	max, maxOk := parseNumber(s[dotPos+2:])
 
 	if !minOk || !maxOk {
 		return nil, fmt.Errorf("invalid range format: '%s'", s)
+	}
+
+	// Проверяем ограничения на числа
+	if min > maxLengthValue || max > maxLengthValue {
+		return nil, fmt.Errorf("length value too large: max allowed is %d", maxLengthValue)
 	}
 
 	if min < 0 || max < 0 || min > max {
@@ -68,8 +75,8 @@ func (lp *LengthPlugin) parseRangeNoAlloc(s string, dotPos int) (func(string) bo
 	}
 
 	return func(value string) bool {
-		return utf8.RuneCountInString(value) >= min &&
-			utf8.RuneCountInString(value) <= max
+		length := utf8.RuneCountInString(value)
+		return length >= min && length <= max
 	}, nil
 }
 
@@ -84,9 +91,14 @@ func (lp *LengthPlugin) parseOperatorNoAlloc(expr string) (func(string) bool, er
 	}
 
 	numStr := expr[numStart:]
-	length, ok := lp.atoiNoAlloc(numStr)
+	length, ok := parseNumber(numStr)
 	if !ok {
 		return nil, fmt.Errorf("invalid length value: '%s'", numStr)
+	}
+
+	// Проверяем ограничения на числа
+	if length > maxLengthValue {
+		return nil, fmt.Errorf("length value too large: %d (max allowed is %d)", length, maxLengthValue)
 	}
 
 	if length < 0 {
@@ -98,12 +110,13 @@ func (lp *LengthPlugin) parseOperatorNoAlloc(expr string) (func(string) bool, er
 
 func (lp *LengthPlugin) parseOperator(expr string) (string, int) {
 	if len(expr) >= 2 {
-		switch expr[0:2] {
-		case ">=":
+		if expr[0] == '>' && expr[1] == '=' {
 			return ">=", 2
-		case "<=":
+		}
+		if expr[0] == '<' && expr[1] == '=' {
 			return "<=", 2
-		case "!=":
+		}
+		if expr[0] == '!' && expr[1] == '=' {
 			return "!=", 2
 		}
 	}
@@ -120,22 +133,6 @@ func (lp *LengthPlugin) parseOperator(expr string) (string, int) {
 	}
 
 	return "=", 0
-}
-
-// atoiNoAlloc - преобразование строки в int без аллокаций
-func (lp *LengthPlugin) atoiNoAlloc(s string) (int, bool) {
-	if len(s) == 0 {
-		return 0, false
-	}
-
-	result := 0
-	for _, ch := range s {
-		if ch < '0' || ch > '9' {
-			return 0, false
-		}
-		result = result*10 + int(ch-'0')
-	}
-	return result, true
 }
 
 func (lp *LengthPlugin) createValidator(operator string, length int) func(string) bool {

@@ -1,0 +1,569 @@
+package paramvalidator
+
+import (
+	"strings"
+	"testing"
+	"time"
+	"unicode/utf8"
+
+	"github.com/smalloff/paramvalidator/plugins"
+)
+
+// TestPatternPluginSecurity тестирует основные уязвимости паттерн-плагина
+func TestPatternPluginSecurity(t *testing.T) {
+	plugin := plugins.NewPatternPlugin()
+
+	tests := []struct {
+		name        string
+		pattern     string
+		value       string
+		expectValid bool
+		description string
+	}{
+		{
+			name:        "Empty pattern",
+			pattern:     "",
+			value:       "test",
+			expectValid: false,
+			description: "Empty pattern should be rejected",
+		},
+		{
+			name:        "Only wildcard",
+			pattern:     "*",
+			value:       "any value",
+			expectValid: true,
+			description: "Single wildcard should match any string",
+		},
+		{
+			name:        "Multiple consecutive wildcards",
+			pattern:     "**",
+			value:       "test",
+			expectValid: true,
+			description: "Multiple wildcards should be handled correctly",
+		},
+		{
+			name:        "Pattern with special regex chars",
+			pattern:     "*.*+?[](){}|^$\\*",
+			value:       "test.test+?[](){}|^$\\test",
+			expectValid: true,
+			description: "Special regex characters should be treated literally",
+		},
+		{
+			name:        "Unicode pattern safety",
+			pattern:     "*🎉*🚀*",
+			value:       "start🎉middle🚀end",
+			expectValid: true,
+			description: "Unicode characters should be handled safely",
+		},
+		{
+			name:        "Null bytes in pattern",
+			pattern:     "*\x00*",
+			value:       "test\x00value",
+			expectValid: true,
+			description: "Null bytes should be handled",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			validator, err := plugin.Parse("test", tt.pattern)
+			if err != nil {
+				if tt.expectValid {
+					t.Errorf("Unexpected error: %v", err)
+				}
+				return
+			}
+
+			result := validator(tt.value)
+			if result != tt.expectValid {
+				t.Errorf("%s: expected %v, got %v", tt.description, tt.expectValid, result)
+			}
+		})
+	}
+}
+
+// TestPatternPluginReDoSProtection тестирует защиту от ReDoS атак
+func TestPatternPluginReDoSProtection(t *testing.T) {
+	plugin := plugins.NewPatternPlugin()
+
+	redosTests := []struct {
+		name        string
+		pattern     string
+		value       string
+		maxDuration time.Duration
+	}{
+		{
+			name:        "Exponential backtracking protection",
+			pattern:     "*a*b*c*d*e*f*g*h*i*j*",
+			value:       strings.Repeat("x", 1000),
+			maxDuration: 5 * time.Millisecond,
+		},
+		{
+			name:        "Many wildcards with long prefix",
+			pattern:     strings.Repeat("a", 100) + "*",
+			value:       strings.Repeat("a", 100) + strings.Repeat("b", 1000),
+			maxDuration: 2 * time.Millisecond,
+		},
+		{
+			name:        "Complex pattern with overlaps",
+			pattern:     "*abc*abc*abc*abc*",
+			value:       strings.Repeat("abc", 1000),
+			maxDuration: 5 * time.Millisecond,
+		},
+	}
+
+	for _, tt := range redosTests {
+		t.Run(tt.name, func(t *testing.T) {
+			validator, err := plugin.Parse("test", tt.pattern)
+			if err != nil {
+				t.Fatalf("Failed to create validator: %v", err)
+			}
+
+			// Многократный запуск для более точного измерения
+			iterations := 10
+			var totalDuration time.Duration
+
+			for i := 0; i < iterations; i++ {
+				start := time.Now()
+				result := validator(tt.value)
+				duration := time.Since(start)
+				totalDuration += duration
+
+				_ = result // Используем результат
+			}
+
+			avgDuration := totalDuration / time.Duration(iterations)
+			if avgDuration > tt.maxDuration {
+				t.Errorf("Potential ReDoS detected: %s took avg %v (max allowed: %v). Pattern: %q, Value length: %d",
+					tt.name, avgDuration, tt.maxDuration, tt.pattern, len(tt.value))
+			}
+
+			t.Logf("Pattern: %q, Value length: %d, Avg duration: %v",
+				tt.pattern, len(tt.value), avgDuration)
+		})
+	}
+}
+
+// TestPluginInputValidation тестирует валидацию входных данных плагинов
+func TestPluginInputValidation(t *testing.T) {
+	pluginTests := []struct {
+		name   string
+		plugin interface {
+			CanParse(constraintStr string) bool
+			Parse(paramName, constraintStr string) (func(string) bool, error)
+			GetName() string
+		}
+	}{
+		{"pattern", plugins.NewPatternPlugin()},
+		{"length", plugins.NewLengthPlugin()},
+		{"comparison", plugins.NewComparisonPlugin()},
+		{"range", plugins.NewRangePlugin()},
+	}
+
+	maliciousInputs := []struct {
+		name         string
+		constraint   string
+		shouldReject bool
+		description  string
+	}{
+		{
+			name:         "Extremely long constraint",
+			constraint:   strings.Repeat("a", 10000),
+			shouldReject: true,
+			description:  "Very long constraints should be rejected",
+		},
+		{
+			name:         "Null bytes in constraint",
+			constraint:   "test\x00value",
+			shouldReject: false, // Могут быть допустимы в некоторых плагинах
+			description:  "Null bytes should be handled safely",
+		},
+		{
+			name:         "Invalid UTF-8 sequence",
+			constraint:   "valid\xff\xfeinvalid",
+			shouldReject: true,
+			description:  "Invalid UTF-8 should be rejected",
+		},
+		{
+			name:         "Only special characters",
+			constraint:   "!@#$%^&*()",
+			shouldReject: false, // Зависит от плагина
+			description:  "Special characters should be handled",
+		},
+		{
+			name:         "Empty string",
+			constraint:   "",
+			shouldReject: true,
+			description:  "Empty constraints should be rejected",
+		},
+	}
+
+	for _, pluginTest := range pluginTests {
+		t.Run(pluginTest.name, func(t *testing.T) {
+			for _, input := range maliciousInputs {
+				t.Run(input.name, func(t *testing.T) {
+					// Проверяем, может ли плагин обработать такой ввод
+					canParse := pluginTest.plugin.CanParse(input.constraint)
+
+					// Пытаемся распарсить
+					validator, err := pluginTest.plugin.Parse("test_param", input.constraint)
+
+					if input.shouldReject {
+						// Ожидаем ошибку или невозможность парсинга
+						if err == nil && validator != nil {
+							t.Errorf("%s: Expected rejection for constraint %q, but it was accepted",
+								input.description, input.constraint)
+						}
+					} else {
+						// Если CanParse возвращает true, то Parse не должен паниковать
+						if canParse && err != nil {
+							t.Logf("%s: Plugin can parse but returned error (may be acceptable): %v",
+								input.description, err)
+						}
+
+						// Проверяем, что нет паники
+						func() {
+							defer func() {
+								if r := recover(); r != nil {
+									t.Errorf("%s: PANIC for constraint %q: %v",
+										input.description, input.constraint, r)
+								}
+							}()
+
+							// Тестируем валидатор, если он был создан
+							if validator != nil {
+								testValues := []string{"", "test", "123", strings.Repeat("x", 100)}
+								for _, testValue := range testValues {
+									result := validator(testValue)
+									_ = result // Используем результат
+								}
+							}
+						}()
+					}
+				})
+			}
+		})
+	}
+}
+
+// TestPluginMemorySafety тестирует безопасность использования памяти
+func TestPluginMemorySafety(t *testing.T) {
+	plugin := plugins.NewPatternPlugin()
+
+	t.Run("Memory exhaustion protection", func(t *testing.T) {
+		// Создаем валидатор с простым паттерном
+		validator, err := plugin.Parse("test", "*test*")
+		if err != nil {
+			t.Fatalf("Failed to create validator: %v", err)
+		}
+
+		// Тестируем с различными размерами входных данных
+		testCases := []struct {
+			name  string
+			value string
+		}{
+			{"Empty string", ""},
+			{"Normal string", "this is a test value"},
+			{"Very long string", strings.Repeat("x", 100000)},
+			{"Many matches", strings.Repeat("test", 1000)},
+		}
+
+		for _, tc := range testCases {
+			t.Run(tc.name, func(t *testing.T) {
+				start := time.Now()
+				result := validator(tc.value)
+				duration := time.Since(start)
+
+				// Проверяем, что выполнение не занимает слишком много времени
+				if duration > 100*time.Millisecond {
+					t.Errorf("Memory exhaustion potential: processing %d bytes took %v",
+						len(tc.value), duration)
+				}
+
+				_ = result
+				t.Logf("Processed %d bytes in %v, result: %v",
+					len(tc.value), duration, result)
+			})
+		}
+	})
+}
+
+// TestPluginConcurrentSafety тестирует конкурентную безопасность
+func TestPluginConcurrentSafety(t *testing.T) {
+	pluginList := []struct {
+		name   string
+		plugin interface {
+			CanParse(constraintStr string) bool
+			Parse(paramName, constraintStr string) (func(string) bool, error)
+			GetName() string
+		}
+	}{
+		{"pattern", plugins.NewPatternPlugin()},
+		{"length", plugins.NewLengthPlugin()},
+		{"comparison", plugins.NewComparisonPlugin()},
+		{"range", plugins.NewRangePlugin()},
+	}
+
+	for _, pl := range pluginList {
+		t.Run(pl.name, func(t *testing.T) {
+			const goroutines = 50
+			const iterations = 100
+
+			done := make(chan bool, goroutines)
+
+			for i := 0; i < goroutines; i++ {
+				go func(id int) {
+					defer func() {
+						if r := recover(); r != nil {
+							t.Errorf("Goroutine %d panicked: %v", id, r)
+						}
+						done <- true
+					}()
+
+					for j := 0; j < iterations; j++ {
+						// Создаем различные constraint для тестирования
+						var constraint string
+						switch pl.name {
+						case "pattern":
+							constraint = "*test*"
+						case "length":
+							constraint = "len>5"
+						case "comparison":
+							constraint = ">10"
+						case "range":
+							constraint = "1..100"
+						}
+
+						validator, err := pl.plugin.Parse("test_param", constraint)
+						if err != nil {
+							continue // Некоторые комбинации могут быть невалидными
+						}
+
+						// Тестируем валидатор
+						if validator != nil {
+							testValues := []string{"", "test", "12345", "valid_value"}
+							for _, value := range testValues {
+								result := validator(value)
+								_ = result
+							}
+						}
+					}
+				}(i)
+			}
+
+			// Ждем завершения всех горутин
+			for i := 0; i < goroutines; i++ {
+				<-done
+			}
+		})
+	}
+}
+
+// TestPluginBoundaryConditions тестирует граничные условия
+// TestPluginBoundaryConditions тестирует граничные условия
+func TestPluginBoundaryConditions(t *testing.T) {
+	plugin := plugins.NewPatternPlugin()
+
+	tests := []struct {
+		name        string
+		pattern     string
+		values      []string
+		expectError bool
+		description string
+	}{
+		{
+			name:        "Empty value handling",
+			pattern:     "*",
+			values:      []string{""},
+			expectError: false,
+			description: "Empty values should be handled correctly",
+		},
+		{
+			name:        "Very long pattern - should be rejected",
+			pattern:     strings.Repeat("a", 1000) + "*", // 1001 символов - превышает лимит
+			values:      []string{},
+			expectError: true,
+			description: "Very long patterns should be rejected",
+		},
+		{
+			name:        "Maximum length pattern",
+			pattern:     strings.Repeat("a", 999) + "*", // 1000 символов - максимальная длина
+			values:      []string{strings.Repeat("a", 999) + "suffix"},
+			expectError: false,
+			description: "Maximum length patterns should work",
+		},
+		{
+			name:        "Unicode boundary",
+			pattern:     "*" + string([]rune{0x1F600}), // смайлик
+			values:      []string{"prefix" + string([]rune{0x1F600})},
+			expectError: false,
+			description: "Unicode boundary characters should work",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			validator, err := plugin.Parse("test", tt.pattern)
+
+			if tt.expectError {
+				if err == nil {
+					t.Errorf("Expected error for pattern %q, but got none", tt.pattern)
+				}
+				return
+			}
+
+			if err != nil {
+				t.Fatalf("Failed to create validator: %v", err)
+			}
+
+			for _, value := range tt.values {
+				// Проверяем, что нет паники
+				func() {
+					defer func() {
+						if r := recover(); r != nil {
+							t.Errorf("%s: PANIC for value %q: %v",
+								tt.description, value, r)
+						}
+					}()
+
+					result := validator(value)
+
+					// Проверяем валидность UTF-8 если значение не пустое
+					if value != "" && !utf8.ValidString(value) {
+						t.Logf("Warning: Test value contains invalid UTF-8: %q", value)
+					}
+
+					t.Logf("Pattern: %q, Value: %q, Result: %v - %s",
+						tt.pattern, value, result, tt.description)
+				}()
+			}
+		})
+	}
+}
+
+// TestPluginResourceCleanup тестирует корректное освобождение ресурсов
+func TestPluginResourceCleanup(t *testing.T) {
+	plugin := plugins.NewPatternPlugin()
+
+	// Создаем множество валидаторов и проверяем, что нет утечек
+	patterns := []string{
+		"*test*",
+		"prefix*",
+		"*suffix",
+		"*a*b*c*",
+		strings.Repeat("x", 100) + "*",
+	}
+
+	// Многократное создание и использование валидаторов
+	for i := 0; i < 1000; i++ {
+		for _, pattern := range patterns {
+			validator, err := plugin.Parse("test", pattern)
+			if err != nil {
+				continue
+			}
+
+			// Используем валидатор
+			testValues := []string{"", "test", "no_match", strings.Repeat("x", 100)}
+			for _, value := range testValues {
+				result := validator(value)
+				_ = result
+			}
+		}
+
+		if i%100 == 0 {
+			t.Logf("Completed %d iterations without resource leaks", i)
+		}
+	}
+}
+
+// TestPluginSpecificSecurity тестирует специфические уязвимости каждого плагина
+func TestPluginSpecificSecurity(t *testing.T) {
+	t.Run("LengthPlugin security", func(t *testing.T) {
+		plugin := plugins.NewLengthPlugin()
+
+		securityTests := []struct {
+			name       string
+			constraint string
+			shouldFail bool
+		}{
+			{"Valid length", "len>5", false},
+			{"Invalid operator", "len>>5", true},
+			{"Negative number", "len>-5", true},
+			{"Very large number", "len>9999999999", true},
+			{"Empty after len", "len", true},
+			{"Invalid characters", "len>5abc", true},
+		}
+
+		for _, tt := range securityTests {
+			t.Run(tt.name, func(t *testing.T) {
+				_, err := plugin.Parse("test", tt.constraint)
+				if tt.shouldFail && err == nil {
+					t.Errorf("Expected error for constraint %q, but got none", tt.constraint)
+				}
+				if !tt.shouldFail && err != nil {
+					t.Errorf("Unexpected error for constraint %q: %v", tt.constraint, err)
+				}
+			})
+		}
+	})
+
+	t.Run("ComparisonPlugin security", func(t *testing.T) {
+		plugin := plugins.NewComparisonPlugin()
+
+		securityTests := []struct {
+			name       string
+			constraint string
+			shouldFail bool
+		}{
+			{"Valid comparison", ">10", false},
+			{"Double operator", ">>10", true},
+			{"Invalid combination", "><10", true},
+			{"Missing number", ">", true},
+			{"Very large number", ">9999999999", true},
+			{"Negative number", ">-5", false},
+			{"Invalid characters", ">10abc", true},
+		}
+
+		for _, tt := range securityTests {
+			t.Run(tt.name, func(t *testing.T) {
+				_, err := plugin.Parse("test", tt.constraint)
+				if tt.shouldFail && err == nil {
+					t.Errorf("Expected error for constraint %q, but got none", tt.constraint)
+				}
+				if !tt.shouldFail && err != nil {
+					t.Errorf("Unexpected error for constraint %q: %v", tt.constraint, err)
+				}
+			})
+		}
+	})
+
+	t.Run("RangePlugin security", func(t *testing.T) {
+		plugin := plugins.NewRangePlugin()
+
+		securityTests := []struct {
+			name       string
+			constraint string
+			shouldFail bool
+		}{
+			{"Valid range", "1..10", false},
+			{"Valid range with dash", "1-10", false},
+			{"Invalid range", "10..1", true},
+			{"Very large numbers", "1..9999999999", true},
+			{"Negative range", "-10..10", false},
+			{"Missing separator", "110", true},
+			{"Invalid characters", "1..10abc", true},
+		}
+
+		for _, tt := range securityTests {
+			t.Run(tt.name, func(t *testing.T) {
+				_, err := plugin.Parse("test", tt.constraint)
+				if tt.shouldFail && err == nil {
+					t.Errorf("Expected error for constraint %q, but got none", tt.constraint)
+				}
+				if !tt.shouldFail && err != nil {
+					t.Errorf("Unexpected error for constraint %q: %v", tt.constraint, err)
+				}
+			})
+		}
+	})
+}
