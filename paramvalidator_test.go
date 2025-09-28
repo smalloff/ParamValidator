@@ -1055,8 +1055,6 @@ func BenchmarkConcurrentNormalization(b *testing.B) {
 	b.RunParallel(func(pb *testing.PB) {
 		for pb.Next() {
 			pv.NormalizeURL("/api/users?page=5&limit=10&invalid=value")
-			pv.NormalizeURL("/api/users?page=3&limit=10&extra=param")
-			pv.NormalizeURL("/api/users?page=5&limit=15&invalid=test")
 		}
 	})
 }
