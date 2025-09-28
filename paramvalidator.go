@@ -5,25 +5,9 @@ import (
 	"fmt"
 	"net/url"
 	"strings"
-	"sync"
 	"unicode/utf8"
 	"unsafe"
 )
-
-var byteSlicePool = sync.Pool{
-	New: func() interface{} {
-		return make([]byte, 0, 256)
-	},
-}
-
-func getByteSlice() []byte {
-	return byteSlicePool.Get().([]byte)
-}
-
-func putByteSlice(b []byte) {
-	b = b[:0] // reset
-	byteSlicePool.Put(b)
-}
 
 // WithCallback sets the callback function for validation
 func WithCallback(callback CallbackFunc) Option {
