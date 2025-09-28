@@ -6,8 +6,6 @@ import (
 	"github.com/smalloff/paramvalidator/plugins"
 )
 
-// Добавить в конец comparison_plugin_test.go
-
 func TestComparisonEdgeCases(t *testing.T) {
 	plugin := plugins.NewComparisonPlugin()
 
@@ -528,5 +526,74 @@ func BenchmarkComparisonPluginParse(b *testing.B) {
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
 		plugin.Parse("test", ">100")
+	}
+}
+
+func BenchmarkComparisonPluginNormalization(b *testing.B) {
+	comparisonPlugin := plugins.NewComparisonPlugin()
+	parser := NewRuleParser(comparisonPlugin)
+
+	pv := &ParamValidator{
+		globalParams:  make(map[string]*ParamRule),
+		urlRules:      make(map[string]*URLRule),
+		urlMatcher:    NewURLMatcher(),
+		compiledRules: &CompiledRules{},
+		parser:        parser,
+	}
+	pv.initialized.Store(true)
+	err := pv.ParseRules("/api?score=[>50]&quantity=[<=10]")
+	if err != nil {
+		b.Fatalf("Failed to parse rules: %v", err)
+	}
+
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		pv.NormalizeURL("/api?score=75&quantity=5&invalid=value")
+	}
+}
+
+func BenchmarkComparisonPluginFilterQueryParams(b *testing.B) {
+	comparisonPlugin := plugins.NewComparisonPlugin()
+	parser := NewRuleParser(comparisonPlugin)
+
+	pv := &ParamValidator{
+		globalParams:  make(map[string]*ParamRule),
+		urlRules:      make(map[string]*URLRule),
+		urlMatcher:    NewURLMatcher(),
+		compiledRules: &CompiledRules{},
+		parser:        parser,
+	}
+	pv.initialized.Store(true)
+	err := pv.ParseRules("/api?score=[>50]&quantity=[<=10]")
+	if err != nil {
+		b.Fatalf("Failed to parse rules: %v", err)
+	}
+
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		pv.FilterQueryParams("/api", "score=75&quantity=5&invalid=value")
+	}
+}
+
+func BenchmarkComparisonPluginValidateQueryParams(b *testing.B) {
+	comparisonPlugin := plugins.NewComparisonPlugin()
+	parser := NewRuleParser(comparisonPlugin)
+
+	pv := &ParamValidator{
+		globalParams:  make(map[string]*ParamRule),
+		urlRules:      make(map[string]*URLRule),
+		urlMatcher:    NewURLMatcher(),
+		compiledRules: &CompiledRules{},
+		parser:        parser,
+	}
+	pv.initialized.Store(true)
+	err := pv.ParseRules("/api?score=[>50]&quantity=[<=10]")
+	if err != nil {
+		b.Fatalf("Failed to parse rules: %v", err)
+	}
+
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		pv.ValidateQueryParams("/api", "score=75&quantity=5&invalid=value")
 	}
 }

@@ -629,3 +629,72 @@ func BenchmarkRangePluginParse(b *testing.B) {
 		plugin.Parse("test", "1-100")
 	}
 }
+
+func BenchmarkRangePluginNormalization(b *testing.B) {
+	rangePlugin := plugins.NewRangePlugin()
+	parser := NewRuleParser(rangePlugin)
+
+	pv := &ParamValidator{
+		globalParams:  make(map[string]*ParamRule),
+		urlRules:      make(map[string]*URLRule),
+		urlMatcher:    NewURLMatcher(),
+		compiledRules: &CompiledRules{},
+		parser:        parser,
+	}
+	pv.initialized.Store(true)
+	err := pv.ParseRules("/api?age=[18-65]&price=[100..1000]")
+	if err != nil {
+		b.Fatalf("Failed to parse rules: %v", err)
+	}
+
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		pv.NormalizeURL("/api?age=25&price=500&invalid=value")
+	}
+}
+
+func BenchmarkRangePluginFilterQueryParams(b *testing.B) {
+	rangePlugin := plugins.NewRangePlugin()
+	parser := NewRuleParser(rangePlugin)
+
+	pv := &ParamValidator{
+		globalParams:  make(map[string]*ParamRule),
+		urlRules:      make(map[string]*URLRule),
+		urlMatcher:    NewURLMatcher(),
+		compiledRules: &CompiledRules{},
+		parser:        parser,
+	}
+	pv.initialized.Store(true)
+	err := pv.ParseRules("/api?age=[18-65]&price=[100..1000]")
+	if err != nil {
+		b.Fatalf("Failed to parse rules: %v", err)
+	}
+
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		pv.FilterQueryParams("/api", "age=25&price=500&invalid=value")
+	}
+}
+
+func BenchmarkRangePluginValidateQueryParams(b *testing.B) {
+	rangePlugin := plugins.NewRangePlugin()
+	parser := NewRuleParser(rangePlugin)
+
+	pv := &ParamValidator{
+		globalParams:  make(map[string]*ParamRule),
+		urlRules:      make(map[string]*URLRule),
+		urlMatcher:    NewURLMatcher(),
+		compiledRules: &CompiledRules{},
+		parser:        parser,
+	}
+	pv.initialized.Store(true)
+	err := pv.ParseRules("/api?age=[18-65]&price=[100..1000]")
+	if err != nil {
+		b.Fatalf("Failed to parse rules: %v", err)
+	}
+
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		pv.ValidateQueryParams("/api", "age=25&price=500&invalid=value")
+	}
+}
