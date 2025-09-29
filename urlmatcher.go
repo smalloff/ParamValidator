@@ -1,4 +1,3 @@
-// urlmatcher.go
 package paramvalidator
 
 import (
@@ -24,7 +23,6 @@ func (um *URLMatcher) AddRule(pattern string, rule *URLRule) {
 	um.mu.Lock()
 	defer um.mu.Unlock()
 
-	// Calculate specificity once and store it
 	if rule != nil {
 		rule.specificity = int16(calculateSpecificity(pattern))
 	}
@@ -71,7 +69,6 @@ func (um *URLMatcher) GetMostSpecificRule(urlPath string) *URLRule {
 
 	for pattern, rule := range um.urlRules {
 		if rule != nil && um.urlMatchesPattern(urlPath, pattern) {
-			// Use pre-calculated specificity
 			if rule.specificity > maxSpecificity {
 				maxSpecificity = rule.specificity
 				mostSpecificRule = rule
@@ -82,7 +79,7 @@ func (um *URLMatcher) GetMostSpecificRule(urlPath string) *URLRule {
 	return mostSpecificRule
 }
 
-// URL matching internals - these remain private
+// URL matching internals
 func (um *URLMatcher) urlMatchesPattern(urlPath, pattern string) bool {
 	return urlMatchesPattern(urlPath, pattern)
 }
@@ -146,14 +143,13 @@ func findSegmentEnds(urlPath, pattern string, urlStart, patternStart int) (int, 
 
 func compareSegments(urlSeg, patternSeg string) bool {
 	if len(patternSeg) == 1 && patternSeg[0] == '*' {
-		return true // Wildcard matches any segment
+		return true
 	}
 
 	if len(urlSeg) != len(patternSeg) {
 		return false
 	}
 
-	// Fast comparison for short segments
 	if len(urlSeg) <= 8 {
 		for i := 0; i < len(urlSeg); i++ {
 			if urlSeg[i] != patternSeg[i] {
