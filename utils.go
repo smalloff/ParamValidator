@@ -173,21 +173,15 @@ func containsPathTraversal(path string) bool {
 func findSpecialCharsUltraFast(s string) bool {
 	n := len(s)
 	i := 0
+
+	// Обрабатываем по 4 символа за раз
 	for ; i <= n-4; i += 4 {
 		if s[i] == '*' || s[i+1] == '*' || s[i+2] == '*' || s[i+3] == '*' {
-			if s[i] == '*' {
-				return true
-			}
-			if s[i+1] == '*' {
-				return true
-			}
-			if s[i+2] == '*' {
-				return true
-			}
 			return true
 		}
 	}
 
+	// Обрабатываем оставшиеся символы
 	for ; i < n; i++ {
 		if s[i] == '*' {
 			return true
