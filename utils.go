@@ -5,7 +5,7 @@ import (
 )
 
 // normalizeURLPattern cleans and standardizes URL pattern
-func NormalizeURLPattern(pattern string) string {
+func normalizeURLPattern(pattern string) string {
 	if pattern == "" {
 		return ""
 	}

@@ -227,7 +227,7 @@ func (rp *RuleParser) parseURLRulesUnsafe(rulesStr string) (map[string]*URLRule,
 			continue
 		}
 
-		urlPattern = NormalizeURLPattern(urlPattern)
+		urlPattern = normalizeURLPattern(urlPattern)
 		if urlPattern == "" {
 			continue
 		}

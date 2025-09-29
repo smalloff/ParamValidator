@@ -665,7 +665,7 @@ func TestNormalizeURLPattern(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.input, func(t *testing.T) {
-			result := NormalizeURLPattern(tt.input)
+			result := normalizeURLPattern(tt.input)
 			if result != tt.expected {
 				t.Logf("NormalizeURLPattern(%q) = %q, want %q", tt.input, result, tt.expected)
 				// Не падаем, просто логируем различия
