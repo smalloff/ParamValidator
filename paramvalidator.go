@@ -649,11 +649,6 @@ func (pv *ParamValidator) FilterQueryParams(urlPath, queryString string) string 
 		return ""
 	}
 
-	// Быстрая проверка без блокировки
-	if !pv.initialized.Load() {
-		return ""
-	}
-
 	pv.mu.RLock()
 	defer pv.mu.RUnlock()
 
