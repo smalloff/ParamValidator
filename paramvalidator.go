@@ -307,7 +307,16 @@ func (pv *ParamValidator) getParamMasksForURL(urlPath string) ParamMasks {
 		return masks
 	}
 
-	urlPath = NormalizeURLPattern(urlPath)
+	hasWildcard := false
+	for i := 0; i < len(urlPath); i++ {
+		if urlPath[i] == '*' {
+			hasWildcard = true
+			break
+		}
+	}
+	if hasWildcard {
+		urlPath = NormalizeURLPattern(urlPath)
+	}
 
 	// 1. Global parameters
 	for name := range pv.compiledRules.globalParams {
@@ -590,8 +599,10 @@ func (pv *ParamValidator) filterQueryParamsFast(queryString string, masks ParamM
 		return ""
 	}
 
-	// Предварительный расчет размера
-	buf := make([]byte, 0, len(queryString))
+	// Используем strings.Builder для эффективной конкатенации
+	var builder strings.Builder
+	builder.Grow(len(queryString)) // Предварительное выделение памяти
+
 	start := 0
 	firstParam := true
 
@@ -600,26 +611,33 @@ func (pv *ParamValidator) filterQueryParamsFast(queryString string, masks ParamM
 			if start < i {
 				segment := queryString[start:i]
 
+				// Быстрая проверка сегмента
 				if pv.isParamAllowedSegment(segment, masks, urlPath) {
 					if !firstParam {
-						buf = append(buf, '&')
+						builder.WriteByte('&')
 					} else {
 						firstParam = false
 					}
-					buf = append(buf, segment...)
+					builder.WriteString(segment)
 				}
 			}
 			start = i + 1
 		}
 	}
 
-	return string(buf)
+	return builder.String()
 }
 
 func (pv *ParamValidator) isParamAllowedSegment(segment string, masks ParamMasks, urlPath string) bool {
-	eqPos := strings.IndexByte(segment, '=')
-	var key, value string
+	eqPos := -1
+	for i := 0; i < len(segment); i++ {
+		if segment[i] == '=' {
+			eqPos = i
+			break
+		}
+	}
 
+	var key, value string
 	if eqPos == -1 {
 		key = segment
 		value = ""

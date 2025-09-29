@@ -1,7 +1,6 @@
 package paramvalidator
 
 import (
-	"path"
 	"strings"
 )
 
@@ -11,49 +10,133 @@ func NormalizeURLPattern(pattern string) string {
 		return ""
 	}
 
-	for strings.Contains(pattern, "**") {
-		pattern = strings.ReplaceAll(pattern, "**", "*")
-	}
-
-	if len(pattern) > 0 && pattern[0] == '*' {
-		return pattern
-	}
-
-	if !strings.Contains(pattern, "./") && !strings.Contains(pattern, "//") && !strings.Contains(pattern, "..") {
+	// Быстрая проверка на простой случай (большинство URL)
+	if isSimplePattern(pattern) {
 		if pattern[0] != '/' {
 			return "/" + pattern
 		}
 		return pattern
 	}
 
-	if strings.Contains(pattern, "*") {
-		parts := strings.Split(pattern, "/")
-		var cleanedParts []string
-		for _, part := range parts {
-			if part == "" || part == "." {
-				continue
-			}
-			if part == ".." {
-				if len(cleanedParts) > 0 {
-					cleanedParts = cleanedParts[:len(cleanedParts)-1]
-				}
-				continue
-			}
-			cleanedParts = append(cleanedParts, part)
-		}
-		result := strings.Join(cleanedParts, "/")
-		if pattern[0] == '/' {
-			result = "/" + result
-		}
-		return result
+	return normalizeComplexPattern(pattern)
+}
+
+// isSimplePattern проверяет, нуждается ли паттерн в сложной нормализации
+func isSimplePattern(pattern string) bool {
+	if len(pattern) == 0 {
+		return true
 	}
 
-	cleaned := path.Clean(pattern)
-	if cleaned == "." {
+	// Быстрая проверка на наличие специальных символов
+	for i := 0; i < len(pattern); i++ {
+		switch pattern[i] {
+		case '*', '.', '/':
+			// Проверяем конкретные случаи
+			if pattern[i] == '*' {
+				// Проверяем двойные **
+				if i+1 < len(pattern) && pattern[i+1] == '*' {
+					return false
+				}
+			} else if pattern[i] == '.' {
+				// Проверяем "./" или ".."
+				if i+1 < len(pattern) && pattern[i+1] == '.' {
+					return false // ".."
+				}
+				if i+1 < len(pattern) && pattern[i+1] == '/' {
+					return false // "./"
+				}
+			} else if pattern[i] == '/' {
+				// Проверяем "//"
+				if i+1 < len(pattern) && pattern[i+1] == '/' {
+					return false
+				}
+			}
+		}
+	}
+
+	return pattern[0] == '/'
+}
+
+// normalizeComplexPattern обрабатывает сложные случаи
+func normalizeComplexPattern(pattern string) string {
+	// 1. Обработка двойных **
+	pattern = removeDoubleStars(pattern)
+
+	// 2. Если начинается с *, возвращаем как есть
+	if len(pattern) > 0 && pattern[0] == '*' {
+		return pattern
+	}
+
+	// 3. Обработка с path segments
+	return cleanPathSegments(pattern)
+}
+
+// removeDoubleStars удаляет последовательные **
+func removeDoubleStars(pattern string) string {
+	// Быстрая проверка - есть ли двойные ** вообще
+	hasDoubleStar := false
+	for i := 0; i < len(pattern)-1; i++ {
+		if pattern[i] == '*' && pattern[i+1] == '*' {
+			hasDoubleStar = true
+			break
+		}
+	}
+
+	if !hasDoubleStar {
+		return pattern
+	}
+
+	// Ручная замена "**" на "*"
+	var result strings.Builder
+	result.Grow(len(pattern))
+
+	for i := 0; i < len(pattern); i++ {
+		if i < len(pattern)-1 && pattern[i] == '*' && pattern[i+1] == '*' {
+			result.WriteByte('*')
+			i++ // Пропускаем следующий *
+		} else {
+			result.WriteByte(pattern[i])
+		}
+	}
+
+	return result.String()
+}
+
+// cleanPathSegments очищает path segments
+func cleanPathSegments(pattern string) string {
+	var segments []string
+	start := 0
+
+	// Ручной split по '/'
+	for i := 0; i <= len(pattern); i++ {
+		if i == len(pattern) || pattern[i] == '/' {
+			if start < i {
+				segment := pattern[start:i]
+				if segment == "." {
+					// Пропускаем
+				} else if segment == ".." {
+					if len(segments) > 0 {
+						segments = segments[:len(segments)-1]
+					}
+				} else {
+					segments = append(segments, segment)
+				}
+			}
+			start = i + 1
+		}
+	}
+
+	// Собираем результат
+	if len(segments) == 0 {
+		if pattern[0] == '/' {
+			return "/"
+		}
 		return "/"
 	}
-	if pattern[0] == '/' && cleaned[0] != '/' {
-		return "/" + cleaned
+
+	result := strings.Join(segments, "/")
+	if pattern[0] == '/' {
+		return "/" + result
 	}
-	return cleaned
+	return result
 }
