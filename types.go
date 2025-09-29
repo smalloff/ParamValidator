@@ -82,9 +82,10 @@ type ParamMasks struct {
 
 // CompiledRules contains pre-compiled rules for faster access
 type CompiledRules struct {
-	globalParams map[string]*ParamRule
-	urlRules     map[string]*URLRule
-	paramIndex   *ParamIndex
+	globalParams     map[string]*ParamRule
+	urlRules         map[string]*URLRule
+	paramIndex       *ParamIndex
+	globalParamsMask ParamMask
 }
 
 // ParamIndex provides lock-free parameter indexing
