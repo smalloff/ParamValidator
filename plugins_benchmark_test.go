@@ -427,7 +427,7 @@ func BenchmarkPluginRealWorldScenario(b *testing.B) {
 
 		// Основные операции валидации
 		pv.ValidateURL(url)
-		pv.NormalizeURL(url + "&invalid=param&extra=value")
+		pv.FilterURL(url + "&invalid=param&extra=value")
 	}
 }
 

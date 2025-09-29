@@ -624,7 +624,7 @@ func BenchmarkLengthPluginNormalization(b *testing.B) {
 
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		pv.NormalizeURL("/api?username=john_doe&code=123456&invalid=value")
+		pv.FilterURL("/api?username=john_doe&code=123456&invalid=value")
 	}
 }
 

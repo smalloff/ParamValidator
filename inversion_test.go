@@ -245,9 +245,9 @@ func TestInvertedRulesNormalization(t *testing.T) {
 				t.Fatalf("Failed to create validator: %v", err)
 			}
 
-			result := pv.NormalizeURL(tt.url)
+			result := pv.FilterURL(tt.url)
 			if result != tt.expected {
-				t.Errorf("NormalizeURL(%q) with rules %q = %q, expected %q",
+				t.Errorf("FilterURL(%q) with rules %q = %q, expected %q",
 					tt.url, tt.rules, result, tt.expected)
 			}
 		})

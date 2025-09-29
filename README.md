@@ -52,7 +52,7 @@ func main() {
 	fmt.Println("URL valid:", isValid) // true
 
 	// Normalize URL
-	normalized := pv.NormalizeURL("/products?page=15&category=electronics&invalid=param")
+	normalized := pv.FilterURL("/products?page=15&category=electronics&invalid=param")
 	fmt.Println("Normalized URL:", normalized) // /products?category=electronics
 
 	// Multiple URL rules

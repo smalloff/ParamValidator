@@ -471,7 +471,7 @@ func BenchmarkPatternPluginNormalization(b *testing.B) {
 	}
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		pv.NormalizeURL("/api?file=img_photo.jpg&id=new_user_123&invalid=value")
+		pv.FilterURL("/api?file=img_photo.jpg&id=new_user_123&invalid=value")
 	}
 }
 

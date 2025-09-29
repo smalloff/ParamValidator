@@ -542,7 +542,7 @@ func BenchmarkComparisonPluginNormalization(b *testing.B) {
 
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		pv.NormalizeURL("/api?score=75&quantity=5&invalid=value")
+		pv.FilterURL("/api?score=75&quantity=5&invalid=value")
 	}
 }
 

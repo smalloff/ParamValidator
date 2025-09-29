@@ -322,7 +322,7 @@ func TestParamValidatorConcurrentSafety(t *testing.T) {
 						}
 					}
 				case 2:
-					normalized := pv.NormalizeURL(urlStr + "&invalid=param")
+					normalized := pv.FilterURL(urlStr + "&invalid=param")
 					_ = normalized
 				}
 			}
@@ -457,7 +457,7 @@ func TestParamValidatorResourceCleanup(t *testing.T) {
 							pv.FilterQuery(u.Path, u.RawQuery)
 						}
 					}
-					pv.NormalizeURL(urlStr)
+					pv.FilterURL(urlStr)
 				}
 			}
 		}
@@ -646,8 +646,8 @@ func BenchmarkParamValidatorSecurity(b *testing.B) {
 	}
 }
 
-// TestNormalizeURLPattern тестирует нормализацию URL паттернов
-func TestNormalizeURLPattern(t *testing.T) {
+// TestFilterURLPattern тестирует нормализацию URL паттернов
+func TestFilterURLPattern(t *testing.T) {
 	tests := []struct {
 		input    string
 		expected string
@@ -667,7 +667,7 @@ func TestNormalizeURLPattern(t *testing.T) {
 		t.Run(tt.input, func(t *testing.T) {
 			result := normalizeURLPattern(tt.input)
 			if result != tt.expected {
-				t.Logf("NormalizeURLPattern(%q) = %q, want %q", tt.input, result, tt.expected)
+				t.Logf("FilterURLPattern(%q) = %q, want %q", tt.input, result, tt.expected)
 				// Не падаем, просто логируем различия
 			}
 		})

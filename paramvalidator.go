@@ -135,11 +135,11 @@ func (pv *ParamValidator) validateURLUnsafe(u *url.URL) bool {
 		return false
 	}
 
-	return pv.validateQueryParamsFast(u.RawQuery, masks, u.Path)
+	return pv.validateQueryParams(u.RawQuery, masks, u.Path, false)
 }
 
-// validateQueryParamsFast fast query parameters validation without allocations
-func (pv *ParamValidator) validateQueryParamsFast(queryString string, masks ParamMasks, urlPath string) bool {
+// validateQueryParams universal query parameters validation
+func (pv *ParamValidator) validateQueryParams(queryString string, masks ParamMasks, urlPath string, useBytes bool) bool {
 	if queryString == "" {
 		return true
 	}
@@ -151,10 +151,14 @@ func (pv *ParamValidator) validateQueryParamsFast(queryString string, masks Para
 	for i := 0; i <= len(queryString); i++ {
 		if i == len(queryString) || queryString[i] == '&' {
 			if start < i && paramCount < MaxParamValues {
-				_, keyStart, keyEnd, valStart, valEnd := pv.parseQuerySegment(queryString, start, i)
-
 				if !allowAll {
-					if !pv.isParamAllowedByIndexes(queryString, keyStart, keyEnd, valStart, valEnd, masks, urlPath) {
+					var allowed bool
+					if useBytes {
+						allowed = pv.isParamAllowedBytesSegment([]byte(queryString[start:i]), masks, urlPath)
+					} else {
+						allowed = pv.isParamAllowedSegment(queryString[start:i], masks, urlPath)
+					}
+					if !allowed {
 						return false
 					}
 				}
@@ -189,30 +193,6 @@ func (pv *ParamValidator) parseQuerySegment(queryString string, start, end int) 
 	}
 
 	return eqPos, keyStart, keyEnd, valStart, valEnd
-}
-
-// isParamAllowedByIndexes validates by indexes without creating substrings for key
-func (pv *ParamValidator) isParamAllowedByIndexes(fullStr string, keyStart, keyEnd, valStart, valEnd int, masks ParamMasks, urlPath string) bool {
-	idx := pv.compiledRules.paramIndex.GetIndexByRange(fullStr, keyStart, keyEnd)
-	if idx == -1 {
-		return false
-	}
-
-	if !masks.CombinedMask().GetBit(idx) {
-		return false
-	}
-
-	rule := pv.findParamRuleByIndex(idx, masks, urlPath)
-	if rule == nil {
-		return false
-	}
-
-	value := ""
-	if valStart < valEnd {
-		value = fullStr[valStart:valEnd]
-	}
-
-	return pv.isValueValidFast(rule, value)
 }
 
 // GetIndexByRange finds parameter by byte range without creating string
@@ -565,11 +545,11 @@ func (pv *ParamValidator) FilterQueryBytes(urlPath, queryBytes, buffer []byte) [
 	urlPathStr := string(urlPath)
 	masks := pv.createParamMasks(urlPathStr)
 
-	return pv.filterQueryParamsToBufferBytes(queryBytes, masks, urlPathStr, buffer)
+	return pv.filterQueryParamsToBuffer(queryBytes, masks, urlPathStr, buffer, true)
 }
 
-// filterQueryParamsToBufferBytes filters into provided buffer (fully []byte)
-func (pv *ParamValidator) filterQueryParamsToBufferBytes(queryBytes []byte, masks ParamMasks, urlPath string, buffer []byte) []byte {
+// filterQueryParamsToBuffer filters into provided buffer (fully []byte)
+func (pv *ParamValidator) filterQueryParamsToBuffer(queryBytes []byte, masks ParamMasks, urlPath string, buffer []byte, useBytes bool) []byte {
 	if cap(buffer) < len(queryBytes) {
 		return nil
 	}
@@ -581,7 +561,14 @@ func (pv *ParamValidator) filterQueryParamsToBufferBytes(queryBytes []byte, mask
 	for i := 0; i <= len(queryBytes); i++ {
 		if i == len(queryBytes) || queryBytes[i] == '&' {
 			if start < i {
-				if pv.isParamAllowedBytesSegment(queryBytes[start:i], masks, urlPath) {
+				var allowed bool
+				if useBytes {
+					allowed = pv.isParamAllowedBytesSegment(queryBytes[start:i], masks, urlPath)
+				} else {
+					allowed = pv.isParamAllowedSegment(string(queryBytes[start:i]), masks, urlPath)
+				}
+
+				if allowed {
 					if !firstParam {
 						result = append(result, '&')
 					} else {
@@ -616,6 +603,7 @@ func (pv *ParamValidator) ValidateQueryBytes(urlPath, queryBytes []byte) bool {
 			return true
 		}
 
+		// Convert urlPath to string once (this allocation is necessary for URL matching)
 		urlPathStr := string(urlPath)
 		masks := pv.createParamMasks(urlPathStr)
 
@@ -627,8 +615,35 @@ func (pv *ParamValidator) ValidateQueryBytes(urlPath, queryBytes []byte) bool {
 			return false
 		}
 
-		return pv.validateQueryParamsBytesFast(queryBytes, masks, urlPathStr)
+		// Use bytes version without converting queryBytes to string
+		return pv.validateQueryParamsBytes(queryBytes, masks, urlPathStr)
 	})
+}
+
+// validateQueryParamsBytes validates query parameters in []byte form without allocations
+func (pv *ParamValidator) validateQueryParamsBytes(queryBytes []byte, masks ParamMasks, urlPath string) bool {
+	if len(queryBytes) == 0 {
+		return true
+	}
+
+	allowAll := pv.isAllowAllParamsMasks(masks)
+	start := 0
+	paramCount := 0
+
+	for i := 0; i <= len(queryBytes); i++ {
+		if i == len(queryBytes) || queryBytes[i] == '&' {
+			if start < i && paramCount < MaxParamValues {
+				if !allowAll {
+					if !pv.isParamAllowedBytesSegment(queryBytes[start:i], masks, urlPath) {
+						return false
+					}
+				}
+				paramCount++
+			}
+			start = i + 1
+		}
+	}
+	return paramCount <= MaxParamValues
 }
 
 // createParamMasks creates parameter masks for URL path
@@ -640,29 +655,6 @@ func (pv *ParamValidator) createParamMasks(urlPath string) ParamMasks {
 	}
 	pv.fillParamMasksDirect(&masks, urlPath)
 	return masks
-}
-
-// validateQueryParamsBytesFast fast []byte parameters validation
-func (pv *ParamValidator) validateQueryParamsBytesFast(queryBytes []byte, masks ParamMasks, urlPath string) bool {
-	allowAll := pv.isAllowAllParamsMasks(masks)
-	start := 0
-	paramCount := 0
-
-	for i := 0; i <= len(queryBytes); i++ {
-		if i == len(queryBytes) || queryBytes[i] == '&' {
-			if start < i && paramCount < MaxParamValues {
-				segment := queryBytes[start:i]
-				if !allowAll {
-					if !pv.isParamAllowedBytesSegment(segment, masks, urlPath) {
-						return false
-					}
-				}
-				paramCount++
-			}
-			start = i + 1
-		}
-	}
-	return paramCount <= MaxParamValues
 }
 
 // isParamAllowedBytesSegment checks segment in []byte form
@@ -783,8 +775,8 @@ func (pv *ParamValidator) validateParamUnsafe(urlPath, paramName, paramValue str
 	return pv.isParamAllowedWithMasks(paramName, paramValue, masks, urlPath)
 }
 
-// NormalizeURL optimized version
-func (pv *ParamValidator) NormalizeURL(fullURL string) string {
+// FilterURL optimized version
+func (pv *ParamValidator) FilterURL(fullURL string) string {
 	if !pv.initialized.Load() || fullURL == "" {
 		return fullURL
 	}
@@ -941,7 +933,7 @@ func (pv *ParamValidator) ValidateQuery(urlPath, queryString string) bool {
 			return false
 		}
 
-		return pv.validateQueryParamsFast(queryString, masks, urlPath)
+		return pv.validateQueryParams(queryString, masks, urlPath, false)
 	})
 }
 

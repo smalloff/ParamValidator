@@ -644,7 +644,7 @@ func BenchmarkRangePluginNormalization(b *testing.B) {
 
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		pv.NormalizeURL("/api?age=25&price=500&invalid=value")
+		pv.FilterURL("/api?age=25&price=500&invalid=value")
 	}
 }
 

@@ -283,7 +283,7 @@ func TestValidateParam(t *testing.T) {
 	}
 }
 
-func TestNormalizeURL(t *testing.T) {
+func TestFilterURL(t *testing.T) {
 	tests := []struct {
 		name     string
 		rules    string
@@ -322,11 +322,11 @@ func TestNormalizeURL(t *testing.T) {
 			if err != nil {
 				t.Fatalf("Failed to create validator: %v", err)
 			}
-			result := pv.NormalizeURL(tt.url)
+			result := pv.FilterURL(tt.url)
 
 			expected := tt.expected
 			if result != expected {
-				t.Errorf("NormalizeURL(%q) = %q, expected %q", tt.url, result, expected)
+				t.Errorf("FilterURL(%q) = %q, expected %q", tt.url, result, expected)
 			}
 		})
 	}
@@ -666,9 +666,9 @@ func TestMultipleRulesNormalization(t *testing.T) {
 			if err != nil {
 				t.Fatalf("Failed to create validator: %v", err)
 			}
-			result := pv.NormalizeURL(tt.url)
+			result := pv.FilterURL(tt.url)
 			if result != tt.expected {
-				t.Errorf("NormalizeURL(%q) with rules %q = %q, expected %q",
+				t.Errorf("FilterURL(%q) with rules %q = %q, expected %q",
 					tt.url, tt.rules, result, tt.expected)
 			}
 		})
@@ -808,7 +808,7 @@ func TestConcurrentValidation(t *testing.T) {
 						id, pageValue, shouldPass, result)
 				}
 			case 2:
-				normalized := pv.NormalizeURL(fmt.Sprintf("/api/users?page=%s&invalid=value", pageValue))
+				normalized := pv.FilterURL(fmt.Sprintf("/api/users?page=%s&invalid=value", pageValue))
 				if shouldPass {
 					// Если значение должно проходить, проверяем что оно осталось в URL
 					if !strings.Contains(normalized, "page="+pageValue) {
@@ -988,7 +988,7 @@ func BenchmarkValidateURL(b *testing.B) {
 	}
 }
 
-func BenchmarkNormalizeURL(b *testing.B) {
+func BenchmarkFilterURL(b *testing.B) {
 	pv, err := NewParamValidator("/api/*?page=[5]&limit=[10]")
 	if err != nil {
 		b.Fatalf("Failed to create validator: %v", err)
@@ -997,7 +997,7 @@ func BenchmarkNormalizeURL(b *testing.B) {
 
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		pv.NormalizeURL(url)
+		pv.FilterURL(url)
 	}
 }
 
@@ -1054,7 +1054,7 @@ func BenchmarkConcurrentNormalization(b *testing.B) {
 	b.ResetTimer()
 	b.RunParallel(func(pb *testing.PB) {
 		for pb.Next() {
-			pv.NormalizeURL("/api/users?page=5&limit=10&invalid=value")
+			pv.FilterURL("/api/users?page=5&limit=10&invalid=value")
 		}
 	})
 }
