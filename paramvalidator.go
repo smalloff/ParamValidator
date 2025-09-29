@@ -6,7 +6,6 @@ import (
 	"net/url"
 	"strings"
 	"unicode/utf8"
-	"unsafe"
 )
 
 // WithCallback sets the callback function for validation
@@ -419,8 +418,8 @@ func (pv *ParamValidator) parseAndValidateQueryParamsWithMasks(queryString strin
 	allowAll := pv.isAllowAllParamsMasks(masks)
 
 	err := pv.processQueryParamsCommon(queryString, func(keyBytes, valueBytes []byte) {
-		key := unsafeGetString(keyBytes)
-		value := unsafeGetString(valueBytes)
+		key := string(keyBytes)
+		value := string(valueBytes)
 
 		if !allowAll && !pv.isParamAllowedWithMasks(key, value, masks, urlPath) {
 			isValid = false
@@ -638,7 +637,7 @@ func (pv *ParamValidator) processQueryParamsCommon(queryString string, processor
 		return nil
 	}
 
-	queryBytes := unsafeGetBytes(queryString)
+	queryBytes := []byte(queryString)
 	start := 0
 	paramCount := 0
 
@@ -668,16 +667,6 @@ func (pv *ParamValidator) processQueryParamsCommon(queryString string, processor
 		return fmt.Errorf("too many parameters")
 	}
 	return nil
-}
-
-// unsafeGetBytes converts string to []byte without allocation
-func unsafeGetBytes(s string) []byte {
-	return *(*[]byte)(unsafe.Pointer(&s))
-}
-
-// unsafeGetString converts []byte to string without allocation
-func unsafeGetString(b []byte) string {
-	return *(*string)(unsafe.Pointer(&b))
 }
 
 // Clear removes all validation rules

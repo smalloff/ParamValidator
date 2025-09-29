@@ -137,5 +137,62 @@ func cleanPathSegments(pattern string) string {
 	if pattern[0] == '/' {
 		return "/" + result
 	}
-	return "/" + result
+	return result
+}
+
+func containsPathTraversal(path string) bool {
+	n := len(path)
+	if n < 2 {
+		return false
+	}
+
+	for i := 0; i < n-1; i++ {
+		// Check for ".."
+		if path[i] == '.' && path[i+1] == '.' {
+			return true
+		}
+		// Check for "//"
+		if path[i] == '/' && path[i+1] == '/' {
+			return true
+		}
+		// Check for "./"
+		if path[i] == '.' && path[i+1] == '/' {
+			return true
+		}
+		// Check for "/." followed by end or another slash
+		if path[i] == '/' && path[i+1] == '.' {
+			if i+2 == n || path[i+2] == '/' {
+				return true
+			}
+		}
+	}
+	return false
+}
+
+// findSpecialCharsUltraFast максимально оптимизированный поиск *
+func findSpecialCharsUltraFast(s string) bool {
+	n := len(s)
+	i := 0
+	for ; i <= n-4; i += 4 {
+		if s[i] == '*' || s[i+1] == '*' || s[i+2] == '*' || s[i+3] == '*' {
+			if s[i] == '*' {
+				return true
+			}
+			if s[i+1] == '*' {
+				return true
+			}
+			if s[i+2] == '*' {
+				return true
+			}
+			return true
+		}
+	}
+
+	for ; i < n; i++ {
+		if s[i] == '*' {
+			return true
+		}
+	}
+
+	return false
 }
