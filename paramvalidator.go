@@ -98,10 +98,7 @@ func (pv *ParamValidator) ValidateURL(fullURL string) bool {
 		return false
 	}
 
-	if !utf8.ValidString(fullURL) {
-		return false
-	}
-
+	// Убрана избыточная проверка UTF-8 - url.Parse сделает её сама
 	u, err := url.Parse(fullURL)
 	if err != nil {
 		return false
@@ -191,9 +188,7 @@ func (pv *ParamValidator) isParamAllowedFast(paramName, paramValue string, masks
 	}
 
 	source := masks.GetRuleSource(idx)
-	if source == SourceNone {
-		return false
-	}
+	// Убрана избыточная проверка SourceNone - если idx != -1, то source не может быть SourceNone
 
 	var rule *ParamRule
 	switch source {
@@ -206,7 +201,7 @@ func (pv *ParamValidator) isParamAllowedFast(paramName, paramValue string, masks
 	}
 
 	if rule != nil {
-		return pv.isValueValidFast(rule, paramValue)
+		return pv.isValueValid(rule, paramValue, true)
 	}
 	return false
 }
@@ -233,8 +228,8 @@ func (pv *ParamValidator) findURLRuleForParamFast(paramName, urlPath string) *Pa
 	return nil
 }
 
-// isValueValidFast fast value validation
-func (pv *ParamValidator) isValueValidFast(rule *ParamRule, value string) bool {
+// isValueValid универсальная функция валидации значений (объединенная версия)
+func (pv *ParamValidator) isValueValid(rule *ParamRule, value string, useFast bool) bool {
 	if rule == nil {
 		return false
 	}
@@ -256,27 +251,37 @@ func (pv *ParamValidator) isValueValidFast(rule *ParamRule, value string) bool {
 		}
 	case PatternCallback:
 		if pv.callbackFunc != nil {
-			func() {
-				defer func() {
-					if r := recover(); r != nil {
-						result = false
-					}
+			if useFast {
+				// Быстрая версия с обработкой panic
+				func() {
+					defer func() {
+						if r := recover(); r != nil {
+							result = false
+						}
+					}()
+					result = pv.callbackFunc(rule.Name, value)
 				}()
+			} else {
 				result = pv.callbackFunc(rule.Name, value)
-			}()
+			}
 		} else {
 			result = false
 		}
 	case "plugin":
 		if rule.CustomValidator != nil {
-			func() {
-				defer func() {
-					if r := recover(); r != nil {
-						result = false
-					}
+			if useFast {
+				// Быстрая версия с обработкой panic
+				func() {
+					defer func() {
+						if r := recover(); r != nil {
+							result = false
+						}
+					}()
+					result = rule.CustomValidator(value)
 				}()
+			} else {
 				result = rule.CustomValidator(value)
-			}()
+			}
 		} else {
 			result = false
 		}
@@ -416,7 +421,7 @@ func isPatternMoreSpecific(pattern1, pattern2 string) bool {
 // isParamAllowedWithMasks checks parameter using mask system
 func (pv *ParamValidator) isParamAllowedWithMasks(paramName, paramValue string, masks ParamMasks, urlPath string) bool {
 	rule := pv.findParamRuleByMasks(paramName, masks, urlPath)
-	return rule != nil && pv.isValueValidUnsafe(rule, paramValue)
+	return rule != nil && pv.isValueValid(rule, paramValue, false)
 }
 
 // parseAndValidateQueryParamsWithMasks parses and validates parameters using masks
@@ -451,49 +456,6 @@ func (pv *ParamValidator) findMostSpecificURLRuleUnsafe(urlPath string) *URLRule
 // urlMatchesPatternUnsafe checks if URL path matches pattern
 func (pv *ParamValidator) urlMatchesPatternUnsafe(urlPath, pattern string) bool {
 	return urlMatchesPattern(urlPath, pattern)
-}
-
-// isValueValidUnsafe checks if value is valid according to rule
-func (pv *ParamValidator) isValueValidUnsafe(rule *ParamRule, value string) bool {
-	if rule == nil {
-		return false
-	}
-
-	var result bool
-
-	switch rule.Pattern {
-	case PatternKeyOnly:
-		result = value == ""
-	case PatternAny:
-		result = true
-	case PatternEnum:
-		result = false
-		for _, allowedValue := range rule.Values {
-			if value == allowedValue {
-				result = true
-				break
-			}
-		}
-	case PatternCallback:
-		if pv.callbackFunc != nil {
-			result = pv.callbackFunc(rule.Name, value)
-		} else {
-			result = false
-		}
-	case "plugin":
-		if rule.CustomValidator != nil {
-			result = rule.CustomValidator(value)
-		} else {
-			result = false
-		}
-	default:
-		result = false
-	}
-
-	if rule.Inverted {
-		return !result
-	}
-	return result
 }
 
 // ValidateParam validates single parameter value for specific URL path
@@ -649,6 +611,8 @@ func (pv *ParamValidator) FilterQueryParams(urlPath, queryString string) string 
 		return ""
 	}
 
+	// Убрана дублирующая проверка инициализации
+
 	pv.mu.RLock()
 	defer pv.mu.RUnlock()
 
@@ -680,6 +644,7 @@ func (pv *ParamValidator) ValidateQueryParams(urlPath, queryString string) bool 
 
 		masks := pv.getParamMasksForURL(urlPath)
 
+		// Объединены проверки allowAll и empty mask
 		if pv.isAllowAllParamsMasks(masks) {
 			return true
 		}
