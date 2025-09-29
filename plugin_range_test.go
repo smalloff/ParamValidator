@@ -648,7 +648,7 @@ func BenchmarkRangePluginNormalization(b *testing.B) {
 	}
 }
 
-func BenchmarkRangePluginFilterQueryParams(b *testing.B) {
+func BenchmarkRangePluginFilterQuery(b *testing.B) {
 	rangePlugin := plugins.NewRangePlugin()
 	pv, err := NewParamValidator("", WithPlugins(rangePlugin))
 	if err != nil {
@@ -661,11 +661,11 @@ func BenchmarkRangePluginFilterQueryParams(b *testing.B) {
 
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		pv.FilterQueryParams("/api", "age=25&price=500&invalid=value")
+		pv.FilterQuery("/api", "age=25&price=500&invalid=value")
 	}
 }
 
-func BenchmarkRangePluginValidateQueryParams(b *testing.B) {
+func BenchmarkRangePluginValidateQuery(b *testing.B) {
 	rangePlugin := plugins.NewRangePlugin()
 
 	pv, err := NewParamValidator("", WithPlugins(rangePlugin))
@@ -679,6 +679,6 @@ func BenchmarkRangePluginValidateQueryParams(b *testing.B) {
 
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		pv.ValidateQueryParams("/api", "age=25&price=500&invalid=value")
+		pv.ValidateQuery("/api", "age=25&price=500&invalid=value")
 	}
 }

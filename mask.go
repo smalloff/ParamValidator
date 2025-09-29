@@ -242,3 +242,27 @@ func (pm ParamMasks) GetRuleSource(paramIndex int) RuleSource {
 	}
 	return SourceNone
 }
+
+// GetIndexByBytes ищет параметр по []byte без создания строки
+func (pi *ParamIndex) GetIndexByBytes(keyBytes []byte) int {
+	var result int = -1
+	pi.paramToIndex.Range(func(key, value interface{}) bool {
+		paramName := key.(string)
+		if len(paramName) == len(keyBytes) {
+			// Побайтовое сравнение
+			match := true
+			for i := 0; i < len(keyBytes); i++ {
+				if keyBytes[i] != paramName[i] {
+					match = false
+					break
+				}
+			}
+			if match {
+				result = value.(int)
+				return false
+			}
+		}
+		return true
+	})
+	return result
+}

@@ -83,5 +83,5 @@ func main() {
 	queryString := "page=5&limit=10&invalid=param"
 
 	// Fast filter
-	filteredQuery := pv.FilterQueryParams(urlPath, queryString) // page=5&limit=10
+	filteredQuery := pv.FilterQuery(urlPath, queryString) // page=5&limit=10
 }

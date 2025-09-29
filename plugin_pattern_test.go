@@ -475,7 +475,7 @@ func BenchmarkPatternPluginNormalization(b *testing.B) {
 	}
 }
 
-func BenchmarkPatternPluginFilterQueryParams(b *testing.B) {
+func BenchmarkPatternPluginFilterQuery(b *testing.B) {
 	patternPlugin := plugins.NewPatternPlugin()
 
 	pv, err := NewParamValidator("", WithPlugins(patternPlugin))
@@ -492,11 +492,11 @@ func BenchmarkPatternPluginFilterQueryParams(b *testing.B) {
 	}
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		pv.FilterQueryParams("/api", "file=img_photo.jpg&id=new_user_123&invalid=value")
+		pv.FilterQuery("/api", "file=img_photo.jpg&id=new_user_123&invalid=value")
 	}
 }
 
-func BenchmarkPatternPluginValidateQueryParams(b *testing.B) {
+func BenchmarkPatternPluginValidateQuery(b *testing.B) {
 	patternPlugin := plugins.NewPatternPlugin()
 	pv, err := NewParamValidator("", WithPlugins(patternPlugin))
 	if err != nil {
@@ -510,6 +510,6 @@ func BenchmarkPatternPluginValidateQueryParams(b *testing.B) {
 
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		pv.ValidateQueryParams("/api", "file=img_photo.jpg&id=new_user_123&invalid=value")
+		pv.ValidateQuery("/api", "file=img_photo.jpg&id=new_user_123&invalid=value")
 	}
 }

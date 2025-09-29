@@ -454,7 +454,7 @@ func TestParamValidatorResourceCleanup(t *testing.T) {
 					for key, values := range u.Query() {
 						if len(values) > 0 {
 							pv.ValidateParam(u.Path, key, values[0])
-							pv.FilterQueryParams(u.Path, u.RawQuery)
+							pv.FilterQuery(u.Path, u.RawQuery)
 						}
 					}
 					pv.NormalizeURL(urlStr)

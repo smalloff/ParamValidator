@@ -332,7 +332,7 @@ func TestNormalizeURL(t *testing.T) {
 	}
 }
 
-func TestFilterQueryParams(t *testing.T) {
+func TestFilterQuery(t *testing.T) {
 	pv, err := NewParamValidator("/api?page=[5]&limit=[10]")
 	if err != nil {
 		t.Fatalf("Failed to create validator: %v", err)
@@ -372,16 +372,16 @@ func TestFilterQueryParams(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			result := pv.FilterQueryParams(tt.urlPath, tt.query)
+			result := pv.FilterQuery(tt.urlPath, tt.query)
 			if result != tt.expected {
-				t.Errorf("FilterQueryParams(%q, %q) = %q, expected %q",
+				t.Errorf("FilterQuery(%q, %q) = %q, expected %q",
 					tt.urlPath, tt.query, result, tt.expected)
 			}
 		})
 	}
 }
 
-func TestValidateQueryParams(t *testing.T) {
+func TestValidateQuery(t *testing.T) {
 	pv, err := NewParamValidator("/api?page=[5]&limit=[10]")
 	if err != nil {
 		t.Fatalf("Failed to create validator: %v", err)
@@ -421,9 +421,9 @@ func TestValidateQueryParams(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			result := pv.ValidateQueryParams(tt.urlPath, tt.query)
+			result := pv.ValidateQuery(tt.urlPath, tt.query)
 			if result != tt.expected {
-				t.Errorf("ValidateQueryParams(%q, %q) = %v, expected %v",
+				t.Errorf("ValidateQuery(%q, %q) = %v, expected %v",
 					tt.urlPath, tt.query, result, tt.expected)
 			}
 		})
@@ -823,7 +823,7 @@ func TestConcurrentValidation(t *testing.T) {
 					}
 				}
 			case 3:
-				filtered := pv.FilterQueryParams("/api/users",
+				filtered := pv.FilterQuery("/api/users",
 					fmt.Sprintf("page=%s&limit=10&invalid=value", pageValue))
 				if shouldPass {
 					// Если значение должно проходить, проверяем что оно осталось
@@ -863,7 +863,7 @@ func TestConcurrentValidation(t *testing.T) {
 	}
 }
 
-func TestConcurrentFilterQueryParams(t *testing.T) {
+func TestConcurrentFilterQuery(t *testing.T) {
 	pv, err := NewParamValidator("/api/*?page=[5]&limit=[10]&sort=[name,date]")
 	if err != nil {
 		t.Fatalf("Failed to create validator: %v", err)
@@ -883,7 +883,7 @@ func TestConcurrentFilterQueryParams(t *testing.T) {
 			shouldPass := pageValue == "5"
 
 			query := fmt.Sprintf("page=%s&limit=10&sort=name&invalid=value&extra=param", pageValue)
-			filtered := pv.FilterQueryParams("/api/users", query)
+			filtered := pv.FilterQuery("/api/users", query)
 
 			if shouldPass {
 				// Проверяем, что валидные параметры остались
@@ -919,14 +919,14 @@ func TestConcurrentFilterQueryParams(t *testing.T) {
 	}
 
 	if len(errors) > 0 {
-		t.Errorf("Concurrent FilterQueryParams failed with %d errors:", len(errors))
+		t.Errorf("Concurrent FilterQuery failed with %d errors:", len(errors))
 		for _, err := range errors {
 			t.Error(err)
 		}
 	}
 }
 
-func TestConcurrentValidateQueryParams(t *testing.T) {
+func TestConcurrentValidateQuery(t *testing.T) {
 	pv, err := NewParamValidator("/api/*?page=[5]&limit=[10]&sort=[name,date]")
 	if err != nil {
 		t.Fatalf("Failed to create validator: %v", err)
@@ -946,7 +946,7 @@ func TestConcurrentValidateQueryParams(t *testing.T) {
 			shouldPass := pageValue == "5"
 
 			query := fmt.Sprintf("page=%s&limit=10&sort=name", pageValue)
-			result := pv.ValidateQueryParams("/api/users", query)
+			result := pv.ValidateQuery("/api/users", query)
 
 			if shouldPass && !result {
 				errorCh <- fmt.Errorf("goroutine %d: valid query params rejected: page=%s, result=%v",
@@ -967,7 +967,7 @@ func TestConcurrentValidateQueryParams(t *testing.T) {
 	}
 
 	if len(errors) > 0 {
-		t.Errorf("Concurrent ValidateQueryParams failed with %d errors:", len(errors))
+		t.Errorf("Concurrent ValidateQuery failed with %d errors:", len(errors))
 		for _, err := range errors {
 			t.Error(err)
 		}
@@ -1001,7 +1001,7 @@ func BenchmarkNormalizeURL(b *testing.B) {
 	}
 }
 
-func BenchmarkFilterQueryParams(b *testing.B) {
+func BenchmarkFilterQuery(b *testing.B) {
 	pv, err := NewParamValidator("/api/*?page=[5]&limit=[10]")
 	if err != nil {
 		b.Fatalf("Failed to create validator: %v", err)
@@ -1010,11 +1010,11 @@ func BenchmarkFilterQueryParams(b *testing.B) {
 
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		pv.FilterQueryParams("/api/data", query)
+		pv.FilterQuery("/api/data", query)
 	}
 }
 
-func BenchmarkValidateQueryParams(b *testing.B) {
+func BenchmarkValidateQuery(b *testing.B) {
 	pv, err := NewParamValidator("/api/*?page=[5]&limit=[10]")
 	if err != nil {
 		b.Fatalf("Failed to create validator: %v", err)
@@ -1023,7 +1023,7 @@ func BenchmarkValidateQueryParams(b *testing.B) {
 
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		pv.ValidateQueryParams("/api/data", query)
+		pv.ValidateQuery("/api/data", query)
 	}
 }
 
@@ -1059,8 +1059,8 @@ func BenchmarkConcurrentNormalization(b *testing.B) {
 	})
 }
 
-// BenchmarkConcurrentFilterQueryParams measures concurrent query parameter filtering performance
-func BenchmarkConcurrentFilterQueryParams(b *testing.B) {
+// BenchmarkConcurrentFilterQuery measures concurrent query parameter filtering performance
+func BenchmarkConcurrentFilterQuery(b *testing.B) {
 	pv, err := NewParamValidator("/api/*?page=[5]&limit=[10]")
 	if err != nil {
 		b.Fatalf("Failed to create validator: %v", err)
@@ -1069,15 +1069,15 @@ func BenchmarkConcurrentFilterQueryParams(b *testing.B) {
 	b.ResetTimer()
 	b.RunParallel(func(pb *testing.PB) {
 		for pb.Next() {
-			pv.FilterQueryParams("/api/users", "page=5&limit=10&invalid=value&extra=param")
-			pv.FilterQueryParams("/api/users", "page=3&limit=10&test=value")
-			pv.FilterQueryParams("/api/users", "page=5&limit=15&invalid=data")
+			pv.FilterQuery("/api/users", "page=5&limit=10&invalid=value&extra=param")
+			pv.FilterQuery("/api/users", "page=3&limit=10&test=value")
+			pv.FilterQuery("/api/users", "page=5&limit=15&invalid=data")
 		}
 	})
 }
 
-// BenchmarkConcurrentValidateQueryParams measures concurrent query parameter validation performance
-func BenchmarkConcurrentValidateQueryParams(b *testing.B) {
+// BenchmarkConcurrentValidateQuery measures concurrent query parameter validation performance
+func BenchmarkConcurrentValidateQuery(b *testing.B) {
 	pv, err := NewParamValidator("/api/*?page=[5]&limit=[10]&sort=[name,date]")
 	if err != nil {
 		b.Fatalf("Failed to create validator: %v", err)
@@ -1086,9 +1086,47 @@ func BenchmarkConcurrentValidateQueryParams(b *testing.B) {
 	b.ResetTimer()
 	b.RunParallel(func(pb *testing.PB) {
 		for pb.Next() {
-			pv.ValidateQueryParams("/api/users", "page=5&limit=10&sort=name")
-			pv.ValidateQueryParams("/api/users", "page=3&limit=10&sort=date")
-			pv.ValidateQueryParams("/api/users", "page=5&limit=15&sort=name")
+			pv.ValidateQuery("/api/users", "page=5&limit=10&sort=name")
+			pv.ValidateQuery("/api/users", "page=3&limit=10&sort=date")
+			pv.ValidateQuery("/api/users", "page=5&limit=15&sort=name")
 		}
 	})
+}
+
+func BenchmarkFilterQueryBytes(b *testing.B) {
+	pv, err := NewParamValidator("/api/*?page=[5]&limit=[10]&sort=[name,date]")
+	if err != nil {
+		b.Fatalf("Failed to create validator: %v", err)
+	}
+
+	urlPath := []byte("/api/data")
+	queryBytes := []byte("page=5&limit=10&sort=name&invalid=value")
+	resultBuf := make([]byte, 0, 256)
+
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		result := pv.FilterQueryBytes(urlPath, queryBytes, resultBuf[:0])
+		if len(result) == 0 {
+			b.Error("Expected non-empty result")
+		}
+	}
+}
+
+func BenchmarkValidateQueryBytes(b *testing.B) {
+	pv, err := NewParamValidator("/api/*?page=[5]&limit=[10]&sort=[name,date]")
+	if err != nil {
+		b.Fatalf("Failed to create validator: %v", err)
+	}
+
+	urlPath := []byte("/api/data")
+	// ВАЛИДНЫЙ запрос - все параметры разрешены
+	queryBytes := []byte("page=5&limit=10&sort=name")
+
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		result := pv.ValidateQueryBytes(urlPath, queryBytes)
+		if !result {
+			b.Error("Expected true result for valid query")
+		}
+	}
 }

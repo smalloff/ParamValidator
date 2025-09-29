@@ -561,57 +561,210 @@ func (pv *ParamValidator) isParamAllowedWithMasks(paramName, paramValue string, 
 	return pv.isValueValid(rule, paramValue, false)
 }
 
-// parseAndValidateQueryParamsWithMasks parses and validates parameters using masks
-func (pv *ParamValidator) parseAndValidateQueryParamsWithMasks(queryString string, masks ParamMasks, urlPath string) (bool, error) {
-	if queryString == "" {
-		return true, nil
+// FilterQueryBytes filters query parameters into provided buffer
+// Returns slice of buffer containing filtered parameters (zero allocations)
+// buffer must have sufficient capacity (at least len(queryString))
+func (pv *ParamValidator) FilterQueryBytes(urlPath, queryBytes, buffer []byte) []byte {
+	if !pv.initialized.Load() || len(queryBytes) == 0 {
+		return nil
 	}
 
-	isValid := true
-	allowAll := pv.isAllowAllParamsMasks(masks)
-	paramCount := 0
+	pv.mu.RLock()
+	defer pv.mu.RUnlock()
 
-	queryBytes := []byte(queryString)
+	if len(urlPath) > MaxURLLength || len(queryBytes) > MaxURLLength {
+		return nil
+	}
+
+	// Конвертируем urlPath в string для поиска масок (это делается 1 раз)
+	urlPathStr := string(urlPath)
+
+	// Создаем маски на стеке
+	var masks ParamMasks
+	masks.Global = NewParamMask()
+	masks.URL = NewParamMask()
+	masks.SpecificURL = NewParamMask()
+	pv.fillParamMasksDirect(&masks, urlPathStr)
+
+	return pv.filterQueryParamsToBufferBytes(queryBytes, masks, urlPathStr, buffer)
+}
+
+// filterQueryParamsToBufferBytes фильтрация в предоставленный буфер (полностью []byte)
+func (pv *ParamValidator) filterQueryParamsToBufferBytes(queryBytes []byte, masks ParamMasks, urlPath string, buffer []byte) []byte {
+	if cap(buffer) < len(queryBytes) {
+		return nil
+	}
+
+	result := buffer[:0]
+	firstParam := true
 	start := 0
+
+	for i := 0; i <= len(queryBytes); i++ {
+		if i == len(queryBytes) || queryBytes[i] == '&' {
+			if start < i {
+				if pv.isParamAllowedBytesSegment(queryBytes[start:i], masks, urlPath) {
+					if !firstParam {
+						result = append(result, '&')
+					} else {
+						firstParam = false
+					}
+					result = append(result, queryBytes[start:i]...)
+				}
+			}
+			start = i + 1
+		}
+	}
+
+	if len(result) == 0 {
+		return nil
+	}
+	return result
+}
+
+// ValidateQueryBytes validates query parameters bytes for URL path
+// Zero-allocs version for high-performance scenarios
+func (pv *ParamValidator) ValidateQueryBytes(urlPath, queryBytes []byte) bool {
+	if !pv.initialized.Load() || len(urlPath) == 0 {
+		return false
+	}
+
+	return pv.withSafeAccess(func() bool {
+		if len(urlPath) > MaxURLLength || len(queryBytes) > MaxURLLength {
+			return false
+		}
+
+		if len(queryBytes) == 0 {
+			return true
+		}
+
+		// Конвертируем urlPath в string (1 раз)
+		urlPathStr := string(urlPath)
+
+		// Создаем маски на стеке
+		var masks ParamMasks
+		masks.Global = NewParamMask()
+		masks.URL = NewParamMask()
+		masks.SpecificURL = NewParamMask()
+		pv.fillParamMasksDirect(&masks, urlPathStr)
+
+		if pv.isAllowAllParamsMasks(masks) {
+			return true
+		}
+
+		if masks.CombinedMask().IsEmpty() {
+			return false
+		}
+
+		return pv.validateQueryParamsBytesFast(queryBytes, masks, urlPathStr)
+	})
+}
+
+// validateQueryParamsBytesFast быстрая валидация []byte параметров
+func (pv *ParamValidator) validateQueryParamsBytesFast(queryBytes []byte, masks ParamMasks, urlPath string) bool {
+	allowAll := pv.isAllowAllParamsMasks(masks)
+	start := 0
+	paramCount := 0
 
 	for i := 0; i <= len(queryBytes); i++ {
 		if i == len(queryBytes) || queryBytes[i] == '&' {
 			if start < i && paramCount < MaxParamValues {
 				segment := queryBytes[start:i]
-				eqPos := -1
-
-				// Ищем позицию '=' в сегменте
-				for j := 0; j < len(segment); j++ {
-					if segment[j] == '=' {
-						eqPos = j
-						break
+				if !allowAll {
+					if !pv.isParamAllowedBytesSegment(segment, masks, urlPath) {
+						return false
 					}
-				}
-
-				var key, value string
-				if eqPos == -1 {
-					key = string(segment) // Безопасная конвертация
-					value = ""
-				} else {
-					key = string(segment[:eqPos])     // Безопасная конвертация
-					value = string(segment[eqPos+1:]) // Безопасная конвертация
-				}
-
-				if !allowAll && !pv.isParamAllowedWithMasks(key, value, masks, urlPath) {
-					isValid = false
-					break // Прерываем при первой ошибке
 				}
 				paramCount++
 			}
 			start = i + 1
 		}
 	}
+	return paramCount <= MaxParamValues
+}
 
-	if paramCount > MaxParamValues {
-		return false, fmt.Errorf("too many parameters")
+// isParamAllowedBytesSegment проверка сегмента в []byte форме
+func (pv *ParamValidator) isParamAllowedBytesSegment(segment []byte, masks ParamMasks, urlPath string) bool {
+	// Ищем '=' в сегменте
+	eqPos := -1
+	for i := 0; i < len(segment); i++ {
+		if segment[i] == '=' {
+			eqPos = i
+			break
+		}
 	}
 
-	return isValid, nil
+	var keyBytes, valueBytes []byte
+	if eqPos == -1 {
+		keyBytes = segment
+		valueBytes = nil
+	} else {
+		keyBytes = segment[:eqPos]
+		valueBytes = segment[eqPos+1:]
+	}
+
+	// Ищем параметр по []byte
+	idx := pv.compiledRules.paramIndex.GetIndexByBytes(keyBytes)
+	if idx == -1 {
+		return false
+	}
+
+	if !masks.CombinedMask().GetBit(idx) {
+		return false
+	}
+
+	rule := pv.findParamRuleByIndex(idx, masks, urlPath)
+	if rule == nil {
+		return false
+	}
+
+	// Для значения используем быструю проверку по []byte
+	return pv.isValueValidBytesFast(rule, valueBytes)
+}
+
+func (pv *ParamValidator) isValueValidBytesFast(rule *ParamRule, valueBytes []byte) bool {
+	if rule == nil {
+		return false
+	}
+
+	var result bool
+
+	switch rule.Pattern {
+	case PatternKeyOnly:
+		result = len(valueBytes) == 0
+	case PatternAny:
+		result = true
+	case PatternEnum:
+		// Сравниваем []byte напрямую с каждым значением enum
+		result = false
+		for _, allowedValue := range rule.Values {
+			if bytesEqual(valueBytes, []byte(allowedValue)) {
+				result = true
+				break
+			}
+		}
+	case PatternCallback:
+		if pv.callbackFunc != nil {
+			// Для callback нужна конвертация в string
+			valueStr := string(valueBytes)
+			result = pv.callbackFunc(rule.Name, valueStr)
+		} else {
+			result = false
+		}
+	case "plugin":
+		if rule.CustomValidator != nil {
+			valueStr := string(valueBytes)
+			result = rule.CustomValidator(valueStr)
+		} else {
+			result = false
+		}
+	default:
+		result = false
+	}
+
+	if rule.Inverted {
+		return !result
+	}
+	return result
 }
 
 // findMostSpecificURLRuleUnsafe finds most specific matching URL rule
@@ -773,8 +926,8 @@ func (pv *ParamValidator) isParamAllowedSegment(segment string, masks ParamMasks
 	return pv.isParamAllowedFast(key, value, masks, urlPath)
 }
 
-// FilterQueryParams filters query parameters string according to validation rules
-func (pv *ParamValidator) FilterQueryParams(urlPath, queryString string) string {
+// FilterQuery filters query parameters string according to validation rules
+func (pv *ParamValidator) FilterQuery(urlPath, queryString string) string {
 	if !pv.initialized.Load() || queryString == "" {
 		return ""
 	}
@@ -789,9 +942,8 @@ func (pv *ParamValidator) FilterQueryParams(urlPath, queryString string) string 
 	return pv.filterQueryParamsFast(queryString, pv.getParamMasksForURL(urlPath), urlPath)
 }
 
-// ValidateQueryParams validates query parameters string for URL path
-// ValidateQueryParams validates query parameters string for URL path
-func (pv *ParamValidator) ValidateQueryParams(urlPath, queryString string) bool {
+// ValidateQuery validates query parameters string for URL path
+func (pv *ParamValidator) ValidateQuery(urlPath, queryString string) bool {
 	if !pv.initialized.Load() || urlPath == "" {
 		return false
 	}

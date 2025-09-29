@@ -628,7 +628,7 @@ func BenchmarkLengthPluginNormalization(b *testing.B) {
 	}
 }
 
-func BenchmarkLengthPluginFilterQueryParams(b *testing.B) {
+func BenchmarkLengthPluginFilterQuery(b *testing.B) {
 	lengthPlugin := plugins.NewLengthPlugin()
 	pv, err := NewParamValidator("", WithPlugins(lengthPlugin))
 	if err != nil {
@@ -641,11 +641,11 @@ func BenchmarkLengthPluginFilterQueryParams(b *testing.B) {
 
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		pv.FilterQueryParams("/api", "username=john_doe&code=123456&invalid=value")
+		pv.FilterQuery("/api", "username=john_doe&code=123456&invalid=value")
 	}
 }
 
-func BenchmarkLengthPluginValidateQueryParams(b *testing.B) {
+func BenchmarkLengthPluginValidateQuery(b *testing.B) {
 	lengthPlugin := plugins.NewLengthPlugin()
 	pv, err := NewParamValidator("", WithPlugins(lengthPlugin))
 	if err != nil {
@@ -658,6 +658,6 @@ func BenchmarkLengthPluginValidateQueryParams(b *testing.B) {
 
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		pv.ValidateQueryParams("/api", "username=john_doe&code=123456&invalid=value")
+		pv.ValidateQuery("/api", "username=john_doe&code=123456&invalid=value")
 	}
 }

@@ -546,7 +546,7 @@ func BenchmarkComparisonPluginNormalization(b *testing.B) {
 	}
 }
 
-func BenchmarkComparisonPluginFilterQueryParams(b *testing.B) {
+func BenchmarkComparisonPluginFilterQuery(b *testing.B) {
 	comparisonPlugin := plugins.NewComparisonPlugin()
 	pv, err := NewParamValidator("", WithPlugins(comparisonPlugin))
 	if err != nil {
@@ -559,11 +559,11 @@ func BenchmarkComparisonPluginFilterQueryParams(b *testing.B) {
 
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		pv.FilterQueryParams("/api", "score=75&quantity=5&invalid=value")
+		pv.FilterQuery("/api", "score=75&quantity=5&invalid=value")
 	}
 }
 
-func BenchmarkComparisonPluginValidateQueryParams(b *testing.B) {
+func BenchmarkComparisonPluginValidateQuery(b *testing.B) {
 	comparisonPlugin := plugins.NewComparisonPlugin()
 	pv, err := NewParamValidator("", WithPlugins(comparisonPlugin))
 	if err != nil {
@@ -576,6 +576,6 @@ func BenchmarkComparisonPluginValidateQueryParams(b *testing.B) {
 
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		pv.ValidateQueryParams("/api", "score=75&quantity=5&invalid=value")
+		pv.ValidateQuery("/api", "score=75&quantity=5&invalid=value")
 	}
 }
