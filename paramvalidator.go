@@ -139,6 +139,7 @@ func (pv *ParamValidator) validateURLUnsafe(u *url.URL) bool {
 }
 
 // validateQueryParamsFast fast query parameters validation without allocations
+// validateQueryParamsFast полностью на стеке
 func (pv *ParamValidator) validateQueryParamsFast(queryString string, masks ParamMasks, urlPath string) bool {
 	if queryString == "" {
 		return true
@@ -148,33 +149,33 @@ func (pv *ParamValidator) validateQueryParamsFast(queryString string, masks Para
 	start := 0
 	paramCount := 0
 
-	// Работаем напрямую со string слайсами без конвертации в []byte
 	for i := 0; i <= len(queryString); i++ {
 		if i == len(queryString) || queryString[i] == '&' {
 			if start < i && paramCount < MaxParamValues {
-				segment := queryString[start:i]
+				// Ищем '=' в текущем сегменте
 				eqPos := -1
-
-				// Ищем '=' в сегменте
-				for j := 0; j < len(segment); j++ {
-					if segment[j] == '=' {
+				for j := start; j < i; j++ {
+					if queryString[j] == '=' {
 						eqPos = j
 						break
 					}
 				}
 
 				if !allowAll {
-					var key, value string
+					var keyStart, keyEnd, valStart, valEnd int
+					keyStart = start
+
 					if eqPos == -1 {
-						key = segment
-						value = ""
+						keyEnd = i
+						valStart = i
+						valEnd = i
 					} else {
-						key = segment[:eqPos]
-						value = segment[eqPos+1:]
+						keyEnd = eqPos
+						valStart = eqPos + 1
+						valEnd = i
 					}
 
-					// Используем оптимизированную версию без аллокаций
-					if !pv.isParamAllowedFast(key, value, masks, urlPath) {
+					if !pv.isParamAllowedByIndexes(queryString, keyStart, keyEnd, valStart, valEnd, masks, urlPath) {
 						return false
 					}
 				}
@@ -184,6 +185,61 @@ func (pv *ParamValidator) validateQueryParamsFast(queryString string, masks Para
 		}
 	}
 	return paramCount <= MaxParamValues
+}
+
+// isParamAllowedByIndexes валидирует по индексам без создания подстрок для ключа
+func (pv *ParamValidator) isParamAllowedByIndexes(fullStr string, keyStart, keyEnd, valStart, valEnd int, masks ParamMasks, urlPath string) bool {
+	// Ищем параметр по диапазону байт без создания строки
+	idx := pv.compiledRules.paramIndex.GetIndexByRange(fullStr, keyStart, keyEnd)
+	if idx == -1 {
+		return false
+	}
+
+	if !masks.CombinedMask().GetBit(idx) {
+		return false
+	}
+
+	rule := pv.findParamRuleByIndex(idx, masks, urlPath)
+	if rule == nil {
+		return false
+	}
+
+	// Для значения все равно создаем строку (1 аллокация вместо 2)
+	value := ""
+	if valStart < valEnd {
+		value = fullStr[valStart:valEnd]
+	}
+
+	return pv.isValueValidFast(rule, value)
+}
+
+// GetIndexByRange ищет параметр по диапазону байтов без создания строки
+func (pi *ParamIndex) GetIndexByRange(str string, start, end int) int {
+	length := end - start
+	if length <= 0 {
+		return -1
+	}
+
+	var result int = -1
+	pi.paramToIndex.Range(func(key, value interface{}) bool {
+		paramName := key.(string)
+		if len(paramName) == length {
+			// Быстрое сравнение по диапазону
+			match := true
+			for i := 0; i < length; i++ {
+				if str[start+i] != paramName[i] {
+					match = false
+					break
+				}
+			}
+			if match {
+				result = value.(int)
+				return false
+			}
+		}
+		return true
+	})
+	return result
 }
 
 // isParamAllowedFast optimized parameter validation
@@ -664,36 +720,36 @@ func buildNormalizedURL(path, query string) string {
 }
 
 // filterQueryParamsFast fast parameter filtering
+// filterQueryParamsFast на стеке
 func (pv *ParamValidator) filterQueryParamsFast(queryString string, masks ParamMasks, urlPath string) string {
 	if queryString == "" {
 		return ""
 	}
 
-	var builder strings.Builder
-	// Предварительное выделение памяти для уменьшения переаллокаций
-	builder.Grow(len(queryString))
-
-	start := 0
+	// Используем stack-allocated буфер
+	var buf [1024]byte
+	result := buf[:0]
 	firstParam := true
 
+	start := 0
 	for i := 0; i <= len(queryString); i++ {
 		if i == len(queryString) || queryString[i] == '&' {
 			if start < i {
 				segment := queryString[start:i]
 				if pv.isParamAllowedSegment(segment, masks, urlPath) {
 					if !firstParam {
-						builder.WriteByte('&')
+						result = append(result, '&')
 					} else {
 						firstParam = false
 					}
-					builder.WriteString(segment)
+					result = append(result, segment...)
 				}
 			}
 			start = i + 1
 		}
 	}
 
-	return builder.String()
+	return string(result)
 }
 
 func (pv *ParamValidator) isParamAllowedSegment(segment string, masks ParamMasks, urlPath string) bool {
@@ -734,6 +790,7 @@ func (pv *ParamValidator) FilterQueryParams(urlPath, queryString string) string 
 }
 
 // ValidateQueryParams validates query parameters string for URL path
+// ValidateQueryParams validates query parameters string for URL path
 func (pv *ParamValidator) ValidateQueryParams(urlPath, queryString string) bool {
 	if !pv.initialized.Load() || urlPath == "" {
 		return false
@@ -752,7 +809,12 @@ func (pv *ParamValidator) ValidateQueryParams(urlPath, queryString string) bool 
 			return false
 		}
 
-		masks := pv.getParamMasksForURL(urlPath)
+		// Создаем маски на стеке
+		var masks ParamMasks
+		masks.Global = NewParamMask()
+		masks.URL = NewParamMask()
+		masks.SpecificURL = NewParamMask()
+		pv.fillParamMasksDirect(&masks, urlPath)
 
 		if pv.isAllowAllParamsMasks(masks) {
 			return true
@@ -762,9 +824,32 @@ func (pv *ParamValidator) ValidateQueryParams(urlPath, queryString string) bool 
 			return false
 		}
 
-		valid, err := pv.parseAndValidateQueryParamsWithMasks(queryString, masks, urlPath)
-		return err == nil && valid
+		return pv.validateQueryParamsFast(queryString, masks, urlPath)
 	})
+}
+
+// fillParamMasksDirect заполняет маски напрямую без лишних аллокаций
+func (pv *ParamValidator) fillParamMasksDirect(masks *ParamMasks, urlPath string) {
+	if pv.compiledRules == nil || pv.compiledRules.paramIndex == nil {
+		return
+	}
+
+	// 1. Global parameters - используем предрасчитанную маску
+	masks.Global = pv.compiledRules.globalParamsMask
+
+	// 2. Most specific rule
+	if mostSpecificRule := pv.findMostSpecificURLRuleUnsafe(urlPath); mostSpecificRule != nil {
+		masks.SpecificURL = mostSpecificRule.ParamMask
+	}
+
+	// 3. URL rules
+	for pattern, urlRule := range pv.compiledRules.urlRules {
+		if pv.urlMatchesPatternUnsafe(urlPath, pattern) {
+			// Исключаем параметры, которые уже в SpecificURL
+			filteredMask := urlRule.ParamMask.Difference(masks.SpecificURL)
+			masks.URL = masks.URL.Union(filteredMask)
+		}
+	}
 }
 
 // Clear removes all validation rules
