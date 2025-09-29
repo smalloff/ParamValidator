@@ -103,6 +103,8 @@ func (rp *RuleParser) isValidURLPattern(pattern string) bool {
 	// Запрещаем опасные паттерны
 	if strings.Contains(pattern, "..") ||
 		strings.Contains(pattern, "//") ||
+		strings.Contains(pattern, "./") ||
+		strings.Contains(pattern, "/.") ||
 		strings.HasPrefix(pattern, "javascript:") ||
 		strings.HasPrefix(pattern, "data:") ||
 		strings.HasPrefix(pattern, "file:") {

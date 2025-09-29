@@ -51,7 +51,6 @@ func (um *URLMatcher) GetMatchingRules(urlPath string) []*URLRule {
 	defer um.mu.RUnlock()
 
 	var matchingRules []*URLRule
-	urlPath = NormalizeURLPattern(urlPath)
 
 	for pattern, rule := range um.urlRules {
 		if um.urlMatchesPattern(urlPath, pattern) {
@@ -69,7 +68,6 @@ func (um *URLMatcher) GetMostSpecificRule(urlPath string) *URLRule {
 
 	var mostSpecificRule *URLRule
 	maxSpecificity := int16(-1)
-	urlPath = NormalizeURLPattern(urlPath)
 
 	for pattern, rule := range um.urlRules {
 		if rule != nil && um.urlMatchesPattern(urlPath, pattern) {
@@ -91,14 +89,12 @@ func (um *URLMatcher) urlMatchesPattern(urlPath, pattern string) bool {
 
 // Export URL matching functions for use by ParamValidator
 func urlMatchesPattern(urlPath, pattern string) bool {
-	urlPath = NormalizeURLPattern(urlPath)
-
 	switch {
 	case pattern == PatternAll || pattern == urlPath:
 		return true
 	case strings.HasSuffix(pattern, PatternAll):
 		return matchPrefixPattern(urlPath, pattern)
-	case strings.Contains(pattern, "*"):
+	case findSpecialCharsUltraFast(pattern):
 		return wildcardMatch(urlPath, pattern)
 	default:
 		return pattern == urlPath
@@ -115,6 +111,9 @@ func matchPrefixPattern(urlPath, pattern string) bool {
 }
 
 func wildcardMatch(urlPath, pattern string) bool {
+	if containsPathTraversal(urlPath) {
+		return false
+	}
 	urlStart, patternStart := 0, 0
 	urlLen, patternLen := len(urlPath), len(pattern)
 

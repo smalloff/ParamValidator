@@ -128,6 +128,11 @@ func (pv *ParamValidator) validateURLUnsafe(u *url.URL) bool {
 		return false
 	}
 
+	// Check for path traversal attempts before normalization
+	if containsPathTraversal(u.Path) {
+		return false
+	}
+
 	masks := pv.getParamMasksForURL(u.Path)
 
 	// Fast allow all check
@@ -307,17 +312,6 @@ func (pv *ParamValidator) getParamMasksForURL(urlPath string) ParamMasks {
 		return masks
 	}
 
-	hasWildcard := false
-	for i := 0; i < len(urlPath); i++ {
-		if urlPath[i] == '*' {
-			hasWildcard = true
-			break
-		}
-	}
-	if hasWildcard {
-		urlPath = NormalizeURLPattern(urlPath)
-	}
-
 	// 1. Global parameters
 	for name := range pv.compiledRules.globalParams {
 		if idx := pv.compiledRules.paramIndex.GetIndex(name); idx != -1 {
@@ -325,7 +319,7 @@ func (pv *ParamValidator) getParamMasksForURL(urlPath string) ParamMasks {
 		}
 	}
 
-	// 2. Most specific rule
+	// 2. Most specific rule - use original path for matching
 	mostSpecificRule := pv.findMostSpecificURLRuleUnsafe(urlPath)
 	if mostSpecificRule != nil {
 		for name := range mostSpecificRule.Params {
