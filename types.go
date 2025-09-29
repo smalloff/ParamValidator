@@ -62,10 +62,11 @@ type ParamRule struct {
 
 // URLRule defines validation rules for specific URL pattern
 type URLRule struct {
-	URLPattern  string
-	Params      map[string]*ParamRule
-	ParamMask   ParamMask
-	specificity int16
+	URLPattern    string
+	Params        map[string]*ParamRule
+	ParamMask     ParamMask
+	specificity   int16
+	paramsByIndex map[int]*ParamRule
 }
 
 // ParamMask represents a bitmask for parameter indexing
@@ -82,10 +83,12 @@ type ParamMasks struct {
 
 // CompiledRules contains pre-compiled rules for faster access
 type CompiledRules struct {
-	globalParams     map[string]*ParamRule
-	urlRules         map[string]*URLRule
-	paramIndex       *ParamIndex
-	globalParamsMask ParamMask
+	globalParams        map[string]*ParamRule
+	urlRules            map[string]*URLRule
+	paramIndex          *ParamIndex
+	globalParamsMask    ParamMask
+	globalParamsByIndex map[int]*ParamRule // индекс -> глобальное правило
+	urlRulesByIndex     map[int][]*URLRule // индекс -> список URL правил
 }
 
 // ParamIndex provides lock-free parameter indexing
