@@ -42,38 +42,38 @@ func TestComparisonEdgeCases(t *testing.T) {
 		{
 			name:        "double greater than should fail",
 			constraint:  ">>100",
-			shouldParse: true, // CanParse returns true
-			shouldError: true, // But Parse should fail
+			shouldParse: false, // CanParse returns false теперь
+			shouldError: true,  // Parse should fail
 		},
 		{
 			name:        "double less than should fail",
 			constraint:  "<<100",
-			shouldParse: true, // CanParse returns true
-			shouldError: true, // But Parse should fail
+			shouldParse: false, // CanParse returns false теперь
+			shouldError: true,  // Parse should fail
 		},
 		{
 			name:        "mixed operators should fail",
 			constraint:  "><100",
-			shouldParse: true, // CanParse returns true
-			shouldError: true, // But Parse should fail
+			shouldParse: false, // CanParse returns false теперь
+			shouldError: true,  // Parse should fail
 		},
 		{
 			name:        "operator with text should fail",
 			constraint:  ">abc",
-			shouldParse: true, // CanParse returns true
-			shouldError: true, // But Parse should fail
+			shouldParse: false, // CanParse returns false теперь
+			shouldError: true,  // Parse should fail
 		},
 		{
 			name:        "empty after operator should fail",
 			constraint:  ">",
-			shouldParse: true, // CanParse returns true
-			shouldError: true, // But Parse should fail
+			shouldParse: false, // CanParse returns false теперь
+			shouldError: true,  // Parse should fail
 		},
 		{
 			name:        "operator with equals only should fail",
 			constraint:  ">=",
-			shouldParse: true, // CanParse returns true
-			shouldError: true, // But Parse should fail
+			shouldParse: false, // CanParse returns false теперь
+			shouldError: true,  // Parse should fail
 		},
 		{
 			name:        "negative number valid",
@@ -291,38 +291,38 @@ func TestComparisonPlugin(t *testing.T) {
 		{
 			name:        "double operator should fail",
 			constraint:  ">>10",
-			shouldParse: true, // CanParse returns true
-			shouldError: true, // But Parse should fail
+			shouldParse: false, // CanParse returns false теперь
+			shouldError: true,  // Parse should fail
 		},
 		{
 			name:        "double less than should fail",
 			constraint:  "<<100",
-			shouldParse: true, // CanParse returns true
-			shouldError: true, // But Parse should fail
+			shouldParse: false, // CanParse returns false теперь
+			shouldError: true,  // Parse should fail
 		},
 		{
 			name:        "mixed operators should fail",
 			constraint:  "><100",
-			shouldParse: true, // CanParse returns true
-			shouldError: true, // But Parse should fail
+			shouldParse: false, // CanParse returns false теперь
+			shouldError: true,  // Parse should fail
 		},
 		{
 			name:        "operator with text should fail",
 			constraint:  ">abc",
-			shouldParse: true, // CanParse returns true
-			shouldError: true, // But Parse should fail
+			shouldParse: false, // CanParse returns false теперь
+			shouldError: true,  // Parse should fail
 		},
 		{
 			name:        "empty after operator should fail",
 			constraint:  ">",
-			shouldParse: true, // CanParse returns true
-			shouldError: true, // But Parse should fail
+			shouldParse: false, // CanParse returns false теперь
+			shouldError: true,  // Parse should fail
 		},
 		{
 			name:        "operator with equals only should fail",
 			constraint:  ">=",
-			shouldParse: true, // CanParse returns true
-			shouldError: true, // But Parse should fail
+			shouldParse: false, // CanParse returns false теперь
+			shouldError: true,  // Parse should fail
 		},
 		{
 			name:        "empty constraint",
@@ -333,8 +333,8 @@ func TestComparisonPlugin(t *testing.T) {
 		{
 			name:        "very large number should fail",
 			constraint:  ">9999999999",
-			shouldParse: true, // CanParse returns true
-			shouldError: true, // But Parse should fail
+			shouldParse: true, // CanParse returns true (формат правильный)
+			shouldError: true, // Но Parse должен упасть из-за диапазона
 		},
 	}
 
@@ -384,6 +384,7 @@ func TestComparisonPlugin(t *testing.T) {
 	}
 }
 
+// Остальные тесты остаются без изменений...
 func TestComparisonPluginIntegration(t *testing.T) {
 	// Создаем парсер и явно регистрируем плагин
 	comparisonPlugin := plugins.NewComparisonPlugin()
@@ -498,6 +499,7 @@ func TestComparisonPluginIntegration(t *testing.T) {
 	}
 }
 
+// Бенчмарки остаются без изменений...
 func BenchmarkComparisonPlugin(b *testing.B) {
 	plugin := plugins.NewComparisonPlugin()
 	validator, err := plugin.Parse("test", ">100")

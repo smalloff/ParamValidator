@@ -29,7 +29,13 @@ func (cp *ComparisonPlugin) CanParse(constraintStr string) bool {
 	}
 
 	firstChar := constraintStr[0]
-	return firstChar == '<' || firstChar == '>'
+	if firstChar != '<' && firstChar != '>' {
+		return false
+	}
+
+	// Полная проверка валидности формата
+	_, _, err := cp.parseComparisonOptimized(constraintStr)
+	return err == nil
 }
 
 func (cp *ComparisonPlugin) Parse(paramName, constraintStr string) (func(string) bool, error) {

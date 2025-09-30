@@ -245,49 +245,49 @@ func TestRangePlugin(t *testing.T) {
 		{
 			name:        "triple numbers",
 			constraint:  "1-10-100",
-			shouldParse: true, // CanParse проходит
-			shouldError: true, // Но Parse должен вернуть ошибку
+			shouldParse: false, // CanParse returns false теперь
+			shouldError: true,
 		},
 		{
 			name:        "text instead of numbers",
 			constraint:  "a-z",
-			shouldParse: true, // CanParse проходит
-			shouldError: true, // Но Parse должен вернуть ошибку
+			shouldParse: false, // CanParse returns false теперь
+			shouldError: true,
 		},
 		{
 			name:        "mixed text numbers",
 			constraint:  "1-abc",
-			shouldParse: true, // CanParse проходит
-			shouldError: true, // Но Parse должен вернуть ошибку
+			shouldParse: false, // CanParse returns false теперь
+			shouldError: true,
 		},
 		{
 			name:        "min greater than max",
 			constraint:  "10-1",
-			shouldParse: true, // CanParse проходит
-			shouldError: true, // Но Parse должен вернуть ошибку
+			shouldParse: false, // CanParse returns false теперь
+			shouldError: true,
 		},
 		{
 			name:        "empty min value",
 			constraint:  "-10",
-			shouldParse: true,
+			shouldParse: false, // CanParse returns false теперь
 			shouldError: true,
 		},
 		{
 			name:        "empty max value",
 			constraint:  "10-",
-			shouldParse: true,
+			shouldParse: false, // CanParse returns false теперь
 			shouldError: true,
 		},
 		{
 			name:        "dots with empty min",
 			constraint:  "..10",
-			shouldParse: true,
+			shouldParse: false, // CanParse returns false теперь
 			shouldError: true,
 		},
 		{
 			name:        "dots with empty max",
 			constraint:  "10..",
-			shouldParse: true,
+			shouldParse: false, // CanParse returns false теперь
 			shouldError: true,
 		},
 		{
@@ -299,7 +299,7 @@ func TestRangePlugin(t *testing.T) {
 		{
 			name:        "very large numbers should fail",
 			constraint:  "1..9999999999",
-			shouldParse: true,
+			shouldParse: false, // CanParse returns false теперь
 			shouldError: true,
 		},
 		{
@@ -541,37 +541,37 @@ func TestRangeEdgeCases(t *testing.T) {
 		{
 			name:        "min greater than max should fail",
 			constraint:  "10..1",
-			shouldParse: true,
+			shouldParse: false, // CanParse returns false теперь
 			shouldError: true,
 		},
 		{
 			name:        "empty min value should fail",
 			constraint:  "..10",
-			shouldParse: true,
+			shouldParse: false, // CanParse returns false теперь
 			shouldError: true,
 		},
 		{
 			name:        "empty max value should fail",
 			constraint:  "10..",
-			shouldParse: true,
+			shouldParse: false, // CanParse returns false теперь
 			shouldError: true,
 		},
 		{
 			name:        "text instead of numbers should fail",
 			constraint:  "a..z",
-			shouldParse: true,
+			shouldParse: false, // CanParse returns false теперь
 			shouldError: true,
 		},
 		{
 			name:        "very large numbers should fail",
 			constraint:  "1..9999999999",
-			shouldParse: true,
+			shouldParse: false, // CanParse returns false теперь
 			shouldError: true,
 		},
 		{
 			name:        "triple numbers should fail",
 			constraint:  "1-10-100",
-			shouldParse: true,
+			shouldParse: false, // CanParse returns false теперь
 			shouldError: true,
 		},
 	}
@@ -599,6 +599,7 @@ func TestRangeEdgeCases(t *testing.T) {
 	}
 }
 
+// Бенчмарки остаются без изменений...
 func BenchmarkRangePlugin(b *testing.B) {
 	plugin := plugins.NewRangePlugin()
 	validator, err := plugin.Parse("test", "1-100")

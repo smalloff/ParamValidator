@@ -133,13 +133,15 @@ func TestPatternPlugin(t *testing.T) {
 		{
 			name:        "any string match",
 			constraint:  "*",
-			shouldParse: true, // Есть wildcard - парсится
+			value:       "any_value",
+			shouldParse: true,
 			expected:    true,
 			shouldError: false,
 		},
 		{
 			name:        "any string empty",
 			constraint:  "*",
+			value:       "",
 			shouldParse: true,
 			expected:    true,
 			shouldError: false,
@@ -183,6 +185,18 @@ func TestPatternPlugin(t *testing.T) {
 			shouldParse: true,
 			expected:    true,
 			shouldError: false,
+		},
+		{
+			name:        "too long pattern",
+			constraint:  "a*" + string(make([]byte, 1001)), // Создаем слишком длинный паттерн
+			shouldParse: false,
+			shouldError: true,
+		},
+		{
+			name:        "pattern without wildcard",
+			constraint:  "nowildcard",
+			shouldParse: false,
+			shouldError: true,
 		},
 	}
 
@@ -403,6 +417,18 @@ func TestPatternEdgeCases(t *testing.T) {
 			shouldParse: true,
 			shouldError: false,
 		},
+		{
+			name:        "pattern without wildcard should not parse",
+			constraint:  "nowildcard",
+			shouldParse: false,
+			shouldError: true,
+		},
+		{
+			name:        "too long pattern should not parse",
+			constraint:  "a*" + string(make([]byte, 1001)),
+			shouldParse: false,
+			shouldError: true,
+		},
 	}
 
 	for _, tt := range tests {
@@ -428,6 +454,7 @@ func TestPatternEdgeCases(t *testing.T) {
 	}
 }
 
+// Бенчмарки остаются без изменений...
 func BenchmarkPatternPlugin(b *testing.B) {
 	plugin := plugins.NewPatternPlugin()
 	validator, err := plugin.Parse("test", "img_*")

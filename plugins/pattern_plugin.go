@@ -55,6 +55,18 @@ func (pp *PatternPlugin) Parse(paramName, constraintStr string) (func(string) bo
 		return nil, fmt.Errorf("invalid UTF-8 in pattern")
 	}
 
+	// Проверяем наличие wildcard *
+	hasWildcard := false
+	for i := 0; i < len(constraintStr); i++ {
+		if constraintStr[i] == '*' {
+			hasWildcard = true
+			break
+		}
+	}
+	if !hasWildcard {
+		return nil, fmt.Errorf("pattern must contain at least one wildcard '*'")
+	}
+
 	// Предварительно анализируем паттерн
 	hasLeadingStar := constraintStr[0] == '*'
 	hasTrailingStar := constraintStr[len(constraintStr)-1] == '*'
@@ -133,4 +145,9 @@ func (pp *PatternPlugin) createValidator(parts []string) func(string) bool {
 		}
 		return true
 	}
+}
+
+// Закрытие ресурсов
+func (pp *PatternPlugin) Close() error {
+	return nil
 }

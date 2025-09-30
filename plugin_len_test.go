@@ -237,31 +237,31 @@ func TestLengthPlugin(t *testing.T) {
 		{
 			name:        "invalid format no number",
 			constraint:  "len>",
-			shouldParse: true,
+			shouldParse: false, // CanParse returns false теперь
 			shouldError: true,
 		},
 		{
 			name:        "invalid format text",
 			constraint:  "len>abc",
-			shouldParse: true,
+			shouldParse: false, // CanParse returns false теперь
 			shouldError: true,
 		},
 		{
 			name:        "invalid range format",
 			constraint:  "len5..",
-			shouldParse: true,
+			shouldParse: false, // CanParse returns false теперь
 			shouldError: true,
 		},
 		{
 			name:        "invalid range min greater than max",
 			constraint:  "len10..5",
-			shouldParse: true,
+			shouldParse: false, // CanParse returns false теперь
 			shouldError: true,
 		},
 		{
 			name:        "negative length",
 			constraint:  "len>-5",
-			shouldParse: true,
+			shouldParse: false, // CanParse returns false теперь
 			shouldError: true,
 		},
 		{
@@ -297,14 +297,14 @@ func TestLengthPlugin(t *testing.T) {
 		{
 			name:        "double operator",
 			constraint:  "len>>5",
-			shouldParse: true,
+			shouldParse: false, // CanParse returns false теперь
 			shouldError: true,
 		},
 		{
 			name:        "very large number",
 			constraint:  "len>9999999999",
-			shouldParse: true,
-			shouldError: true,
+			shouldParse: true, // CanParse returns true (формат правильный)
+			shouldError: true, // Но Parse должен упасть из-за диапазона
 		},
 	}
 
@@ -510,19 +510,19 @@ func TestLengthEdgeCases(t *testing.T) {
 		{
 			name:        "double operator should fail",
 			constraint:  "len>>5",
-			shouldParse: true,
+			shouldParse: false, // CanParse returns false теперь
 			shouldError: true,
 		},
 		{
 			name:        "invalid range min greater than max",
 			constraint:  "len10..5",
-			shouldParse: true,
+			shouldParse: false, // CanParse returns false теперь
 			shouldError: true,
 		},
 		{
 			name:        "negative length should fail",
 			constraint:  "len>-5",
-			shouldParse: true,
+			shouldParse: false, // CanParse returns false теперь
 			shouldError: true,
 		},
 		{
@@ -534,13 +534,13 @@ func TestLengthEdgeCases(t *testing.T) {
 		{
 			name:        "very large number should fail",
 			constraint:  "len>9999999999",
-			shouldParse: true,
-			shouldError: true,
+			shouldParse: true, // CanParse returns true (формат правильный)
+			shouldError: true, // Но Parse должен упасть из-за диапазона
 		},
 		{
 			name:        "invalid characters should fail",
 			constraint:  "len>5abc",
-			shouldParse: true,
+			shouldParse: false, // CanParse returns false теперь
 			shouldError: true,
 		},
 		{
@@ -580,6 +580,7 @@ func TestLengthEdgeCases(t *testing.T) {
 	}
 }
 
+// Бенчмарки остаются без изменений...
 func BenchmarkLengthPlugin(b *testing.B) {
 	plugin := plugins.NewLengthPlugin()
 	validator, err := plugin.Parse("test", "len>5")

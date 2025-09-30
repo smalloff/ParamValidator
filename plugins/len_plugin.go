@@ -3,6 +3,7 @@ package plugins
 
 import (
 	"fmt"
+	"strings"
 )
 
 const maxLengthValue = 1000000 // Максимальное значение для длины
@@ -20,16 +21,78 @@ func (lp *LengthPlugin) GetName() string {
 }
 
 func (lp *LengthPlugin) CanParse(constraintStr string) bool {
-	return len(constraintStr) >= 4 &&
-		constraintStr[0] == 'l' &&
-		constraintStr[1] == 'e' &&
-		constraintStr[2] == 'n' &&
-		(lp.isValidNextChar(constraintStr[3]))
+	if len(constraintStr) < 3 || constraintStr[0:3] != "len" {
+		return false
+	}
+
+	if len(constraintStr) == 3 {
+		return false // "len" без оператора/числа
+	}
+
+	// Полная проверка валидности формата
+	err := lp.parseConstraintForCanParse(constraintStr[3:])
+	return err == nil
 }
 
-func (lp *LengthPlugin) isValidNextChar(c byte) bool {
-	return c == '>' || c == '<' || c == '=' || c == '!' ||
-		(c >= '0' && c <= '9') || c == '.'
+// Упрощенная версия для CanParse - только проверка синтаксиса
+func (lp *LengthPlugin) parseConstraintForCanParse(rest string) error {
+	if strings.Contains(rest, "..") {
+		return lp.parseRangeForCanParse(rest)
+	}
+	return lp.parseOperatorForCanParse(rest)
+}
+
+func (lp *LengthPlugin) parseRangeForCanParse(s string) error {
+	parts := strings.Split(s, "..")
+	if len(parts) != 2 {
+		return fmt.Errorf("invalid range format")
+	}
+
+	// Проверяем что обе части - числа
+	min, minOk := parseNumber(parts[0])
+	max, maxOk := parseNumber(parts[1])
+	if !minOk || !maxOk {
+		return fmt.Errorf("invalid numbers in range")
+	}
+
+	// Проверяем корректность диапазона
+	if min < 0 || max < 0 {
+		return fmt.Errorf("negative length not allowed")
+	}
+	if min > max {
+		return fmt.Errorf("invalid range: min > max")
+	}
+
+	return nil
+}
+
+func (lp *LengthPlugin) parseOperatorForCanParse(expr string) error {
+	if len(expr) == 0 {
+		return fmt.Errorf("empty expression")
+	}
+
+	operator, numStart := lp.parseOperator(expr)
+	if numStart >= len(expr) {
+		return fmt.Errorf("missing length value")
+	}
+
+	// Проверяем двойные операторы
+	if operator == ">>" || operator == "<<" {
+		return fmt.Errorf("double operator not allowed")
+	}
+
+	numStr := expr[numStart:]
+	length, ok := parseNumber(numStr)
+	if !ok {
+		return fmt.Errorf("invalid length value")
+	}
+
+	// Проверяем отрицательные числа
+	if length < 0 {
+		return fmt.Errorf("negative length not allowed")
+	}
+
+	return nil
 }
 
 func (lp *LengthPlugin) Parse(paramName, constraintStr string) (func(string) bool, error) {
@@ -38,11 +101,18 @@ func (lp *LengthPlugin) Parse(paramName, constraintStr string) (func(string) boo
 	}
 
 	rest := constraintStr[3:]
+	validator, err := lp.parseConstraint(rest)
+	if err != nil {
+		return nil, err
+	}
 
+	return validator, nil
+}
+
+func (lp *LengthPlugin) parseConstraint(rest string) (func(string) bool, error) {
 	if dotPos := lp.findDoubleDot(rest); dotPos != -1 {
 		return lp.parseRangeNoAlloc(rest, dotPos)
 	}
-
 	return lp.parseOperatorNoAlloc(rest)
 }
 
@@ -89,6 +159,11 @@ func (lp *LengthPlugin) parseOperatorNoAlloc(expr string) (func(string) bool, er
 		return nil, fmt.Errorf("missing length value")
 	}
 
+	// Проверяем двойные операторы
+	if operator == ">>" || operator == "<<" {
+		return nil, fmt.Errorf("double operator '%s' not allowed, use single operator", operator)
+	}
+
 	numStr := expr[numStart:]
 	length, ok := parseNumber(numStr)
 	if !ok {
@@ -117,6 +192,12 @@ func (lp *LengthPlugin) parseOperator(expr string) (string, int) {
 		}
 		if expr[0] == '!' && expr[1] == '=' {
 			return "!=", 2
+		}
+		if expr[0] == '>' && expr[1] == '>' {
+			return ">>", 2 // Двойной оператор - ошибка
+		}
+		if expr[0] == '<' && expr[1] == '<' {
+			return "<<", 2 // Двойной оператор - ошибка
 		}
 	}
 
