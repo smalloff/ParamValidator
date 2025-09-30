@@ -3,6 +3,7 @@ package plugins
 
 import (
 	"fmt"
+	"strings"
 )
 
 const (
@@ -23,97 +24,9 @@ func (rp *RangePlugin) GetName() string {
 	return rp.name
 }
 
-func (rp *RangePlugin) CanParse(constraintStr string) bool {
-	if len(constraintStr) < 6 || constraintStr[0:5] != "range" {
-		return false
-	}
-
-	if len(constraintStr) == 5 {
-		return false // "range" без диапазона
-	}
-
-	// Проверяем наличие двоеточия после "range"
-	if constraintStr[5] != ':' {
-		return false
-	}
-
-	// Полная проверка валидности формата
-	err := rp.parseRangeForCanParse(constraintStr[6:])
-	return err == nil
-}
-
-// Упрощенная версия для CanParse - только проверка синтаксиса
-func (rp *RangePlugin) parseRangeForCanParse(rest string) error {
-	// Находим разделитель за один проход
-	sepPos := -1
-	sepType := byte(0)
-
-	for i := 1; i < len(rest)-1; i++ {
-		if rest[i] == '.' && i < len(rest)-1 && rest[i+1] == '.' {
-			sepPos = i
-			sepType = '.'
-			break
-		}
-		if rest[i] == '-' && (rest[i-1] >= '0' && rest[i-1] <= '9') {
-			sepPos = i
-			sepType = '-'
-			// continue, ищем ".." в приоритете
-		}
-	}
-
-	if sepPos == -1 {
-		return fmt.Errorf("invalid range format")
-	}
-
-	// Быстро извлекаем подстроки без триминга
-	var minStr, maxStr string
-	if sepType == '.' {
-		minStr = rest[:sepPos]
-		maxStr = rest[sepPos+2:]
-	} else {
-		minStr = rest[:sepPos]
-		maxStr = rest[sepPos+1:]
-	}
-
-	// Проверяем длину чисел
-	if len(minStr) > maxRangeNumberLength || len(maxStr) > maxRangeNumberLength {
-		return fmt.Errorf("number too long")
-	}
-
-	// Проверяем пустые значения
-	if minStr == "" || maxStr == "" {
-		return fmt.Errorf("empty min or max value")
-	}
-
-	// Парсим числа
-	min, minOk := parseNumber(minStr)
-	max, maxOk := parseNumber(maxStr)
-
-	if !minOk || !maxOk {
-		return fmt.Errorf("invalid numbers")
-	}
-
-	// Проверяем корректность диапазона
-	if min > max {
-		return fmt.Errorf("min greater than max")
-	}
-
-	// Проверяем ограничения на числа
-	if min > maxRangeValue || max > maxRangeValue || min < -maxRangeValue || max < -maxRangeValue {
-		return fmt.Errorf("range values out of range")
-	}
-
-	return nil
-}
-
 func (rp *RangePlugin) Parse(paramName, constraintStr string) (func(string) bool, error) {
-	if len(constraintStr) < 6 || constraintStr[0:5] != "range" {
-		return nil, fmt.Errorf("range constraint must start with 'range'")
-	}
-
-	// Проверяем наличие двоеточия после "range"
-	if constraintStr[5] != ':' {
-		return nil, fmt.Errorf("range constraint must have colon after 'range'")
+	if len(constraintStr) < 6 || !strings.HasPrefix(constraintStr, "range:") {
+		return nil, fmt.Errorf("range constraint must start with 'range:'")
 	}
 
 	rest := constraintStr[6:]
@@ -142,7 +55,7 @@ func (rp *RangePlugin) Parse(paramName, constraintStr string) (func(string) bool
 		return nil, fmt.Errorf("invalid range format: %s", constraintStr)
 	}
 
-	// Быстро извлекаем подстроки без триминга
+	// Быстро извлекаем подстроки
 	var minStr, maxStr string
 	if sepType == '.' {
 		minStr = rest[:sepPos]
@@ -152,17 +65,27 @@ func (rp *RangePlugin) Parse(paramName, constraintStr string) (func(string) bool
 		maxStr = rest[sepPos+1:]
 	}
 
+	// Проверяем пустые значения
+	if minStr == "" || maxStr == "" {
+		return nil, fmt.Errorf("invalid range format: %s", constraintStr)
+	}
+
 	// Проверяем длину чисел
 	if len(minStr) > maxRangeNumberLength || len(maxStr) > maxRangeNumberLength {
 		return nil, fmt.Errorf("number too long in range: %s", constraintStr)
 	}
 
-	// Парсим числа как в LengthPlugin
+	// Парсим числа
 	min, minOk := parseNumber(minStr)
 	max, maxOk := parseNumber(maxStr)
 
-	if !minOk || !maxOk || min > max {
+	if !minOk || !maxOk {
 		return nil, fmt.Errorf("invalid range: %s", constraintStr)
+	}
+
+	// Проверяем корректность диапазона
+	if min > max {
+		return nil, fmt.Errorf("invalid range: %d..%d (min > max)", min, max)
 	}
 
 	// Проверяем ограничения на числа

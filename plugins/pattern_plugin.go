@@ -21,35 +21,6 @@ func (pp *PatternPlugin) GetName() string {
 	return pp.name
 }
 
-func (pp *PatternPlugin) CanParse(constraintStr string) bool {
-	if len(constraintStr) < 4 || constraintStr[0:3] != "in:" {
-		return false
-	}
-
-	if len(constraintStr) == 3 {
-		return false // "in:" без паттерна
-	}
-
-	pattern := constraintStr[3:]
-	if pattern == "" || len(pattern) > maxPatternLength {
-		return false
-	}
-
-	// Проверяем валидность UTF-8
-	if !isValidUTF8(pattern) {
-		return false
-	}
-
-	// Быстрый поиск wildcard *
-	for i := 0; i < len(pattern); i++ {
-		if pattern[i] == '*' {
-			return true
-		}
-	}
-
-	return false
-}
-
 func (pp *PatternPlugin) Parse(paramName, constraintStr string) (func(string) bool, error) {
 	if len(constraintStr) < 4 || constraintStr[0:3] != "in:" {
 		return nil, fmt.Errorf("pattern constraint must start with 'in:'")

@@ -7,21 +7,14 @@ import (
 	"unicode/utf8"
 )
 
-// PluginConstraintParser interface for custom constraint parsers
+// PluginConstraintParser defines interface for custom constraint parsers
 type PluginConstraintParser interface {
-	// CanParse checks if plugin can handle this constraint
-	CanParse(constraintStr string) bool
-
-	// Parse creates validation function for parameter
 	Parse(paramName, constraintStr string) (func(string) bool, error)
-
-	// GetName returns plugin name for debugging
 	GetName() string
 }
 
-// PluginResourceManager interface for plugin resource management
+// PluginResourceManager defines interface for plugin resource management
 type PluginResourceManager interface {
-	// Close releases plugin resources
 	Close() error
 }
 
@@ -31,7 +24,7 @@ type RuleParser struct {
 	cache   *ValidationCache
 }
 
-// NewRuleParser creates a new rule parser
+// NewRuleParser creates a new rule parser with optional plugins
 func NewRuleParser(plugins ...PluginConstraintParser) *RuleParser {
 	return &RuleParser{
 		plugins: plugins,
@@ -39,12 +32,12 @@ func NewRuleParser(plugins ...PluginConstraintParser) *RuleParser {
 	}
 }
 
-// RegisterPlugin registers a new plugin
+// RegisterPlugin adds a new plugin to the parser
 func (rp *RuleParser) RegisterPlugin(plugin PluginConstraintParser) {
 	rp.plugins = append(rp.plugins, plugin)
 }
 
-// Close releases parser resources
+// Close releases all parser resources including plugins
 func (rp *RuleParser) Close() error {
 	if rp.cache != nil {
 		rp.cache.Clear()
@@ -61,6 +54,17 @@ func (rp *RuleParser) Close() error {
 
 	if len(errors) > 0 {
 		return fmt.Errorf("errors closing plugins: %v", errors)
+	}
+	return nil
+}
+
+// validateRulesString performs common validation on rules string
+func (rp *RuleParser) validateRulesString(rulesStr string) error {
+	if len(rulesStr) > MaxRulesSize {
+		return fmt.Errorf("rules size %d exceeds maximum %d", len(rulesStr), MaxRulesSize)
+	}
+	if !utf8.ValidString(rulesStr) {
+		return fmt.Errorf("rules contain invalid UTF-8 sequence")
 	}
 	return nil
 }
@@ -95,18 +99,19 @@ func (rp *RuleParser) isValidParamName(name string) bool {
 	return true
 }
 
+// isValidURLPattern validates URL pattern for security and format
 func (rp *RuleParser) isValidURLPattern(pattern string) bool {
 	if pattern == "" || len(pattern) > MaxURLLength {
 		return false
 	}
 
-	// Запрещаем опасные паттерны
 	if strings.Contains(pattern, "..") ||
 		strings.Contains(pattern, "//") ||
 		strings.Contains(pattern, "./") ||
 		strings.Contains(pattern, "/.") ||
 		strings.HasPrefix(pattern, "javascript:") ||
 		strings.HasPrefix(pattern, "data:") ||
+		strings.HasPrefix(pattern, "vbscript:") ||
 		strings.HasPrefix(pattern, "file:") {
 		return false
 	}
@@ -120,12 +125,8 @@ func (rp *RuleParser) parseRulesUnsafe(rulesStr string) (map[string]*ParamRule, 
 		return make(map[string]*ParamRule), make(map[string]*URLRule), nil
 	}
 
-	if len(rulesStr) > MaxRulesSize {
-		return nil, nil, fmt.Errorf("rules size %d exceeds maximum %d", len(rulesStr), MaxRulesSize)
-	}
-
-	if !utf8.ValidString(rulesStr) {
-		return nil, nil, fmt.Errorf("rules contain invalid UTF-8 sequence")
+	if err := rp.validateRulesString(rulesStr); err != nil {
+		return nil, nil, err
 	}
 
 	globalParams := make(map[string]*ParamRule)
@@ -139,7 +140,6 @@ func (rp *RuleParser) parseRulesUnsafe(rulesStr string) (map[string]*ParamRule, 
 		if err != nil {
 			return nil, nil, err
 		}
-		// Merge results
 		for k, v := range parsedURLRules {
 			urlRules[k] = v
 		}
@@ -182,24 +182,7 @@ func (rp *RuleParser) detectRuleType(rulesStr string) RuleType {
 
 // parseGlobalParamsUnsafe parses global parameter rules
 func (rp *RuleParser) parseGlobalParamsUnsafe(rulesStr string) (map[string]*ParamRule, error) {
-	globalParams := make(map[string]*ParamRule)
-	rules := rp.splitRules(rulesStr, '&')
-
-	for _, ruleStr := range rules {
-		if ruleStr == "" {
-			continue
-		}
-
-		rule, err := rp.parseSingleParamRuleUnsafe(ruleStr)
-		if err != nil {
-			return nil, err
-		}
-		if rule != nil {
-			globalParams[rule.Name] = rule
-		}
-	}
-
-	return globalParams, nil
+	return rp.parseParamsFromString(rulesStr, '&')
 }
 
 // parseURLRulesUnsafe parses URL-specific rules
@@ -232,7 +215,7 @@ func (rp *RuleParser) parseURLRulesUnsafe(rulesStr string) (map[string]*URLRule,
 			continue
 		}
 
-		params, err := rp.parseParamsStringUnsafe(paramsStr)
+		params, err := rp.parseParamsFromString(paramsStr, '&')
 		if err != nil {
 			return nil, nil, fmt.Errorf("failed to parse params for URL %s: %w", urlPattern, err)
 		}
@@ -247,6 +230,37 @@ func (rp *RuleParser) parseURLRulesUnsafe(rulesStr string) (map[string]*URLRule,
 	}
 
 	return urlRules, globalParams, nil
+}
+
+// parseParamsFromString parses parameters from string with given separator
+func (rp *RuleParser) parseParamsFromString(paramsStr string, separator byte) (map[string]*ParamRule, error) {
+	params := make(map[string]*ParamRule)
+
+	if paramsStr == PatternAll {
+		params[PatternAll] = &ParamRule{
+			Name:    PatternAll,
+			Pattern: PatternAny,
+		}
+		return params, nil
+	}
+
+	if paramsStr == "" {
+		return params, nil
+	}
+
+	paramStrings := rp.splitRules(paramsStr, separator)
+
+	for _, paramStr := range paramStrings {
+		rule, err := rp.parseSingleParamRuleUnsafe(paramStr)
+		if err != nil {
+			return nil, err
+		}
+		if rule != nil {
+			params[rule.Name] = rule
+		}
+	}
+
+	return params, nil
 }
 
 // splitRules splits rules string considering bracket nesting
@@ -296,7 +310,6 @@ func (rp *RuleParser) splitURLRules(rulesStr string) []string {
 	var builder strings.Builder
 	builder.Grow(len(rulesStr))
 
-	// Remove whitespace for cleaner parsing
 	for _, r := range rulesStr {
 		if r != ' ' && r != '\n' {
 			builder.WriteRune(r)
@@ -323,7 +336,6 @@ func (rp *RuleParser) extractURLAndParams(urlRuleStr string) (string, string) {
 		questionMarkPos := -1
 		breakMe := false
 
-		// Find the question mark outside of brackets
 		for i := 0; i < len(cleanStr); i++ {
 			if breakMe {
 				break
@@ -344,57 +356,22 @@ func (rp *RuleParser) extractURLAndParams(urlRuleStr string) (string, string) {
 		}
 
 		if questionMarkPos != -1 {
-			// URL with parameters: /path?param=value
 			urlPattern := strings.TrimSpace(cleanStr[:questionMarkPos])
 			paramsStr := strings.TrimSpace(cleanStr[questionMarkPos+1:])
 			return urlPattern, paramsStr
 		} else {
-			// No question mark, check for brackets directly after URL
 			bracketPos := strings.Index(cleanStr, "[")
 			if bracketPos != -1 {
-				// URL pattern with inline parameters: /path[param=value]
 				urlPattern := strings.TrimSpace(cleanStr[:bracketPos])
 				paramsStr := strings.TrimSpace(cleanStr[bracketPos:])
 				return urlPattern, paramsStr
 			} else {
-				// Just a URL pattern without parameters
 				return strings.TrimSpace(cleanStr), ""
 			}
 		}
 	}
 
 	return "", urlRuleStr
-}
-
-// parseParamsStringUnsafe parses parameters string into map of rules
-func (rp *RuleParser) parseParamsStringUnsafe(paramsStr string) (map[string]*ParamRule, error) {
-	params := make(map[string]*ParamRule)
-
-	if paramsStr == PatternAll {
-		params[PatternAll] = &ParamRule{
-			Name:    PatternAll,
-			Pattern: PatternAny,
-		}
-		return params, nil
-	}
-
-	if paramsStr == "" {
-		return params, nil
-	}
-
-	paramStrings := rp.splitRules(paramsStr, '&')
-
-	for _, paramStr := range paramStrings {
-		rule, err := rp.parseSingleParamRuleUnsafe(paramStr)
-		if err != nil {
-			return nil, err
-		}
-		if rule != nil {
-			params[rule.Name] = rule
-		}
-	}
-
-	return params, nil
 }
 
 // parseSingleParamRuleUnsafe parses single parameter rule
@@ -412,7 +389,6 @@ func (rp *RuleParser) parseSingleParamRuleUnsafe(ruleStr string) (*ParamRule, er
 		ruleStr = strings.Replace(ruleStr, "![", "[", 1)
 	}
 
-	// Handle special patterns first
 	if strings.HasSuffix(ruleStr, "=[]") {
 		paramName := strings.TrimSuffix(ruleStr, "=[]")
 		paramName, err := rp.sanitizeParamName(paramName)
@@ -480,13 +456,11 @@ func (rp *RuleParser) parseSimpleParamRule(ruleStr string) (*ParamRule, error) {
 func (rp *RuleParser) parseComplexParamRule(ruleStr string, startBracket int, inverted bool) (*ParamRule, error) {
 	paramName := strings.TrimSpace(ruleStr[:startBracket])
 
-	// Remove trailing "=" if present (for URL rules like /path?param=[value])
 	if strings.HasSuffix(paramName, "=") {
 		paramName = strings.TrimSuffix(paramName, "=")
 		paramName = strings.TrimSpace(paramName)
 	}
 
-	// For URL rules, extract only the actual parameter name (after last ? or &)
 	if idx := strings.Index(paramName, "?"); idx != -1 {
 		paramName = paramName[idx+1:]
 	}
@@ -554,40 +528,49 @@ func (rp *RuleParser) extractConstraint(ruleStr string, startBracket int) (strin
 	return constraint, endBracket
 }
 
-// createParamRule создает ParamRule с кэшированием функций плагинов
+// createParamRule creates parameter rule using plugins or standard parsing
 func (rp *RuleParser) createParamRule(paramName, constraintStr string) (*ParamRule, error) {
 	rule := &ParamRule{Name: paramName}
 
-	// First check plugins with caching
+	// Try plugins first
+	validatorFunc, pluginUsed := rp.tryPlugins(paramName, constraintStr)
+	if pluginUsed {
+		rule.Pattern = "plugin"
+		rule.CustomValidator = validatorFunc
+		rule.ConstraintStr = constraintStr
+		return rule, nil
+	}
+
+	// Fall back to standard rules
+	standardRule, err := rp.createStandardParamRule(paramName, constraintStr)
+	if err != nil {
+		return nil, err
+	}
+	standardRule.ConstraintStr = constraintStr
+	return standardRule, nil
+}
+
+// tryPlugins attempts to parse constraint using registered plugins
+func (rp *RuleParser) tryPlugins(paramName, constraintStr string) (func(string) bool, bool) {
 	for _, plugin := range rp.plugins {
-		if plugin.CanParse(constraintStr) {
-			if rp.cache != nil {
-				if validatorFunc, found := rp.cache.Get(plugin.GetName(), paramName, constraintStr); found {
-					rule.Pattern = "plugin"
-					rule.CustomValidator = validatorFunc
-					return rule, nil
-				}
+		if rp.cache != nil {
+			if validatorFunc, found := rp.cache.Get(plugin.GetName(), paramName, constraintStr); found {
+				return validatorFunc, true
 			}
+		}
 
-			validatorFunc, err := plugin.Parse(paramName, constraintStr)
-			if err != nil {
-				return nil, fmt.Errorf("plugin %s failed to parse constraint '%s': %w",
-					plugin.GetName(), constraintStr, err)
-			}
-
+		validatorFunc, err := plugin.Parse(paramName, constraintStr)
+		if err == nil && validatorFunc != nil {
 			if rp.cache != nil {
 				rp.cache.Put(plugin.GetName(), paramName, constraintStr, validatorFunc)
 			}
-
-			rule.Pattern = "plugin"
-			rule.CustomValidator = validatorFunc
-			return rule, nil
+			return validatorFunc, true
 		}
 	}
-
-	return rp.createStandardParamRule(paramName, constraintStr)
+	return nil, false
 }
 
+// createStandardParamRule creates parameter rule using standard patterns
 func (rp *RuleParser) createStandardParamRule(paramName, constraintStr string) (*ParamRule, error) {
 	rule := &ParamRule{Name: paramName}
 
@@ -631,13 +614,60 @@ func (rp *RuleParser) parseEnumConstraint(rule *ParamRule, constraintStr string)
 		return fmt.Errorf("no valid values in enum constraint")
 	}
 
-	// Sort for consistent behavior
 	sort.Strings(rule.Values)
 	return nil
 }
 
+// ClearCache clears the validation cache
 func (rp *RuleParser) ClearCache() {
 	if rp.cache != nil {
 		rp.cache.Clear()
 	}
+}
+
+// CheckRulesSyntax validates rules syntax with full plugin validation
+func (rp *RuleParser) CheckRulesSyntax(rulesStr string) error {
+	if rulesStr == "" {
+		return nil
+	}
+
+	if err := rp.validateRulesString(rulesStr); err != nil {
+		return err
+	}
+
+	globalParams, urlRules, err := rp.parseRulesUnsafe(rulesStr)
+	if err != nil {
+		return err
+	}
+
+	return rp.testPluginValidation(globalParams, urlRules)
+}
+
+// testPluginValidation tests plugin validation functions for all constraints
+func (rp *RuleParser) testPluginValidation(globalParams map[string]*ParamRule, urlRules map[string]*URLRule) error {
+	checkConstraint := func(paramName, constraintStr string) error {
+		rp.tryPlugins(paramName, constraintStr)
+		// If no plugin can handle it, that's fine - it will use standard rules
+		return nil
+	}
+
+	for paramName, rule := range globalParams {
+		if rule.ConstraintStr != "" {
+			if err := checkConstraint(paramName, rule.ConstraintStr); err != nil {
+				return err
+			}
+		}
+	}
+
+	for _, urlRule := range urlRules {
+		for paramName, rule := range urlRule.Params {
+			if rule.ConstraintStr != "" {
+				if err := checkConstraint(paramName, rule.ConstraintStr); err != nil {
+					return err
+				}
+			}
+		}
+	}
+
+	return nil
 }

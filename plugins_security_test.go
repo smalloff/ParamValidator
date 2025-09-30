@@ -149,9 +149,7 @@ func TestPluginInputValidation(t *testing.T) {
 	pluginTests := []struct {
 		name   string
 		plugin interface {
-			CanParse(constraintStr string) bool
 			Parse(paramName, constraintStr string) (func(string) bool, error)
-			GetName() string
 		}
 	}{
 		{"pattern", plugins.NewPatternPlugin()},
@@ -220,9 +218,6 @@ func TestPluginInputValidation(t *testing.T) {
 		t.Run(pluginTest.name, func(t *testing.T) {
 			for _, input := range maliciousInputs {
 				t.Run(input.name, func(t *testing.T) {
-					// Проверяем, может ли плагин обработать такой ввод
-					canParse := pluginTest.plugin.CanParse(input.constraint)
-
 					// Пытаемся распарсить
 					validator, err := pluginTest.plugin.Parse("test_param", input.constraint)
 
@@ -233,12 +228,6 @@ func TestPluginInputValidation(t *testing.T) {
 								input.description, input.constraint)
 						}
 					} else {
-						// Если CanParse возвращает true, то Parse не должен паниковать
-						if canParse && err != nil {
-							t.Logf("%s: Plugin can parse but returned error (may be acceptable): %v",
-								input.description, err)
-						}
-
 						// Проверяем, что нет паники
 						func() {
 							defer func() {
@@ -258,6 +247,10 @@ func TestPluginInputValidation(t *testing.T) {
 							}
 						}()
 					}
+
+					// Логируем информацию для отладки
+					t.Logf("Plugin: %s, Constraint: %q, Error: %v",
+						pluginTest.name, input.constraint, err)
 				})
 			}
 		})
@@ -311,9 +304,7 @@ func TestPluginConcurrentSafety(t *testing.T) {
 	pluginList := []struct {
 		name   string
 		plugin interface {
-			CanParse(constraintStr string) bool
 			Parse(paramName, constraintStr string) (func(string) bool, error)
-			GetName() string
 		}
 	}{
 		{"pattern", plugins.NewPatternPlugin()},
@@ -520,6 +511,8 @@ func TestPluginSpecificSecurity(t *testing.T) {
 				if !tt.shouldFail && err != nil {
 					t.Errorf("Unexpected error for constraint %q: %v", tt.constraint, err)
 				}
+
+				t.Logf("Constraint: %q, Error: %v", tt.constraint, err)
 			})
 		}
 	})
@@ -550,6 +543,8 @@ func TestPluginSpecificSecurity(t *testing.T) {
 				if !tt.shouldFail && err != nil {
 					t.Errorf("Unexpected error for constraint %q: %v", tt.constraint, err)
 				}
+
+				t.Logf("Constraint: %q, Error: %v", tt.constraint, err)
 			})
 		}
 	})
@@ -580,7 +575,80 @@ func TestPluginSpecificSecurity(t *testing.T) {
 				if !tt.shouldFail && err != nil {
 					t.Errorf("Unexpected error for constraint %q: %v", tt.constraint, err)
 				}
+
+				t.Logf("Constraint: %q, Error: %v", tt.constraint, err)
 			})
 		}
 	})
+}
+
+// TestPluginErrorHandling тестирует обработку ошибок в плагинах
+func TestPluginErrorHandling(t *testing.T) {
+	pluginTests := []struct {
+		name   string
+		plugin interface {
+			Parse(paramName, constraintStr string) (func(string) bool, error)
+		}
+		invalidConstraints []string
+	}{
+		{
+			name:   "pattern",
+			plugin: plugins.NewPatternPlugin(),
+			invalidConstraints: []string{
+				"",                                      // empty
+				"in:",                                   // empty pattern
+				"invalid",                               // wrong format
+				"in:" + strings.Repeat("a", 1001) + "*", // too long
+			},
+		},
+		{
+			name:   "length",
+			plugin: plugins.NewLengthPlugin(),
+			invalidConstraints: []string{
+				"",                    // empty
+				"len:",                // empty constraint
+				"len:>>5",             // invalid operator
+				"len:999999999999999", // too large
+			},
+		},
+		{
+			name:   "comparison",
+			plugin: plugins.NewComparisonPlugin(),
+			invalidConstraints: []string{
+				"",           // empty
+				">",          // missing number
+				">>10",       // double operator
+				">999999999", // too large
+			},
+		},
+		{
+			name:   "range",
+			plugin: plugins.NewRangePlugin(),
+			invalidConstraints: []string{
+				"",                  // empty
+				"range:",            // empty range
+				"range:10..1",       // invalid range
+				"range:1..99999999", // too large
+			},
+		},
+	}
+
+	for _, pt := range pluginTests {
+		t.Run(pt.name, func(t *testing.T) {
+			for _, constraint := range pt.invalidConstraints {
+				t.Run(constraint, func(t *testing.T) {
+					validator, err := pt.plugin.Parse("test", constraint)
+
+					// Должна быть ошибка или nil валидатор
+					if err == nil && validator != nil {
+						t.Errorf("Expected error for constraint %q, but got validator", constraint)
+					}
+
+					if err != nil {
+						t.Logf("Correctly got error for %q: %v", constraint, err)
+					}
+				})
+			}
+		})
+	}
 }

@@ -1129,3 +1129,36 @@ func (pv *ParamValidator) isAllowAllParamsMasks(masks ParamMasks) bool {
 	idx := pv.compiledRules.paramIndex.GetIndex(PatternAll)
 	return idx != -1 && masks.CombinedMask().GetBit(idx)
 }
+
+// CheckRules быстро проверяет валидность строки правил
+func (pv *ParamValidator) CheckRules(rulesStr string) error {
+	if !pv.initialized.Load() {
+		return fmt.Errorf("validator not initialized")
+	}
+
+	return pv.parser.CheckRulesSyntax(rulesStr)
+}
+
+// CheckRulesStatic статическая проверка правил
+func CheckRulesStatic(rulesStr string) error {
+	if rulesStr == "" {
+		return nil
+	}
+
+	parser := NewRuleParser()
+	defer parser.Close()
+
+	return parser.CheckRulesSyntax(rulesStr)
+}
+
+// CheckRulesStaticWithPlugins статическая проверка с плагинами
+func CheckRulesStaticWithPlugins(rulesStr string, plugins []PluginConstraintParser) error {
+	if rulesStr == "" {
+		return nil
+	}
+
+	parser := NewRuleParser(plugins...)
+	defer parser.Close()
+
+	return parser.CheckRulesSyntax(rulesStr)
+}

@@ -320,24 +320,15 @@ func TestRangePlugin(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			// Test CanParse
-			canParse := plugin.CanParse(tt.constraint)
-			if canParse != tt.shouldParse {
-				t.Errorf("CanParse(%q) = %v, expected %v",
-					tt.constraint, canParse, tt.shouldParse)
-				return
-			}
+			// Test Parse directly since CanParse is removed
+			validator, err := plugin.Parse("test_param", tt.constraint)
 
 			if !tt.shouldParse {
-				_, err := plugin.Parse("test_param", tt.constraint)
 				if err == nil {
 					t.Errorf("Parse(%q) should fail for non-parsable constraint", tt.constraint)
 				}
 				return
 			}
-
-			// Test Parse
-			validator, err := plugin.Parse("test_param", tt.constraint)
 
 			if tt.shouldError {
 				if err == nil {
@@ -611,12 +602,6 @@ func TestRangeEdgeCases(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			canParse := plugin.CanParse(tt.constraint)
-			if canParse != tt.shouldParse {
-				t.Errorf("CanParse(%q) = %v, expected %v",
-					tt.constraint, canParse, tt.shouldParse)
-			}
-
 			_, err := plugin.Parse("test", tt.constraint)
 
 			if tt.shouldError {
@@ -693,15 +678,6 @@ func BenchmarkRangePlugin(b *testing.B) {
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
 		validator("50")
-	}
-}
-
-func BenchmarkRangePluginCanParse(b *testing.B) {
-	plugin := plugins.NewRangePlugin()
-
-	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
-		plugin.CanParse("range:1-100")
 	}
 }
 

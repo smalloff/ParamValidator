@@ -288,9 +288,7 @@ func BenchmarkPluginInputValidation(b *testing.B) {
 	plugins := []struct {
 		name   string
 		plugin interface {
-			CanParse(constraintStr string) bool
 			Parse(paramName, constraintStr string) (func(string) bool, error)
-			GetName() string
 		}
 		constraints []string
 	}{
@@ -488,4 +486,58 @@ func BenchmarkPluginConcurrentSafety(b *testing.B) {
 			}
 		})
 	})
+}
+
+// BenchmarkPluginSecurityEdgeCases бенчмарки для крайних случаев безопасности
+func BenchmarkPluginSecurityEdgeCases(b *testing.B) {
+	plugin := plugins.NewPatternPlugin()
+
+	edgeCases := []struct {
+		name    string
+		pattern string
+		value   string
+	}{
+		{
+			name:    "Empty pattern",
+			pattern: "in:",
+			value:   "any value",
+		},
+		{
+			name:    "Only wildcard",
+			pattern: "in:*",
+			value:   strings.Repeat("x", 10000),
+		},
+		{
+			name:    "Multiple consecutive wildcards",
+			pattern: "in:***",
+			value:   "test",
+		},
+		{
+			name:    "Very long pattern",
+			pattern: "in:" + strings.Repeat("abc", 1000) + "*",
+			value:   strings.Repeat("abc", 1000) + "suffix",
+		},
+		{
+			name:    "Special regex characters",
+			pattern: "in:*.*+?[]{}()|^$\\*",
+			value:   "text.*+?[]{}()|^$\\*end",
+		},
+	}
+
+	for _, ec := range edgeCases {
+		b.Run(ec.name, func(b *testing.B) {
+			validator, err := plugin.Parse("test", ec.pattern)
+			if err != nil {
+				b.Skipf("Failed to create validator: %v", err)
+			}
+
+			b.ResetTimer()
+			b.ReportAllocs()
+
+			for i := 0; i < b.N; i++ {
+				result := validator(ec.value)
+				_ = result
+			}
+		})
+	}
 }

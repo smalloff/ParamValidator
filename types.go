@@ -58,6 +58,7 @@ type ParamRule struct {
 	CustomValidator func(string) bool
 	BitmaskIndex    int
 	Inverted        bool
+	ConstraintStr   string
 }
 
 // URLRule defines validation rules for specific URL pattern

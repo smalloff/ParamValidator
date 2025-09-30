@@ -23,19 +23,33 @@ func (cp *ComparisonPlugin) GetName() string {
 	return cp.name
 }
 
-func (cp *ComparisonPlugin) CanParse(constraintStr string) bool {
-	if len(constraintStr) == 0 {
-		return false
+// parseOperatorAndNumber извлекает оператор и числовую часть
+func (cp *ComparisonPlugin) parseOperatorAndNumber(constraintStr string) (string, string, bool) {
+	str := strings.TrimSpace(constraintStr)
+
+	if len(str) < 2 {
+		return "", "", false
 	}
 
-	firstChar := constraintStr[0]
-	if firstChar != '<' && firstChar != '>' {
-		return false
+	// Определяем оператор
+	var operator string
+	var numStart int
+
+	if len(str) >= 2 && str[1] == '=' {
+		operator = str[:2]
+		numStart = 2
+	} else {
+		operator = str[:1]
+		numStart = 1
 	}
 
-	// Полная проверка валидности формата
-	_, _, err := cp.parseComparisonOptimized(constraintStr)
-	return err == nil
+	// Проверяем что есть содержимое после оператора
+	if numStart >= len(str) {
+		return "", "", false
+	}
+
+	numStr := str[numStart:]
+	return operator, numStr, true
 }
 
 func (cp *ComparisonPlugin) Parse(paramName, constraintStr string) (func(string) bool, error) {
@@ -63,53 +77,15 @@ func (cp *ComparisonPlugin) Parse(paramName, constraintStr string) (func(string)
 func (cp *ComparisonPlugin) parseComparisonOptimized(constraintStr string) (string, int, error) {
 	str := strings.TrimSpace(constraintStr)
 
-	// Быстрая проверка различных случаев ошибок
-	if len(str) == 1 {
-		return "", 0, fmt.Errorf("incomplete comparison operator '%s': missing number", str)
-	}
-
-	// Проверяем недопустимые комбинации операторов
-	if strings.HasPrefix(str, ">>") {
-		return "", 0, fmt.Errorf("invalid double operator '>>', use single '>'")
-	}
-	if strings.HasPrefix(str, "<<") {
-		return "", 0, fmt.Errorf("invalid double operator '<<', use single '<'")
-	}
-	if strings.HasPrefix(str, "><") || strings.HasPrefix(str, "<>") {
-		return "", 0, fmt.Errorf("invalid operator combination '%s', use either '>' or '<'", str[:2])
-	}
-
-	// Операторы без числа
-	if str == ">" || str == "<" || str == ">=" || str == "<=" {
-		return "", 0, fmt.Errorf("incomplete comparison operator '%s': missing number", str)
-	}
-
-	// Парсим оператор и число за один проход
-	var operator string
-	var numStart int
-
-	if strings.HasPrefix(str, ">=") {
-		operator = ">="
-		numStart = 2
-	} else if strings.HasPrefix(str, "<=") {
-		operator = "<="
-		numStart = 2
-	} else if strings.HasPrefix(str, ">") {
-		operator = ">"
-		numStart = 1
-	} else if strings.HasPrefix(str, "<") {
-		operator = "<"
-		numStart = 1
-	} else {
+	operator, numStr, isValid := cp.parseOperatorAndNumber(str)
+	if !isValid {
 		return "", 0, fmt.Errorf("invalid comparison format: '%s'. Expected formats: >N, <N, >=N, <=N where N is a number", str)
 	}
 
-	// Извлекаем числовую часть
-	if numStart >= len(str) {
-		return "", 0, fmt.Errorf("missing number after operator '%s'", operator)
+	// Проверяем валидность оператора
+	if operator != ">" && operator != ">=" && operator != "<" && operator != "<=" {
+		return "", 0, fmt.Errorf("invalid comparison operator: '%s'", operator)
 	}
-
-	numStr := str[numStart:]
 
 	// Быстрый парсинг числа без аллокаций
 	threshold, ok := parseNumber(numStr)
