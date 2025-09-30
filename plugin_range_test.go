@@ -20,7 +20,7 @@ func TestRangePlugin(t *testing.T) {
 		// Valid ranges with hyphen
 		{
 			name:        "basic range valid",
-			constraint:  "1-10",
+			constraint:  "range:1-10",
 			value:       "5",
 			shouldParse: true,
 			expected:    true,
@@ -28,7 +28,7 @@ func TestRangePlugin(t *testing.T) {
 		},
 		{
 			name:        "basic range lower bound",
-			constraint:  "1-10",
+			constraint:  "range:1-10",
 			value:       "1",
 			shouldParse: true,
 			expected:    true,
@@ -36,7 +36,7 @@ func TestRangePlugin(t *testing.T) {
 		},
 		{
 			name:        "basic range upper bound",
-			constraint:  "1-10",
+			constraint:  "range:1-10",
 			value:       "10",
 			shouldParse: true,
 			expected:    true,
@@ -44,7 +44,7 @@ func TestRangePlugin(t *testing.T) {
 		},
 		{
 			name:        "basic range below min",
-			constraint:  "1-10",
+			constraint:  "range:1-10",
 			value:       "0",
 			shouldParse: true,
 			expected:    false,
@@ -52,7 +52,7 @@ func TestRangePlugin(t *testing.T) {
 		},
 		{
 			name:        "basic range above max",
-			constraint:  "1-10",
+			constraint:  "range:1-10",
 			value:       "11",
 			shouldParse: true,
 			expected:    false,
@@ -62,7 +62,7 @@ func TestRangePlugin(t *testing.T) {
 		// Valid ranges with dots
 		{
 			name:        "dots range valid",
-			constraint:  "1..10",
+			constraint:  "range:1..10",
 			value:       "5",
 			shouldParse: true,
 			expected:    true,
@@ -70,7 +70,7 @@ func TestRangePlugin(t *testing.T) {
 		},
 		{
 			name:        "dots range lower bound",
-			constraint:  "1..10",
+			constraint:  "range:1..10",
 			value:       "1",
 			shouldParse: true,
 			expected:    true,
@@ -78,7 +78,7 @@ func TestRangePlugin(t *testing.T) {
 		},
 		{
 			name:        "dots range upper bound",
-			constraint:  "1..10",
+			constraint:  "range:1..10",
 			value:       "10",
 			shouldParse: true,
 			expected:    true,
@@ -86,7 +86,7 @@ func TestRangePlugin(t *testing.T) {
 		},
 		{
 			name:        "dots range invalid",
-			constraint:  "1..10",
+			constraint:  "range:1..10",
 			value:       "15",
 			shouldParse: true,
 			expected:    false,
@@ -96,7 +96,7 @@ func TestRangePlugin(t *testing.T) {
 		// Negative numbers
 		{
 			name:        "negative range valid",
-			constraint:  "-10..10",
+			constraint:  "range:-10..10",
 			value:       "-5",
 			shouldParse: true,
 			expected:    true,
@@ -104,7 +104,7 @@ func TestRangePlugin(t *testing.T) {
 		},
 		{
 			name:        "negative range lower bound",
-			constraint:  "-10..10",
+			constraint:  "range:-10..10",
 			value:       "-10",
 			shouldParse: true,
 			expected:    true,
@@ -112,7 +112,7 @@ func TestRangePlugin(t *testing.T) {
 		},
 		{
 			name:        "negative range upper bound",
-			constraint:  "-10..10",
+			constraint:  "range:-10..10",
 			value:       "10",
 			shouldParse: true,
 			expected:    true,
@@ -120,7 +120,7 @@ func TestRangePlugin(t *testing.T) {
 		},
 		{
 			name:        "negative range invalid",
-			constraint:  "-10..10",
+			constraint:  "range:-10..10",
 			value:       "-15",
 			shouldParse: true,
 			expected:    false,
@@ -128,7 +128,7 @@ func TestRangePlugin(t *testing.T) {
 		},
 		{
 			name:        "all negative range",
-			constraint:  "-50..-10",
+			constraint:  "range:-50..-10",
 			value:       "-25",
 			shouldParse: true,
 			expected:    true,
@@ -136,7 +136,7 @@ func TestRangePlugin(t *testing.T) {
 		},
 		{
 			name:        "all negative range lower bound",
-			constraint:  "-50..-10",
+			constraint:  "range:-50..-10",
 			value:       "-50",
 			shouldParse: true,
 			expected:    true,
@@ -144,7 +144,7 @@ func TestRangePlugin(t *testing.T) {
 		},
 		{
 			name:        "all negative range upper bound",
-			constraint:  "-50..-10",
+			constraint:  "range:-50..-10",
 			value:       "-10",
 			shouldParse: true,
 			expected:    true,
@@ -152,7 +152,7 @@ func TestRangePlugin(t *testing.T) {
 		},
 		{
 			name:        "all negative range invalid",
-			constraint:  "-50..-10",
+			constraint:  "range:-50..-10",
 			value:       "-5",
 			shouldParse: true,
 			expected:    false,
@@ -162,7 +162,7 @@ func TestRangePlugin(t *testing.T) {
 		// Large numbers
 		{
 			name:        "large range valid",
-			constraint:  "1000-9999",
+			constraint:  "range:1000-9999",
 			value:       "5000",
 			shouldParse: true,
 			expected:    true,
@@ -170,7 +170,7 @@ func TestRangePlugin(t *testing.T) {
 		},
 		{
 			name:        "large range lower bound",
-			constraint:  "1000-9999",
+			constraint:  "range:1000-9999",
 			value:       "1000",
 			shouldParse: true,
 			expected:    true,
@@ -178,7 +178,7 @@ func TestRangePlugin(t *testing.T) {
 		},
 		{
 			name:        "large range upper bound",
-			constraint:  "1000-9999",
+			constraint:  "range:1000-9999",
 			value:       "9999",
 			shouldParse: true,
 			expected:    true,
@@ -186,7 +186,7 @@ func TestRangePlugin(t *testing.T) {
 		},
 		{
 			name:        "large range invalid",
-			constraint:  "1000-9999",
+			constraint:  "range:1000-9999",
 			value:       "999",
 			shouldParse: true,
 			expected:    false,
@@ -196,7 +196,7 @@ func TestRangePlugin(t *testing.T) {
 		// Single value range (equal min and max)
 		{
 			name:        "single value range valid",
-			constraint:  "42..42",
+			constraint:  "range:42..42",
 			value:       "42",
 			shouldParse: true,
 			expected:    true,
@@ -204,7 +204,7 @@ func TestRangePlugin(t *testing.T) {
 		},
 		{
 			name:        "single value range invalid",
-			constraint:  "42..42",
+			constraint:  "range:42..42",
 			value:       "41",
 			shouldParse: true,
 			expected:    false,
@@ -214,7 +214,7 @@ func TestRangePlugin(t *testing.T) {
 		// Zero ranges
 		{
 			name:        "zero range valid",
-			constraint:  "0..0",
+			constraint:  "range:0..0",
 			value:       "0",
 			shouldParse: true,
 			expected:    true,
@@ -222,7 +222,7 @@ func TestRangePlugin(t *testing.T) {
 		},
 		{
 			name:        "zero to positive range",
-			constraint:  "0..100",
+			constraint:  "range:0..100",
 			value:       "50",
 			shouldParse: true,
 			expected:    true,
@@ -237,57 +237,63 @@ func TestRangePlugin(t *testing.T) {
 			shouldError: true,
 		},
 		{
+			name:        "range without numbers",
+			constraint:  "range:",
+			shouldParse: false,
+			shouldError: true,
+		},
+		{
 			name:        "single number",
-			constraint:  "5",
+			constraint:  "range:5",
 			shouldParse: false,
 			shouldError: true,
 		},
 		{
 			name:        "triple numbers",
-			constraint:  "1-10-100",
-			shouldParse: false, // CanParse returns false теперь
+			constraint:  "range:1-10-100",
+			shouldParse: false,
 			shouldError: true,
 		},
 		{
 			name:        "text instead of numbers",
-			constraint:  "a-z",
-			shouldParse: false, // CanParse returns false теперь
+			constraint:  "range:a-z",
+			shouldParse: false,
 			shouldError: true,
 		},
 		{
 			name:        "mixed text numbers",
-			constraint:  "1-abc",
-			shouldParse: false, // CanParse returns false теперь
+			constraint:  "range:1-abc",
+			shouldParse: false,
 			shouldError: true,
 		},
 		{
 			name:        "min greater than max",
-			constraint:  "10-1",
-			shouldParse: false, // CanParse returns false теперь
+			constraint:  "range:10-1",
+			shouldParse: false,
 			shouldError: true,
 		},
 		{
 			name:        "empty min value",
-			constraint:  "-10",
-			shouldParse: false, // CanParse returns false теперь
+			constraint:  "range:-10",
+			shouldParse: false,
 			shouldError: true,
 		},
 		{
 			name:        "empty max value",
-			constraint:  "10-",
-			shouldParse: false, // CanParse returns false теперь
+			constraint:  "range:10-",
+			shouldParse: false,
 			shouldError: true,
 		},
 		{
 			name:        "dots with empty min",
-			constraint:  "..10",
-			shouldParse: false, // CanParse returns false теперь
+			constraint:  "range:..10",
+			shouldParse: false,
 			shouldError: true,
 		},
 		{
 			name:        "dots with empty max",
-			constraint:  "10..",
-			shouldParse: false, // CanParse returns false теперь
+			constraint:  "range:10..",
+			shouldParse: false,
 			shouldError: true,
 		},
 		{
@@ -298,13 +304,13 @@ func TestRangePlugin(t *testing.T) {
 		},
 		{
 			name:        "very large numbers should fail",
-			constraint:  "1..9999999999",
-			shouldParse: false, // CanParse returns false теперь
+			constraint:  "range:1..9999999999",
+			shouldParse: false,
 			shouldError: true,
 		},
 		{
 			name:        "negative with hyphen separator",
-			constraint:  "-10--1",
+			constraint:  "range:-10--1",
 			value:       "-5",
 			shouldParse: true,
 			expected:    true,
@@ -364,91 +370,109 @@ func TestRangePluginIntegration(t *testing.T) {
 	tests := []struct {
 		name     string
 		rule     string
-		value    string
+		params   map[string]string // параметр -> значение для проверки
 		expected bool
 	}{
 		{
 			name:     "range in param rule",
-			rule:     "age=[18-65]",
-			value:    "25",
+			rule:     "age=[range:18-65]",
+			params:   map[string]string{"age": "25"},
 			expected: true,
 		},
 		{
 			name:     "range in param rule too young",
-			rule:     "age=[18-65]",
-			value:    "16",
+			rule:     "age=[range:18-65]",
+			params:   map[string]string{"age": "16"},
 			expected: false,
 		},
 		{
 			name:     "range in param rule too old",
-			rule:     "age=[18-65]",
-			value:    "70",
+			rule:     "age=[range:18-65]",
+			params:   map[string]string{"age": "70"},
 			expected: false,
 		},
 		{
 			name:     "range in param rule lower bound",
-			rule:     "age=[18-65]",
-			value:    "18",
+			rule:     "age=[range:18-65]",
+			params:   map[string]string{"age": "18"},
 			expected: true,
 		},
 		{
 			name:     "range in param rule upper bound",
-			rule:     "age=[18-65]",
-			value:    "65",
+			rule:     "age=[range:18-65]",
+			params:   map[string]string{"age": "65"},
 			expected: true,
 		},
 		{
 			name:     "dots range in param rule",
-			rule:     "price=[100..1000]",
-			value:    "500",
+			rule:     "price=[range:100..1000]",
+			params:   map[string]string{"price": "500"},
 			expected: true,
 		},
 		{
 			name:     "dots range in param rule too low",
-			rule:     "price=[100..1000]",
-			value:    "50",
+			rule:     "price=[range:100..1000]",
+			params:   map[string]string{"price": "50"},
 			expected: false,
 		},
 		{
 			name:     "dots range in param rule too high",
-			rule:     "price=[100..1000]",
-			value:    "1500",
+			rule:     "price=[range:100..1000]",
+			params:   map[string]string{"price": "1500"},
 			expected: false,
 		},
 		{
 			name:     "negative range in param rule",
-			rule:     "temperature=[-20..40]",
-			value:    "25",
+			rule:     "temperature=[range:-20..40]",
+			params:   map[string]string{"temperature": "25"},
 			expected: true,
 		},
 		{
 			name:     "negative range in param rule negative value",
-			rule:     "temperature=[-20..40]",
-			value:    "-10",
+			rule:     "temperature=[range:-20..40]",
+			params:   map[string]string{"temperature": "-10"},
 			expected: true,
 		},
 		{
 			name:     "negative range in param rule too low",
-			rule:     "temperature=[-20..40]",
-			value:    "-25",
+			rule:     "temperature=[range:-20..40]",
+			params:   map[string]string{"temperature": "-25"},
 			expected: false,
 		},
 		{
 			name:     "all negative range in param rule",
-			rule:     "score=[-100..-50]",
-			value:    "-75",
+			rule:     "score=[range:-100..-50]",
+			params:   map[string]string{"score": "-75"},
 			expected: true,
 		},
 		{
 			name:     "single value range in param rule",
-			rule:     "version=[5..5]",
-			value:    "5",
+			rule:     "version=[range:5..5]",
+			params:   map[string]string{"version": "5"},
 			expected: true,
 		},
 		{
 			name:     "single value range in param rule invalid",
-			rule:     "version=[5..5]",
-			value:    "4",
+			rule:     "version=[range:5..5]",
+			params:   map[string]string{"version": "4"},
+			expected: false,
+		},
+		{
+			name:     "mixed range types in same rule - age valid",
+			rule:     "age=[range:18-65]&price=[range:100..1000]",
+			params:   map[string]string{"age": "25", "price": "500"},
+			expected: true,
+		},
+		{
+			name:     "mixed range types in same rule - age invalid",
+			rule:     "age=[range:18-65]&price=[range:100..1000]",
+			params:   map[string]string{"age": "16", "price": "500"},
+			expected: false,
+		},
+		{
+			name:     "mixed range types in same rule - price invalid",
+			rule:     "age=[range:18-65]&price=[range:100..1000]",
+			params:   map[string]string{"age": "25", "price": "50"},
 			expected: false,
 		},
 	}
@@ -460,50 +484,53 @@ func TestRangePluginIntegration(t *testing.T) {
 				t.Fatalf("Failed to parse rule %q: %v", tt.rule, err)
 			}
 
-			var paramRule *ParamRule
+			// Собираем все правила валидации
+			validators := make(map[string]func(string) bool)
+
+			// Глобальные параметры
 			for _, rule := range globalParams {
-				if rule != nil {
-					paramRule = rule
-					break
+				if rule != nil && rule.CustomValidator != nil {
+					validators[rule.Name] = rule.CustomValidator
 				}
 			}
 
-			if paramRule == nil {
-				for _, urlRule := range urlRules {
-					for _, rule := range urlRule.Params {
-						if rule != nil {
-							paramRule = rule
-							break
-						}
-					}
-					if paramRule != nil {
-						break
+			// URL параметры
+			for _, urlRule := range urlRules {
+				for _, rule := range urlRule.Params {
+					if rule != nil && rule.CustomValidator != nil {
+						validators[rule.Name] = rule.CustomValidator
 					}
 				}
 			}
 
-			if paramRule == nil {
-				t.Fatalf("No parameter rule found for %q", tt.rule)
+			if len(validators) == 0 {
+				t.Fatalf("No validators found for rule %q", tt.rule)
 			}
 
-			if paramRule.Pattern != "plugin" {
-				t.Errorf("Expected pattern 'plugin', got %q", paramRule.Pattern)
+			// Проверяем все параметры
+			allValid := true
+			for paramName, value := range tt.params {
+				validator, exists := validators[paramName]
+				if !exists {
+					t.Errorf("No validator found for parameter %q", paramName)
+					allValid = false
+					continue
+				}
+
+				result := validator(value)
+				if !result {
+					allValid = false
+					t.Logf("Parameter %q with value %q failed validation", paramName, value)
+				}
 			}
 
-			if paramRule.CustomValidator == nil {
-				t.Fatal("CustomValidator should not be nil")
-			}
-
-			result := paramRule.CustomValidator(tt.value)
-			if result != tt.expected {
-				t.Errorf("Validation failed for value %q: got %v, expected %v",
-					tt.value, result, tt.expected)
+			if allValid != tt.expected {
+				t.Errorf("Overall validation result = %v, expected %v for params %v",
+					allValid, tt.expected, tt.params)
 			}
 		})
 	}
 }
-
-// Добавить в конец range_plugin_test.go
 
 func TestRangeEdgeCases(t *testing.T) {
 	plugin := plugins.NewRangePlugin()
@@ -516,62 +543,68 @@ func TestRangeEdgeCases(t *testing.T) {
 	}{
 		{
 			name:        "valid range with hyphen",
-			constraint:  "1-10",
+			constraint:  "range:1-10",
 			shouldParse: true,
 			shouldError: false,
 		},
 		{
 			name:        "valid range with dots",
-			constraint:  "1..10",
+			constraint:  "range:1..10",
 			shouldParse: true,
 			shouldError: false,
 		},
 		{
 			name:        "negative range valid",
-			constraint:  "-10..10",
+			constraint:  "range:-10..10",
 			shouldParse: true,
 			shouldError: false,
 		},
 		{
 			name:        "all negative range valid",
-			constraint:  "-50..-10",
+			constraint:  "range:-50..-10",
 			shouldParse: true,
 			shouldError: false,
 		},
 		{
 			name:        "min greater than max should fail",
-			constraint:  "10..1",
-			shouldParse: false, // CanParse returns false теперь
+			constraint:  "range:10..1",
+			shouldParse: false,
 			shouldError: true,
 		},
 		{
 			name:        "empty min value should fail",
-			constraint:  "..10",
-			shouldParse: false, // CanParse returns false теперь
+			constraint:  "range:..10",
+			shouldParse: false,
 			shouldError: true,
 		},
 		{
 			name:        "empty max value should fail",
-			constraint:  "10..",
-			shouldParse: false, // CanParse returns false теперь
+			constraint:  "range:10..",
+			shouldParse: false,
 			shouldError: true,
 		},
 		{
 			name:        "text instead of numbers should fail",
-			constraint:  "a..z",
-			shouldParse: false, // CanParse returns false теперь
+			constraint:  "range:a..z",
+			shouldParse: false,
 			shouldError: true,
 		},
 		{
 			name:        "very large numbers should fail",
-			constraint:  "1..9999999999",
-			shouldParse: false, // CanParse returns false теперь
+			constraint:  "range:1..9999999999",
+			shouldParse: false,
 			shouldError: true,
 		},
 		{
 			name:        "triple numbers should fail",
-			constraint:  "1-10-100",
-			shouldParse: false, // CanParse returns false теперь
+			constraint:  "range:1-10-100",
+			shouldParse: false,
+			shouldError: true,
+		},
+		{
+			name:        "range prefix only",
+			constraint:  "range:",
+			shouldParse: false,
 			shouldError: true,
 		},
 	}
@@ -599,10 +632,60 @@ func TestRangeEdgeCases(t *testing.T) {
 	}
 }
 
-// Бенчмарки остаются без изменений...
+func TestRangePluginBoundaryValues(t *testing.T) {
+	plugin := plugins.NewRangePlugin()
+
+	tests := []struct {
+		constraint string
+		value      string
+		expected   bool
+	}{
+		// Граничные значения для положительных чисел
+		{"range:0-100", "0", true},
+		{"range:0-100", "100", true},
+		{"range:0-100", "-1", false},
+		{"range:0-100", "101", false},
+
+		// Граничные значения для отрицательных чисел
+		{"range:-100-0", "-100", true},
+		{"range:-100-0", "0", true},
+		{"range:-100-0", "-101", false},
+		{"range:-100-0", "1", false},
+
+		// Отрицательные с разделителем --
+		{"range:-100--50", "-100", true},
+		{"range:-100--50", "-50", true},
+		{"range:-100--50", "-75", true},
+		{"range:-100--50", "-49", false},
+		{"range:-100--50", "-101", false},
+
+		// Большие числа
+		{"range:999990-1000000", "999990", true},
+		{"range:999990-1000000", "1000000", true},
+		{"range:999990-1000000", "999989", false},
+		{"range:999990-1000000", "1000001", false},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.constraint+"_"+tt.value, func(t *testing.T) {
+			validator, err := plugin.Parse("test", tt.constraint)
+			if err != nil {
+				t.Fatalf("Parse(%q) failed: %v", tt.constraint, err)
+			}
+
+			result := validator(tt.value)
+			if result != tt.expected {
+				t.Errorf("Validator(%q) for constraint %q = %v, expected %v",
+					tt.value, tt.constraint, result, tt.expected)
+			}
+		})
+	}
+}
+
+// Бенчмарки
 func BenchmarkRangePlugin(b *testing.B) {
 	plugin := plugins.NewRangePlugin()
-	validator, err := plugin.Parse("test", "1-100")
+	validator, err := plugin.Parse("test", "range:1-100")
 	if err != nil {
 		b.Fatalf("Failed to create validator: %v", err)
 	}
@@ -618,7 +701,7 @@ func BenchmarkRangePluginCanParse(b *testing.B) {
 
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		plugin.CanParse("1-100")
+		plugin.CanParse("range:1-100")
 	}
 }
 
@@ -627,7 +710,7 @@ func BenchmarkRangePluginParse(b *testing.B) {
 
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		plugin.Parse("test", "1-100")
+		plugin.Parse("test", "range:1-100")
 	}
 }
 
@@ -638,7 +721,7 @@ func BenchmarkRangePluginNormalization(b *testing.B) {
 		b.Fatalf("Failed to create validator: %v", err)
 	}
 	pv.initialized.Store(true)
-	err = pv.ParseRules("/api?age=[18-65]&price=[100..1000]")
+	err = pv.ParseRules("/api?age=[range:18-65]&price=[range:100..1000]")
 	if err != nil {
 		b.Fatalf("Failed to parse rules: %v", err)
 	}
@@ -655,7 +738,7 @@ func BenchmarkRangePluginFilterQuery(b *testing.B) {
 	if err != nil {
 		b.Fatalf("Failed to create validator: %v", err)
 	}
-	err = pv.ParseRules("/api?age=[18-65]&price=[100..1000]")
+	err = pv.ParseRules("/api?age=[range:18-65]&price=[range:100..1000]")
 	if err != nil {
 		b.Fatalf("Failed to parse rules: %v", err)
 	}
@@ -673,7 +756,7 @@ func BenchmarkRangePluginValidateQuery(b *testing.B) {
 	if err != nil {
 		b.Fatalf("Failed to create validator: %v", err)
 	}
-	err = pv.ParseRules("/api?age=[18-65]&price=[100..1000]")
+	err = pv.ParseRules("/api?age=[range:18-65]&price=[range:100..1000]")
 	if err != nil {
 		b.Fatalf("Failed to parse rules: %v", err)
 	}
@@ -681,5 +764,35 @@ func BenchmarkRangePluginValidateQuery(b *testing.B) {
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
 		pv.ValidateQuery("/api", "age=25&price=500&invalid=value")
+	}
+}
+
+func BenchmarkRangePluginMultipleValidators(b *testing.B) {
+	plugin := plugins.NewRangePlugin()
+
+	validators := []func(string) bool{}
+	constraints := []string{
+		"range:1-10",
+		"range:100-1000",
+		"range:-50-50",
+		"range:0-1000",
+		"range:999-9999",
+	}
+
+	for _, constraint := range constraints {
+		validator, err := plugin.Parse("test", constraint)
+		if err != nil {
+			b.Fatalf("Failed to create validator for %s: %v", constraint, err)
+		}
+		validators = append(validators, validator)
+	}
+
+	values := []string{"5", "500", "0", "750", "5000"}
+
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		for j, validator := range validators {
+			validator(values[j])
+		}
 	}
 }

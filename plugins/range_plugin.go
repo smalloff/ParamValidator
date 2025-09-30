@@ -10,7 +10,7 @@ const (
 	maxRangeValue        = 1000000 // Максимальное значение для диапазона
 )
 
-// RangePlugin плагин для диапазонов чисел: 1-10, 5..100, -50..50
+// RangePlugin плагин для диапазонов чисел: range1-10, range5..100, range-50..50
 type RangePlugin struct {
 	name string
 }
@@ -24,28 +24,37 @@ func (rp *RangePlugin) GetName() string {
 }
 
 func (rp *RangePlugin) CanParse(constraintStr string) bool {
-	if len(constraintStr) < 3 {
+	if len(constraintStr) < 6 || constraintStr[0:5] != "range" {
+		return false
+	}
+
+	if len(constraintStr) == 5 {
+		return false // "range" без диапазона
+	}
+
+	// Проверяем наличие двоеточия после "range"
+	if constraintStr[5] != ':' {
 		return false
 	}
 
 	// Полная проверка валидности формата
-	err := rp.parseRangeForCanParse(constraintStr)
+	err := rp.parseRangeForCanParse(constraintStr[6:])
 	return err == nil
 }
 
 // Упрощенная версия для CanParse - только проверка синтаксиса
-func (rp *RangePlugin) parseRangeForCanParse(constraintStr string) error {
+func (rp *RangePlugin) parseRangeForCanParse(rest string) error {
 	// Находим разделитель за один проход
 	sepPos := -1
 	sepType := byte(0)
 
-	for i := 1; i < len(constraintStr)-1; i++ {
-		if constraintStr[i] == '.' && i < len(constraintStr)-1 && constraintStr[i+1] == '.' {
+	for i := 1; i < len(rest)-1; i++ {
+		if rest[i] == '.' && i < len(rest)-1 && rest[i+1] == '.' {
 			sepPos = i
 			sepType = '.'
 			break
 		}
-		if constraintStr[i] == '-' && (constraintStr[i-1] >= '0' && constraintStr[i-1] <= '9') {
+		if rest[i] == '-' && (rest[i-1] >= '0' && rest[i-1] <= '9') {
 			sepPos = i
 			sepType = '-'
 			// continue, ищем ".." в приоритете
@@ -59,11 +68,11 @@ func (rp *RangePlugin) parseRangeForCanParse(constraintStr string) error {
 	// Быстро извлекаем подстроки без триминга
 	var minStr, maxStr string
 	if sepType == '.' {
-		minStr = constraintStr[:sepPos]
-		maxStr = constraintStr[sepPos+2:]
+		minStr = rest[:sepPos]
+		maxStr = rest[sepPos+2:]
 	} else {
-		minStr = constraintStr[:sepPos]
-		maxStr = constraintStr[sepPos+1:]
+		minStr = rest[:sepPos]
+		maxStr = rest[sepPos+1:]
 	}
 
 	// Проверяем длину чисел
@@ -98,7 +107,17 @@ func (rp *RangePlugin) parseRangeForCanParse(constraintStr string) error {
 }
 
 func (rp *RangePlugin) Parse(paramName, constraintStr string) (func(string) bool, error) {
-	if len(constraintStr) < 3 {
+	if len(constraintStr) < 6 || constraintStr[0:5] != "range" {
+		return nil, fmt.Errorf("range constraint must start with 'range'")
+	}
+
+	// Проверяем наличие двоеточия после "range"
+	if constraintStr[5] != ':' {
+		return nil, fmt.Errorf("range constraint must have colon after 'range'")
+	}
+
+	rest := constraintStr[6:]
+	if len(rest) < 3 {
 		return nil, fmt.Errorf("range too short")
 	}
 
@@ -106,13 +125,13 @@ func (rp *RangePlugin) Parse(paramName, constraintStr string) (func(string) bool
 	sepPos := -1
 	sepType := byte(0)
 
-	for i := 1; i < len(constraintStr)-1; i++ {
-		if constraintStr[i] == '.' && i < len(constraintStr)-1 && constraintStr[i+1] == '.' {
+	for i := 1; i < len(rest)-1; i++ {
+		if rest[i] == '.' && i < len(rest)-1 && rest[i+1] == '.' {
 			sepPos = i
 			sepType = '.'
 			break
 		}
-		if constraintStr[i] == '-' && (constraintStr[i-1] >= '0' && constraintStr[i-1] <= '9') {
+		if rest[i] == '-' && (rest[i-1] >= '0' && rest[i-1] <= '9') {
 			sepPos = i
 			sepType = '-'
 			// continue, ищем ".." в приоритете
@@ -126,11 +145,11 @@ func (rp *RangePlugin) Parse(paramName, constraintStr string) (func(string) bool
 	// Быстро извлекаем подстроки без триминга
 	var minStr, maxStr string
 	if sepType == '.' {
-		minStr = constraintStr[:sepPos]
-		maxStr = constraintStr[sepPos+2:]
+		minStr = rest[:sepPos]
+		maxStr = rest[sepPos+2:]
 	} else {
-		minStr = constraintStr[:sepPos]
-		maxStr = constraintStr[sepPos+1:]
+		minStr = rest[:sepPos]
+		maxStr = rest[sepPos+1:]
 	}
 
 	// Проверяем длину чисел
@@ -167,4 +186,9 @@ func (rp *RangePlugin) Parse(paramName, constraintStr string) (func(string) bool
 		}
 		return num >= min && num <= max
 	}, nil
+}
+
+// Закрытие ресурсов
+func (rp *RangePlugin) Close() error {
+	return nil
 }

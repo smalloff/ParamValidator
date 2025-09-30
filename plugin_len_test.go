@@ -20,7 +20,7 @@ func TestLengthPlugin(t *testing.T) {
 		// Операторы с префиксом len
 		{
 			name:        "len greater than valid",
-			constraint:  "len>5",
+			constraint:  "len:>5",
 			value:       "hello!",
 			shouldParse: true,
 			expected:    true,
@@ -28,7 +28,7 @@ func TestLengthPlugin(t *testing.T) {
 		},
 		{
 			name:        "len greater than invalid",
-			constraint:  "len>5",
+			constraint:  "len:>5",
 			value:       "hello",
 			shouldParse: true,
 			expected:    false,
@@ -36,7 +36,7 @@ func TestLengthPlugin(t *testing.T) {
 		},
 		{
 			name:        "len greater than or equal valid",
-			constraint:  "len>=5",
+			constraint:  "len:>=5",
 			value:       "hello",
 			shouldParse: true,
 			expected:    true,
@@ -44,7 +44,7 @@ func TestLengthPlugin(t *testing.T) {
 		},
 		{
 			name:        "len greater than or equal invalid",
-			constraint:  "len>=5",
+			constraint:  "len:>=5",
 			value:       "test",
 			shouldParse: true,
 			expected:    false,
@@ -52,7 +52,7 @@ func TestLengthPlugin(t *testing.T) {
 		},
 		{
 			name:        "len less than valid",
-			constraint:  "len<10",
+			constraint:  "len:<10",
 			value:       "short",
 			shouldParse: true,
 			expected:    true,
@@ -60,7 +60,7 @@ func TestLengthPlugin(t *testing.T) {
 		},
 		{
 			name:        "len less than invalid",
-			constraint:  "len<10",
+			constraint:  "len:<10",
 			value:       "this is too long",
 			shouldParse: true,
 			expected:    false,
@@ -68,7 +68,7 @@ func TestLengthPlugin(t *testing.T) {
 		},
 		{
 			name:        "len less than or equal valid",
-			constraint:  "len<=5",
+			constraint:  "len:<=5",
 			value:       "hello",
 			shouldParse: true,
 			expected:    true,
@@ -76,7 +76,7 @@ func TestLengthPlugin(t *testing.T) {
 		},
 		{
 			name:        "len less than or equal invalid",
-			constraint:  "len<=5",
+			constraint:  "len:<=5",
 			value:       "hello!",
 			shouldParse: true,
 			expected:    false,
@@ -84,7 +84,7 @@ func TestLengthPlugin(t *testing.T) {
 		},
 		{
 			name:        "len equal valid",
-			constraint:  "len=5",
+			constraint:  "len:5",
 			value:       "hello",
 			shouldParse: true,
 			expected:    true,
@@ -92,7 +92,7 @@ func TestLengthPlugin(t *testing.T) {
 		},
 		{
 			name:        "len equal invalid",
-			constraint:  "len=5",
+			constraint:  "len:5",
 			value:       "hi",
 			shouldParse: true,
 			expected:    false,
@@ -100,7 +100,7 @@ func TestLengthPlugin(t *testing.T) {
 		},
 		{
 			name:        "len not equal valid",
-			constraint:  "len!=5",
+			constraint:  "len:!=5",
 			value:       "hi",
 			shouldParse: true,
 			expected:    true,
@@ -108,7 +108,7 @@ func TestLengthPlugin(t *testing.T) {
 		},
 		{
 			name:        "len not equal invalid",
-			constraint:  "len!=5",
+			constraint:  "len:!=5",
 			value:       "hello",
 			shouldParse: true,
 			expected:    false,
@@ -118,7 +118,7 @@ func TestLengthPlugin(t *testing.T) {
 		// Диапазоны
 		{
 			name:        "len range valid",
-			constraint:  "len5..10",
+			constraint:  "len:5..10",
 			value:       "hello!",
 			shouldParse: true,
 			expected:    true,
@@ -126,7 +126,7 @@ func TestLengthPlugin(t *testing.T) {
 		},
 		{
 			name:        "len range invalid",
-			constraint:  "len5..10",
+			constraint:  "len:5..10",
 			value:       "hi",
 			shouldParse: true,
 			expected:    false,
@@ -134,7 +134,7 @@ func TestLengthPlugin(t *testing.T) {
 		},
 		{
 			name:        "len range exact min",
-			constraint:  "len5..10",
+			constraint:  "len:5..10",
 			value:       "hello",
 			shouldParse: true,
 			expected:    true,
@@ -142,7 +142,7 @@ func TestLengthPlugin(t *testing.T) {
 		},
 		{
 			name:        "len range exact max",
-			constraint:  "len5..10",
+			constraint:  "len:5..10",
 			value:       "hello worl",
 			shouldParse: true,
 			expected:    true,
@@ -152,7 +152,7 @@ func TestLengthPlugin(t *testing.T) {
 		// Unicode строки
 		{
 			name:        "unicode string valid",
-			constraint:  "len=3",
+			constraint:  "len:3",
 			value:       "при", // 3 символа
 			shouldParse: true,
 			expected:    true,
@@ -160,7 +160,7 @@ func TestLengthPlugin(t *testing.T) {
 		},
 		{
 			name:        "unicode string invalid",
-			constraint:  "len=3",
+			constraint:  "len:3",
 			value:       "привет", // 6 символов ≠ 3
 			shouldParse: true,
 			expected:    false,
@@ -168,7 +168,7 @@ func TestLengthPlugin(t *testing.T) {
 		},
 		{
 			name:        "unicode string range valid",
-			constraint:  "len2..4",
+			constraint:  "len:2..4",
 			value:       "世界", // 2 символа
 			shouldParse: true,
 			expected:    true,
@@ -176,7 +176,7 @@ func TestLengthPlugin(t *testing.T) {
 		},
 		{
 			name:        "unicode string range invalid",
-			constraint:  "len2..4",
+			constraint:  "len:2..4",
 			value:       "世界你好", // 4 символа
 			shouldParse: true,
 			expected:    true,
@@ -186,7 +186,7 @@ func TestLengthPlugin(t *testing.T) {
 		// Граничные случаи
 		{
 			name:        "empty string with min length",
-			constraint:  "len>=1",
+			constraint:  "len:>=1",
 			value:       "",
 			shouldParse: true,
 			expected:    false,
@@ -194,7 +194,7 @@ func TestLengthPlugin(t *testing.T) {
 		},
 		{
 			name:        "empty string with zero length",
-			constraint:  "len=0",
+			constraint:  "len:0",
 			value:       "",
 			shouldParse: true,
 			expected:    true,
@@ -202,7 +202,7 @@ func TestLengthPlugin(t *testing.T) {
 		},
 		{
 			name:        "empty string with range",
-			constraint:  "len0..5",
+			constraint:  "len:0..5",
 			value:       "",
 			shouldParse: true,
 			expected:    true,
@@ -210,7 +210,7 @@ func TestLengthPlugin(t *testing.T) {
 		},
 		{
 			name:        "very long string",
-			constraint:  "len<1000",
+			constraint:  "len:<1000",
 			value:       "a",
 			shouldParse: true,
 			expected:    true,
@@ -218,7 +218,7 @@ func TestLengthPlugin(t *testing.T) {
 		},
 		{
 			name:        "string with spaces",
-			constraint:  "len=11",
+			constraint:  "len:11",
 			value:       "hello world",
 			shouldParse: true,
 			expected:    true,
@@ -226,7 +226,7 @@ func TestLengthPlugin(t *testing.T) {
 		},
 		{
 			name:        "string with special characters",
-			constraint:  "len=5",
+			constraint:  "len:5",
 			value:       "a+b=c",
 			shouldParse: true,
 			expected:    true,
@@ -236,31 +236,31 @@ func TestLengthPlugin(t *testing.T) {
 		// Ошибочные форматы
 		{
 			name:        "invalid format no number",
-			constraint:  "len>",
+			constraint:  "len:>",
 			shouldParse: false, // CanParse returns false теперь
 			shouldError: true,
 		},
 		{
 			name:        "invalid format text",
-			constraint:  "len>abc",
+			constraint:  "len:>abc",
 			shouldParse: false, // CanParse returns false теперь
 			shouldError: true,
 		},
 		{
 			name:        "invalid range format",
-			constraint:  "len5..",
+			constraint:  "len:5..",
 			shouldParse: false, // CanParse returns false теперь
 			shouldError: true,
 		},
 		{
 			name:        "invalid range min greater than max",
-			constraint:  "len10..5",
+			constraint:  "len:10..5",
 			shouldParse: false, // CanParse returns false теперь
 			shouldError: true,
 		},
 		{
 			name:        "negative length",
-			constraint:  "len>-5",
+			constraint:  "len:>-5",
 			shouldParse: false, // CanParse returns false теперь
 			shouldError: true,
 		},
@@ -290,19 +290,19 @@ func TestLengthPlugin(t *testing.T) {
 		},
 		{
 			name:        "alternative prefix",
-			constraint:  "length>5",
+			constraint:  "len:gth>5",
 			shouldParse: false,
 			shouldError: true,
 		},
 		{
 			name:        "double operator",
-			constraint:  "len>>5",
+			constraint:  "len:>>5",
 			shouldParse: false, // CanParse returns false теперь
 			shouldError: true,
 		},
 		{
 			name:        "very large number",
-			constraint:  "len>9999999999",
+			constraint:  "len:>9999999999",
 			shouldParse: true, // CanParse returns true (формат правильный)
 			shouldError: true, // Но Parse должен упасть из-за диапазона
 		},
@@ -367,67 +367,67 @@ func TestLengthPluginIntegration(t *testing.T) {
 	}{
 		{
 			name:     "len greater than in rule",
-			rule:     "username=[len>5]",
+			rule:     "username=[len:>5]",
 			value:    "john_doe",
 			expected: true,
 		},
 		{
 			name:     "len greater than in rule too short",
-			rule:     "username=[len>5]",
+			rule:     "username=[len:>5]",
 			value:    "john",
 			expected: false,
 		},
 		{
 			name:     "len less than in rule",
-			rule:     "password=[len<20]",
+			rule:     "password=[len:<20]",
 			value:    "shortpass",
 			expected: true,
 		},
 		{
 			name:     "len less than in rule too long",
-			rule:     "password=[len<20]",
+			rule:     "password=[len:<20]",
 			value:    "this_is_a_very_long_password",
 			expected: false,
 		},
 		{
 			name:     "len range in rule",
-			rule:     "code=[len5..10]",
+			rule:     "code=[len:5..10]",
 			value:    "123456",
 			expected: true,
 		},
 		{
 			name:     "len range in rule too short",
-			rule:     "code=[len5..10]",
+			rule:     "code=[len:5..10]",
 			value:    "123",
 			expected: false,
 		},
 		{
 			name:     "len range in rule too long",
-			rule:     "code=[len5..10]",
+			rule:     "code=[len:5..10]",
 			value:    "12345678901",
 			expected: false,
 		},
 		{
 			name:     "exact length in URL rule",
-			rule:     "/api?token=[len=32]",
+			rule:     "/api?token=[len:32]",
 			value:    "abc123def456ghi789jkl012mno345pq",
 			expected: true,
 		},
 		{
 			name:     "exact length in URL rule wrong length",
-			rule:     "/api?token=[len=32]",
+			rule:     "/api?token=[len:32]",
 			value:    "short",
 			expected: false,
 		},
 		{
 			name:     "not equal length in rule",
-			rule:     "id=[len!=0]",
+			rule:     "id=[len:!=0]",
 			value:    "123",
 			expected: true,
 		},
 		{
 			name:     "not equal length in rule empty",
-			rule:     "id=[len!=0]",
+			rule:     "id=[len:!=0]",
 			value:    "",
 			expected: false,
 		},
@@ -497,55 +497,55 @@ func TestLengthEdgeCases(t *testing.T) {
 	}{
 		{
 			name:        "valid len greater than",
-			constraint:  "len>5",
+			constraint:  "len:>5",
 			shouldParse: true,
 			shouldError: false,
 		},
 		{
 			name:        "valid len range",
-			constraint:  "len5..10",
+			constraint:  "len:5..10",
 			shouldParse: true,
 			shouldError: false,
 		},
 		{
 			name:        "double operator should fail",
-			constraint:  "len>>5",
+			constraint:  "len:>>5",
 			shouldParse: false, // CanParse returns false теперь
 			shouldError: true,
 		},
 		{
 			name:        "invalid range min greater than max",
-			constraint:  "len10..5",
+			constraint:  "len:10..5",
 			shouldParse: false, // CanParse returns false теперь
 			shouldError: true,
 		},
 		{
 			name:        "negative length should fail",
-			constraint:  "len>-5",
+			constraint:  "len:>-5",
 			shouldParse: false, // CanParse returns false теперь
 			shouldError: true,
 		},
 		{
 			name:        "empty after len should fail",
-			constraint:  "len",
+			constraint:  "len:",
 			shouldParse: false,
 			shouldError: true,
 		},
 		{
 			name:        "very large number should fail",
-			constraint:  "len>9999999999",
+			constraint:  "len:>9999999999",
 			shouldParse: true, // CanParse returns true (формат правильный)
 			shouldError: true, // Но Parse должен упасть из-за диапазона
 		},
 		{
 			name:        "invalid characters should fail",
-			constraint:  "len>5abc",
+			constraint:  "len:>5abc",
 			shouldParse: false, // CanParse returns false теперь
 			shouldError: true,
 		},
 		{
 			name:        "unsupported prefix should not parse",
-			constraint:  "length>5",
+			constraint:  "len:gth>5",
 			shouldParse: false,
 			shouldError: true,
 		},
@@ -583,7 +583,7 @@ func TestLengthEdgeCases(t *testing.T) {
 // Бенчмарки остаются без изменений...
 func BenchmarkLengthPlugin(b *testing.B) {
 	plugin := plugins.NewLengthPlugin()
-	validator, err := plugin.Parse("test", "len>5")
+	validator, err := plugin.Parse("test", "len:>5")
 	if err != nil {
 		b.Fatalf("Failed to create validator: %v", err)
 	}
@@ -599,7 +599,7 @@ func BenchmarkLengthPluginCanParse(b *testing.B) {
 
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		plugin.CanParse("len>5")
+		plugin.CanParse("len:>5")
 	}
 }
 
@@ -608,7 +608,7 @@ func BenchmarkLengthPluginParse(b *testing.B) {
 
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		plugin.Parse("test", "len>5")
+		plugin.Parse("test", "len:>5")
 	}
 }
 
@@ -618,7 +618,7 @@ func BenchmarkLengthPluginNormalization(b *testing.B) {
 	if err != nil {
 		b.Fatalf("Failed to create validator: %v", err)
 	}
-	err = pv.ParseRules("/api?username=[len>5]&code=[len5..10]")
+	err = pv.ParseRules("/api?username=[len:>5]&code=[len:5..10]")
 	if err != nil {
 		b.Fatalf("Failed to create validator: %v", err)
 	}
@@ -635,7 +635,7 @@ func BenchmarkLengthPluginFilterQuery(b *testing.B) {
 	if err != nil {
 		b.Fatalf("Failed to create validator: %v", err)
 	}
-	err = pv.ParseRules("/api?username=[len>5]&code=[len5..10]")
+	err = pv.ParseRules("/api?username=[len:>5]&code=[len:5..10]")
 	if err != nil {
 		b.Fatalf("Failed to create validator: %v", err)
 	}
@@ -652,7 +652,7 @@ func BenchmarkLengthPluginValidateQuery(b *testing.B) {
 	if err != nil {
 		b.Fatalf("Failed to create validator: %v", err)
 	}
-	err = pv.ParseRules("/api?username=[len>5]&code=[len5..10]")
+	err = pv.ParseRules("/api?username=[len:>5]&code=[len:5..10]")
 	if err != nil {
 		b.Fatalf("Failed to create validator: %v", err)
 	}

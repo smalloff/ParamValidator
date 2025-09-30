@@ -22,42 +22,42 @@ func TestPatternPluginSecurity(t *testing.T) {
 	}{
 		{
 			name:        "Empty pattern",
-			pattern:     "",
+			pattern:     "in:",
 			value:       "test",
 			expectValid: false,
 			description: "Empty pattern should be rejected",
 		},
 		{
 			name:        "Only wildcard",
-			pattern:     "*",
+			pattern:     "in:*",
 			value:       "any value",
 			expectValid: true,
 			description: "Single wildcard should match any string",
 		},
 		{
 			name:        "Multiple consecutive wildcards",
-			pattern:     "**",
+			pattern:     "in:**",
 			value:       "test",
 			expectValid: true,
 			description: "Multiple wildcards should be handled correctly",
 		},
 		{
 			name:        "Pattern with special regex chars",
-			pattern:     "*.*+?[](){}|^$\\*",
+			pattern:     "in:*.*+?[](){}|^$\\*",
 			value:       "test.test+?[](){}|^$\\test",
 			expectValid: true,
 			description: "Special regex characters should be treated literally",
 		},
 		{
 			name:        "Unicode pattern safety",
-			pattern:     "*🎉*🚀*",
+			pattern:     "in:*🎉*🚀*",
 			value:       "start🎉middle🚀end",
 			expectValid: true,
 			description: "Unicode characters should be handled safely",
 		},
 		{
 			name:        "Null bytes in pattern",
-			pattern:     "*\x00*",
+			pattern:     "in:*\x00*",
 			value:       "test\x00value",
 			expectValid: true,
 			description: "Null bytes should be handled",
@@ -94,19 +94,19 @@ func TestPatternPluginReDoSProtection(t *testing.T) {
 	}{
 		{
 			name:        "Exponential backtracking protection",
-			pattern:     "*a*b*c*d*e*f*g*h*i*j*",
+			pattern:     "in:*a*b*c*d*e*f*g*h*i*j*",
 			value:       strings.Repeat("x", 1000),
 			maxDuration: 5 * time.Millisecond,
 		},
 		{
 			name:        "Many wildcards with long prefix",
-			pattern:     strings.Repeat("a", 100) + "*",
+			pattern:     "in:" + strings.Repeat("a", 100) + "*",
 			value:       strings.Repeat("a", 100) + strings.Repeat("b", 1000),
 			maxDuration: 2 * time.Millisecond,
 		},
 		{
 			name:        "Complex pattern with overlaps",
-			pattern:     "*abc*abc*abc*abc*",
+			pattern:     "in:*abc*abc*abc*abc*",
 			value:       strings.Repeat("abc", 1000),
 			maxDuration: 5 * time.Millisecond,
 		},
@@ -168,25 +168,25 @@ func TestPluginInputValidation(t *testing.T) {
 	}{
 		{
 			name:         "Extremely long constraint",
-			constraint:   strings.Repeat("a", 10000),
+			constraint:   "len:" + strings.Repeat("a", 10000),
 			shouldReject: true,
 			description:  "Very long constraints should be rejected",
 		},
 		{
 			name:         "Null bytes in constraint",
-			constraint:   "test\x00value",
+			constraint:   "in:test\x00value",
 			shouldReject: false, // Могут быть допустимы в некоторых плагинах
 			description:  "Null bytes should be handled safely",
 		},
 		{
 			name:         "Invalid UTF-8 sequence",
-			constraint:   "valid\xff\xfeinvalid",
+			constraint:   "in:valid\xff\xfeinvalid",
 			shouldReject: true,
 			description:  "Invalid UTF-8 should be rejected",
 		},
 		{
 			name:         "Only special characters",
-			constraint:   "!@#$%^&*()",
+			constraint:   "in:!@#$%^&*()",
 			shouldReject: false, // Зависит от плагина
 			description:  "Special characters should be handled",
 		},
@@ -195,6 +195,24 @@ func TestPluginInputValidation(t *testing.T) {
 			constraint:   "",
 			shouldReject: true,
 			description:  "Empty constraints should be rejected",
+		},
+		{
+			name:         "Valid length constraint",
+			constraint:   "len:>5",
+			shouldReject: false,
+			description:  "Valid length constraint should be accepted",
+		},
+		{
+			name:         "Valid range constraint",
+			constraint:   "range:1-10",
+			shouldReject: false,
+			description:  "Valid range constraint should be accepted",
+		},
+		{
+			name:         "Valid comparison constraint",
+			constraint:   ">100",
+			shouldReject: false,
+			description:  "Valid comparison constraint should be accepted",
 		},
 	}
 
@@ -252,7 +270,7 @@ func TestPluginMemorySafety(t *testing.T) {
 
 	t.Run("Memory exhaustion protection", func(t *testing.T) {
 		// Создаем валидатор с простым паттерном
-		validator, err := plugin.Parse("test", "*test*")
+		validator, err := plugin.Parse("test", "in:*test*")
 		if err != nil {
 			t.Fatalf("Failed to create validator: %v", err)
 		}
@@ -325,13 +343,13 @@ func TestPluginConcurrentSafety(t *testing.T) {
 						var constraint string
 						switch pl.name {
 						case "pattern":
-							constraint = "*test*"
+							constraint = "in:*test*"
 						case "length":
-							constraint = "len>5"
+							constraint = "len:>5"
 						case "comparison":
 							constraint = ">10"
 						case "range":
-							constraint = "1..100"
+							constraint = "range:1..100"
 						}
 
 						validator, err := pl.plugin.Parse("test_param", constraint)
@@ -372,28 +390,28 @@ func TestPluginBoundaryConditions(t *testing.T) {
 	}{
 		{
 			name:        "Empty value handling",
-			pattern:     "*",
+			pattern:     "in:*",
 			values:      []string{""},
 			expectError: false,
 			description: "Empty values should be handled correctly",
 		},
 		{
 			name:        "Very long pattern - should be rejected",
-			pattern:     strings.Repeat("a", 1000) + "*", // 1001 символов - превышает лимит
+			pattern:     "in:" + strings.Repeat("a", 1000) + "*", // 1001 символов - превышает лимит
 			values:      []string{},
 			expectError: true,
 			description: "Very long patterns should be rejected",
 		},
 		{
 			name:        "Maximum length pattern",
-			pattern:     strings.Repeat("a", 999) + "*", // 1000 символов - максимальная длина
+			pattern:     "in:" + strings.Repeat("a", 999) + "*", // 1000 символов - максимальная длина
 			values:      []string{strings.Repeat("a", 999) + "suffix"},
 			expectError: false,
 			description: "Maximum length patterns should work",
 		},
 		{
 			name:        "Unicode boundary",
-			pattern:     "*" + string([]rune{0x1F600}), // смайлик
+			pattern:     "in:*" + string([]rune{0x1F600}), // смайлик
 			values:      []string{"prefix" + string([]rune{0x1F600})},
 			expectError: false,
 			description: "Unicode boundary characters should work",
@@ -446,11 +464,11 @@ func TestPluginResourceCleanup(t *testing.T) {
 
 	// Создаем множество валидаторов и проверяем, что нет утечек
 	patterns := []string{
-		"*test*",
-		"prefix*",
-		"*suffix",
-		"*a*b*c*",
-		strings.Repeat("x", 100) + "*",
+		"in:*test*",
+		"in:prefix*",
+		"in:*suffix",
+		"in:*a*b*c*",
+		"in:" + strings.Repeat("x", 100) + "*",
 	}
 
 	// Многократное создание и использование валидаторов
@@ -485,12 +503,12 @@ func TestPluginSpecificSecurity(t *testing.T) {
 			constraint string
 			shouldFail bool
 		}{
-			{"Valid length", "len>5", false},
-			{"Invalid operator", "len>>5", true},
-			{"Negative number", "len>-5", true},
-			{"Very large number", "len>9999999999", true},
-			{"Empty after len", "len", true},
-			{"Invalid characters", "len>5abc", true},
+			{"Valid length", "len:>5", false},
+			{"Invalid operator", "len:>>5", true},
+			{"Negative number", "len:>-5", true},
+			{"Very large number", "len:>9999999999", true},
+			{"Empty after len", "len:", true},
+			{"Invalid characters", "len:>5abc", true},
 		}
 
 		for _, tt := range securityTests {
@@ -544,13 +562,13 @@ func TestPluginSpecificSecurity(t *testing.T) {
 			constraint string
 			shouldFail bool
 		}{
-			{"Valid range", "1..10", false},
-			{"Valid range with dash", "1-10", false},
-			{"Invalid range", "10..1", true},
-			{"Very large numbers", "1..9999999999", true},
-			{"Negative range", "-10..10", false},
-			{"Missing separator", "110", true},
-			{"Invalid characters", "1..10abc", true},
+			{"Valid range", "range:1..10", false},
+			{"Valid range with dash", "range:1-10", false},
+			{"Invalid range", "range:10..1", true},
+			{"Very large numbers", "range:1..9999999999", true},
+			{"Negative range", "range:-10..10", false},
+			{"Missing separator", "range:110", true},
+			{"Invalid characters", "range:1..10abc", true},
 		}
 
 		for _, tt := range securityTests {

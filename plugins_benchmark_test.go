@@ -22,7 +22,7 @@ var (
 		}
 	}{
 		{"comparison", comparisonPlugin},
-		{"length", lengthPlugin},
+		{"len:gth", lengthPlugin},
 		{"range", rangePlugin},
 		{"pattern", patternPlugin},
 	}
@@ -31,17 +31,17 @@ var (
 func BenchmarkMixedPlugins(b *testing.B) {
 	// Смешанные констрейнты для разных плагинов
 	constraints := []string{
-		">100",       // comparison
-		"len>5",      // length
-		"1-100",      // range
-		"*test*",     // pattern
-		"<50",        // comparison
-		"len5..15",   // length
-		"len>=8",     // length
-		"18-65",      // range
-		"prefix*",    // pattern
-		"invalid",    // none
-		"length>=10", // none (invalid for length plugin)
+		">100",        // comparison
+		"len:>5",      // length
+		"range:1-100", // range
+		"in:*test*",   // pattern
+		"<50",         // comparison
+		"len:5..15",   // length
+		"len:>=8",     // length
+		"range:18-65", // range
+		"in:prefix*",  // pattern
+		"invalid",     // none
+		"len:gth>=10", // none (invalid for length plugin)
 	}
 
 	b.ResetTimer()
@@ -65,15 +65,15 @@ func BenchmarkAllPluginsCanParse(b *testing.B) {
 		},
 		{
 			plugin:      lengthPlugin,
-			constraints: []string{"len>5", "len<20", "len>=10", "len<=15", "len5..10"},
+			constraints: []string{"len:>5", "len:<20", "len:>=10", "len:<=15", "len:5..10"},
 		},
 		{
 			plugin:      rangePlugin,
-			constraints: []string{"1-100", "18..65", "-10..10", "0-1000", "5..5"},
+			constraints: []string{"range:1-100", "range:18..65", "range:-10..10", "range:0-1000", "range:5..5"},
 		},
 		{
 			plugin:      patternPlugin,
-			constraints: []string{"*test*", "prefix*", "*suffix", "*a*b*c*", "start*end"},
+			constraints: []string{"in:*test*", "in:prefix*", "in:*suffix", "in:*a*b*c*", "in:start*end"},
 		},
 	}
 
@@ -100,15 +100,15 @@ func BenchmarkAllPluginsParse(b *testing.B) {
 		},
 		{
 			plugin:      lengthPlugin,
-			constraints: []string{"len>5", "len<20", "len5..10"},
+			constraints: []string{"len:>5", "len:<20", "len:5..10"},
 		},
 		{
 			plugin:      rangePlugin,
-			constraints: []string{"1-100", "18..65", "-10..10"},
+			constraints: []string{"range:1-100", "range:18..65", "range:-10..10"},
 		},
 		{
 			plugin:      patternPlugin,
-			constraints: []string{"*test*", "prefix*", "*suffix"},
+			constraints: []string{"in:*test*", "in:prefix*", "in:*suffix"},
 		},
 	}
 
@@ -150,17 +150,17 @@ func BenchmarkAllPluginsValidation(b *testing.B) {
 	}
 
 	// Length
-	if v, err := lengthPlugin.Parse("username", "len>5"); err == nil {
+	if v, err := lengthPlugin.Parse("username", "len:>5"); err == nil {
 		validators = append(validators, v)
 	}
 
 	// Range
-	if v, err := rangePlugin.Parse("score", "1-100"); err == nil {
+	if v, err := rangePlugin.Parse("score", "range:1-100"); err == nil {
 		validators = append(validators, v)
 	}
 
 	// Pattern
-	if v, err := patternPlugin.Parse("file", "*test*"); err == nil {
+	if v, err := patternPlugin.Parse("file", "in:*test*"); err == nil {
 		validators = append(validators, v)
 	}
 
@@ -187,9 +187,9 @@ func BenchmarkPluginIntegration(b *testing.B) {
 
 	// Комплексные правила, использующие все плагины
 	rules := []string{
-		"/api?age=[18-65]&score=[>50]&username=[len>5]&file=[img_*]",
-		"/users?level=[1-10]&status=[active,inactive]&name=[len3..20]&email=[*@*]",
-		"/products?price=[<1000]&quantity=[1-100]&code=[len=6]&category=[*_*]",
+		"/api?age=[range:18-65]&score=[>50]&username=[len:>5]&file=[in:img_*]",
+		"/users?level=[range:1-10]&status=[active,inactive]&name=[len:3..20]&email=[in:*@*]",
+		"/products?price=[<1000]&quantity=[range:1-100]&code=[len:6]&category=[in:*_*]",
 	}
 
 	// Парсим правила один раз
@@ -224,7 +224,7 @@ func BenchmarkPluginConcurrentUsage(b *testing.B) {
 		patternPlugin,
 	)
 
-	rules := "/api?age=[18-65]&score=[>50]&username=[len>5]&file=[img_*]"
+	rules := "/api?age=[range:18-65]&score=[>50]&username=[len:>5]&file=[in:img_*]"
 
 	// Парсим правила один раз
 	globalParams, urlRules, err := parser.parseRulesUnsafe(rules)
@@ -274,21 +274,21 @@ func BenchmarkPluginMemoryUsage(b *testing.B) {
 	}
 
 	// Length validators
-	for _, constraint := range []string{"len>5", "len>10", "len<20", "len5..10", "len10..20"} {
+	for _, constraint := range []string{"len:>5", "len:>10", "len:<20", "len:5..10", "len:10..20"} {
 		if v, err := lengthPlugin.Parse("test_param", constraint); err == nil {
 			allValidators = append(allValidators, v)
 		}
 	}
 
 	// Range validators
-	for _, constraint := range []string{"1-10", "10-100", "100-1000", "-10..10", "0..100"} {
+	for _, constraint := range []string{"range:1-10", "range:10-100", "range:100-1000", "range:-10..10", "range:0..100"} {
 		if v, err := rangePlugin.Parse("test_param", constraint); err == nil {
 			allValidators = append(allValidators, v)
 		}
 	}
 
 	// Pattern validators
-	for _, constraint := range []string{"*test*", "prefix*", "*suffix", "*a*b*", "start*end*"} {
+	for _, constraint := range []string{"in:*test*", "in:prefix*", "in:*suffix", "in:*a*b*", "in:start*end*"} {
 		if v, err := patternPlugin.Parse("test_param", constraint); err == nil {
 			allValidators = append(allValidators, v)
 		}
@@ -329,36 +329,36 @@ func BenchmarkPluginEdgeCases(b *testing.B) {
 			},
 		},
 		{
-			name:   "length_edge",
+			name:   "len:gth_edge",
 			plugin: lengthPlugin,
 			constraints: []string{
-				"len=0",     // нулевая длина
-				"len>99999", // очень большие числа
-				"len",       // неполные
-				"len>>5",    // двойные операторы
-				"len>abc",   // текст вместо чисел
+				"len:=0",     // нулевая длина
+				"len:>99999", // очень большие числа
+				"len:",       // неполные
+				"len:>>5",    // двойные операторы
+				"len:>abc",   // текст вместо чисел
 			},
 		},
 		{
 			name:   "range_edge",
 			plugin: rangePlugin,
 			constraints: []string{
-				"0..0",      // одинаковые границы
-				"-100..100", // отрицательные
-				"10..5",     // min > max
-				"1..999999", // очень большие числа
-				"a..z",      // текст вместо чисел
+				"range:0..0",      // одинаковые границы
+				"range:-100..100", // отрицательные
+				"range:10..5",     // min > max
+				"range:1..999999", // очень большие числа
+				"range:a..z",      // текст вместо чисел
 			},
 		},
 		{
 			name:   "pattern_edge",
 			plugin: patternPlugin,
 			constraints: []string{
-				"*",       // только wildcard
-				"**",      // multiple wildcards
-				"",        // пустая строка
-				"*.*+?[]", // специальные символы
-				"*🎉*🚀*",   // unicode
+				"in:*",       // только wildcard
+				"in:**",      // multiple wildcards
+				"in:",        // пустая строка
+				"in:*.*+?[]", // специальные символы
+				"in:*🎉*🚀*",   // unicode
 			},
 		},
 	}
@@ -401,10 +401,10 @@ func BenchmarkPluginRealWorldScenario(b *testing.B) {
 	// Реалистичные правила для API
 	rules := `
 		age=[18-65];
-		/user/*?score=[>0]&level=[1-10]&username=[len3..20];
-		/api/v1/*?token=[len=32]&limit=[1-100]&offset=[>=0];
-		/products?price=[<10000]&category=[*_*]&status=[active,inactive];
-		/search?q=[len1..100]&page=[1-100]&sort=[name,date,price];
+		/user/*?score=[>0]&level=[1-10]&username=[len:3..20];
+		/api/v1/*?token=[len:32]&limit=[range:1-100]&offset=[>=0];
+		/products?price=[<10000]&category=[in:*_*]&status=[active,inactive];
+		/search?q=[len:1..100]&page=[range:1-100]&sort=[name,date,price];
 	`
 
 	err = pv.ParseRules(rules)
@@ -435,8 +435,8 @@ func BenchmarkPluginRealWorldScenario(b *testing.B) {
 
 func BenchmarkPluginCanParseOnly(b *testing.B) {
 	constraints := []string{
-		">100", "len>5", "1-100", "*test*", "<50", "len5..15",
-		"invalid", "length>=10", "prefix*", "18-65",
+		">100", "len:>5", "range:1-100", "in:*test*", "<50", "len:5..15",
+		"invalid", "len:gth>=10", "in:prefix*", "range:18-65",
 	}
 
 	b.ResetTimer()
@@ -457,13 +457,13 @@ func BenchmarkPluginValidationOnly(b *testing.B) {
 	if v, err := comparisonPlugin.Parse("test", ">50"); err == nil {
 		validators = append(validators, v)
 	}
-	if v, err := lengthPlugin.Parse("test", "len>5"); err == nil {
+	if v, err := lengthPlugin.Parse("test", "len:>5"); err == nil {
 		validators = append(validators, v)
 	}
-	if v, err := rangePlugin.Parse("test", "1-100"); err == nil {
+	if v, err := rangePlugin.Parse("test", "range:1-100"); err == nil {
 		validators = append(validators, v)
 	}
-	if v, err := patternPlugin.Parse("test", "*test*"); err == nil {
+	if v, err := patternPlugin.Parse("test", "in:*test*"); err == nil {
 		validators = append(validators, v)
 	}
 

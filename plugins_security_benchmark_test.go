@@ -18,32 +18,32 @@ func BenchmarkPatternPluginSecurity(b *testing.B) {
 	}{
 		{
 			name:    "Simple wildcard",
-			pattern: "*test*",
+			pattern: "in:*test*",
 			value:   "this is a test value",
 		},
 		{
 			name:    "Multiple wildcards",
-			pattern: "*a*b*c*d*",
+			pattern: "in:*a*b*c*d*",
 			value:   strings.Repeat("x", 1000),
 		},
 		{
 			name:    "Prefix suffix",
-			pattern: "prefix*suffix",
+			pattern: "in:prefix*suffix",
 			value:   "prefix_middle_suffix",
 		},
 		{
 			name:    "Complex pattern",
-			pattern: "*abc*def*ghi*",
+			pattern: "in:*abc*def*ghi*",
 			value:   strings.Repeat("abc def ghi ", 100),
 		},
 		{
 			name:    "Long pattern",
-			pattern: strings.Repeat("a", 100) + "*",
+			pattern: "in:" + strings.Repeat("a", 100) + "*",
 			value:   strings.Repeat("a", 100) + "suffix",
 		},
 		{
 			name:    "Unicode pattern",
-			pattern: "*🎉*🚀*",
+			pattern: "in:*🎉*🚀*",
 			value:   "start🎉middle🚀end",
 		},
 	}
@@ -77,22 +77,22 @@ func BenchmarkPatternPluginReDoSProtection(b *testing.B) {
 	}{
 		{
 			name:    "Exponential backtracking",
-			pattern: "*a*b*c*d*e*f*g*h*i*j*",
+			pattern: "in:*a*b*c*d*e*f*g*h*i*j*",
 			value:   strings.Repeat("x", 500),
 		},
 		{
 			name:    "Many wildcards",
-			pattern: strings.Repeat("*", 50),
+			pattern: "in:" + strings.Repeat("*", 50),
 			value:   strings.Repeat("test", 100),
 		},
 		{
 			name:    "Complex overlaps",
-			pattern: "*abc*abc*abc*abc*abc*",
+			pattern: "in:*abc*abc*abc*abc*abc*",
 			value:   strings.Repeat("abc", 300),
 		},
 		{
 			name:    "Long prefix many wildcards",
-			pattern: strings.Repeat("a", 50) + strings.Repeat("*", 10),
+			pattern: "in:" + strings.Repeat("a", 50) + strings.Repeat("*", 10),
 			value:   strings.Repeat("a", 50) + strings.Repeat("b", 500),
 		},
 	}
@@ -126,27 +126,27 @@ func BenchmarkLengthPluginSecurity(b *testing.B) {
 	}{
 		{
 			name:       "Simple greater than",
-			constraint: "len>10",
+			constraint: "len:>10",
 			values:     []string{"short", "this is long enough", strings.Repeat("x", 1000)},
 		},
 		{
 			name:       "Range constraint",
-			constraint: "len5..50",
+			constraint: "len:5..50",
 			values:     []string{"short", "perfect length string", strings.Repeat("x", 100)},
 		},
 		{
 			name:       "Complex operator",
-			constraint: "len>=100",
+			constraint: "len:>=100",
 			values:     []string{strings.Repeat("x", 50), strings.Repeat("x", 100), strings.Repeat("x", 150)},
 		},
 		{
 			name:       "Not equal",
-			constraint: "len!=0",
+			constraint: "len:!=0",
 			values:     []string{"", "not empty", strings.Repeat("x", 100)},
 		},
 		{
 			name:       "Exact length",
-			constraint: "len=25",
+			constraint: "len:25",
 			values:     []string{strings.Repeat("x", 24), strings.Repeat("x", 25), strings.Repeat("x", 26)},
 		},
 	}
@@ -238,27 +238,27 @@ func BenchmarkRangePluginSecurity(b *testing.B) {
 	}{
 		{
 			name:       "Simple range",
-			constraint: "1..100",
+			constraint: "range:1..100",
 			values:     []string{"0", "1", "50", "100", "101"},
 		},
 		{
 			name:       "Negative range",
-			constraint: "-50..50",
+			constraint: "range:-50..50",
 			values:     []string{"-51", "-50", "0", "50", "51"},
 		},
 		{
 			name:       "Large range",
-			constraint: "1000..10000",
+			constraint: "range:1000..10000",
 			values:     []string{"999", "1000", "5000", "10000", "10001"},
 		},
 		{
 			name:       "Single value range",
-			constraint: "42..42",
+			constraint: "range:42..42",
 			values:     []string{"41", "42", "43"},
 		},
 		{
 			name:       "Dash separator",
-			constraint: "1-100",
+			constraint: "range:1-100",
 			values:     []string{"0", "1", "50", "100", "101"},
 		},
 	}
@@ -297,12 +297,12 @@ func BenchmarkPluginInputValidation(b *testing.B) {
 		{
 			name:        "pattern",
 			plugin:      plugins.NewPatternPlugin(),
-			constraints: []string{"*test*", "prefix*", "*suffix", "*a*b*c*", strings.Repeat("x", 100) + "*"},
+			constraints: []string{"in:*test*", "in:prefix*", "in:*suffix", "in:*a*b*c*", "in:" + strings.Repeat("x", 100) + "*"},
 		},
 		{
 			name:        "length",
 			plugin:      plugins.NewLengthPlugin(),
-			constraints: []string{"len>5", "len10..50", "len!=0", "len=25", "len>=100"},
+			constraints: []string{"len:>5", "len:10..50", "len:!=0", "len:25", "len:>=100"},
 		},
 		{
 			name:        "comparison",
@@ -312,7 +312,7 @@ func BenchmarkPluginInputValidation(b *testing.B) {
 		{
 			name:        "range",
 			plugin:      plugins.NewRangePlugin(),
-			constraints: []string{"1..100", "-50..50", "1000..10000", "42..42", "1-100"},
+			constraints: []string{"range:1..100", "range:-50..50", "range:1000..10000", "range:42..42", "range:1-100"},
 		},
 	}
 
@@ -365,7 +365,7 @@ func BenchmarkPluginInputValidation(b *testing.B) {
 // BenchmarkPluginMemorySafety бенчмарки безопасности памяти
 func BenchmarkPluginMemorySafety(b *testing.B) {
 	plugin := plugins.NewPatternPlugin()
-	validator, err := plugin.Parse("test", "*test*")
+	validator, err := plugin.Parse("test", "in:*test*")
 	if err != nil {
 		b.Fatalf("Failed to create validator: %v", err)
 	}
@@ -411,10 +411,10 @@ func BenchmarkPluginBoundaryConditions(b *testing.B) {
 		}
 		constraint string
 	}{
-		{"pattern", plugins.NewPatternPlugin(), "*test*"},
-		{"length", plugins.NewLengthPlugin(), "len>5"},
+		{"pattern", plugins.NewPatternPlugin(), "in:*test*"},
+		{"length", plugins.NewLengthPlugin(), "len:>5"},
 		{"comparison", plugins.NewComparisonPlugin(), ">10"},
-		{"range", plugins.NewRangePlugin(), "1..100"},
+		{"range", plugins.NewRangePlugin(), "range:1..100"},
 	}
 
 	// Только критические boundary values
@@ -436,11 +436,10 @@ func BenchmarkPluginBoundaryConditions(b *testing.B) {
 			b.ReportAllocs()
 
 			for i := 0; i < b.N; i++ {
-				// Тестируем только 2 значения за итерацию
-				result1 := validator(boundaryValues[i%2])
-				result2 := validator(boundaryValues[(i+1)%2])
-				_ = result1
-				_ = result2
+				for _, value := range boundaryValues {
+					result := validator(value)
+					_ = result
+				}
 			}
 		})
 	}
@@ -449,72 +448,44 @@ func BenchmarkPluginBoundaryConditions(b *testing.B) {
 // BenchmarkPluginConcurrentSafety бенчмарки конкурентной безопасности
 func BenchmarkPluginConcurrentSafety(b *testing.B) {
 	plugin := plugins.NewPatternPlugin()
-	validator, err := plugin.Parse("test", "*test*")
+	validator, err := plugin.Parse("test", "in:*test*")
 	if err != nil {
 		b.Fatalf("Failed to create validator: %v", err)
 	}
 
-	testValues := []string{
-		"",
-		"test",
-		"no match here",
-		"this has test in it",
-		strings.Repeat("test ", 100),
-		strings.Repeat("x", 1000),
-	}
+	testValues := []string{"", "no", "this is a test value", strings.Repeat("x", 100)}
 
-	b.ResetTimer()
-	b.ReportAllocs()
+	b.Run("SingleValidator", func(b *testing.B) {
+		b.ResetTimer()
+		b.ReportAllocs()
 
-	b.RunParallel(func(pb *testing.PB) {
-		for pb.Next() {
-			for _, value := range testValues {
-				result := validator(value)
-				_ = result
-			}
-		}
-	})
-}
-
-// BenchmarkPluginResourceCleanup бенчмарки очистки ресурсов
-func BenchmarkPluginResourceCleanup(b *testing.B) {
-	plugins := []struct {
-		name   string
-		plugin interface {
-			Parse(paramName, constraintStr string) (func(string) bool, error)
-		}
-		constraints []string
-	}{
-		{
-			name:   "pattern",
-			plugin: plugins.NewPatternPlugin(),
-			constraints: []string{
-				"*test*", "prefix*", "*suffix", "*a*b*c*",
-				strings.Repeat("x", 50) + "*", "*" + strings.Repeat("y", 50),
-			},
-		},
-		{
-			name:        "length",
-			plugin:      plugins.NewLengthPlugin(),
-			constraints: []string{"len>5", "len10..50", "len!=0", "len=25"},
-		},
-	}
-
-	testValue := "this is a test value of moderate length"
-
-	for _, pl := range plugins {
-		b.Run(pl.name+"_recreate", func(b *testing.B) {
-			b.ReportAllocs()
-
-			for i := 0; i < b.N; i++ {
-				for _, constraint := range pl.constraints {
-					validator, err := pl.plugin.Parse("test", constraint)
-					if err == nil && validator != nil {
-						result := validator(testValue)
-						_ = result
-					}
+		b.RunParallel(func(pb *testing.PB) {
+			for pb.Next() {
+				for _, value := range testValues {
+					result := validator(value)
+					_ = result
 				}
 			}
 		})
-	}
+	})
+
+	b.Run("MultipleValidators", func(b *testing.B) {
+		b.ResetTimer()
+		b.ReportAllocs()
+
+		b.RunParallel(func(pb *testing.PB) {
+			for pb.Next() {
+				// Создаем новый валидатор в каждой горутине
+				localValidator, err := plugin.Parse("test", "in:*test*")
+				if err != nil {
+					b.Fatalf("Failed to create validator: %v", err)
+				}
+
+				for _, value := range testValues {
+					result := localValidator(value)
+					_ = result
+				}
+			}
+		})
+	})
 }

@@ -22,18 +22,27 @@ func (pp *PatternPlugin) GetName() string {
 }
 
 func (pp *PatternPlugin) CanParse(constraintStr string) bool {
-	if constraintStr == "" || len(constraintStr) > maxPatternLength {
+	if len(constraintStr) < 4 || constraintStr[0:3] != "in:" {
+		return false
+	}
+
+	if len(constraintStr) == 3 {
+		return false // "in:" без паттерна
+	}
+
+	pattern := constraintStr[3:]
+	if pattern == "" || len(pattern) > maxPatternLength {
 		return false
 	}
 
 	// Проверяем валидность UTF-8
-	if !isValidUTF8(constraintStr) {
+	if !isValidUTF8(pattern) {
 		return false
 	}
 
 	// Быстрый поиск wildcard *
-	for i := 0; i < len(constraintStr); i++ {
-		if constraintStr[i] == '*' {
+	for i := 0; i < len(pattern); i++ {
+		if pattern[i] == '*' {
 			return true
 		}
 	}
@@ -42,23 +51,28 @@ func (pp *PatternPlugin) CanParse(constraintStr string) bool {
 }
 
 func (pp *PatternPlugin) Parse(paramName, constraintStr string) (func(string) bool, error) {
-	if constraintStr == "" {
+	if len(constraintStr) < 4 || constraintStr[0:3] != "in:" {
+		return nil, fmt.Errorf("pattern constraint must start with 'in:'")
+	}
+
+	pattern := constraintStr[3:]
+	if pattern == "" {
 		return nil, fmt.Errorf("empty pattern")
 	}
 
-	if len(constraintStr) > maxPatternLength {
-		return nil, fmt.Errorf("pattern too long: %d characters", len(constraintStr))
+	if len(pattern) > maxPatternLength {
+		return nil, fmt.Errorf("pattern too long: %d characters", len(pattern))
 	}
 
 	// Проверяем валидность UTF-8
-	if !isValidUTF8(constraintStr) {
+	if !isValidUTF8(pattern) {
 		return nil, fmt.Errorf("invalid UTF-8 in pattern")
 	}
 
 	// Проверяем наличие wildcard *
 	hasWildcard := false
-	for i := 0; i < len(constraintStr); i++ {
-		if constraintStr[i] == '*' {
+	for i := 0; i < len(pattern); i++ {
+		if pattern[i] == '*' {
 			hasWildcard = true
 			break
 		}
@@ -68,11 +82,11 @@ func (pp *PatternPlugin) Parse(paramName, constraintStr string) (func(string) bo
 	}
 
 	// Предварительно анализируем паттерн
-	hasLeadingStar := constraintStr[0] == '*'
-	hasTrailingStar := constraintStr[len(constraintStr)-1] == '*'
+	hasLeadingStar := pattern[0] == '*'
+	hasTrailingStar := pattern[len(pattern)-1] == '*'
 
 	// Если паттерн простой (один *), обрабатываем специально
-	if hasLeadingStar && hasTrailingStar && len(constraintStr) == 2 {
+	if hasLeadingStar && hasTrailingStar && len(pattern) == 2 {
 		// Паттерн "**" - любая строка включая пустую
 		return func(value string) bool {
 			// Проверяем длину значения
@@ -80,9 +94,9 @@ func (pp *PatternPlugin) Parse(paramName, constraintStr string) (func(string) bo
 		}, nil
 	}
 
-	if hasLeadingStar && !hasTrailingStar && strings.Count(constraintStr, "*") == 1 {
+	if hasLeadingStar && !hasTrailingStar && strings.Count(pattern, "*") == 1 {
 		// Паттерн "*suffix" - проверяем суффикс
-		suffix := constraintStr[1:]
+		suffix := pattern[1:]
 		return func(value string) bool {
 			if len(value) > maxPatternLength*10 {
 				return false
@@ -91,9 +105,9 @@ func (pp *PatternPlugin) Parse(paramName, constraintStr string) (func(string) bo
 		}, nil
 	}
 
-	if !hasLeadingStar && hasTrailingStar && strings.Count(constraintStr, "*") == 1 {
+	if !hasLeadingStar && hasTrailingStar && strings.Count(pattern, "*") == 1 {
 		// Паттерн "prefix*" - проверяем префикс
-		prefix := constraintStr[:len(constraintStr)-1]
+		prefix := pattern[:len(pattern)-1]
 		return func(value string) bool {
 			if len(value) > maxPatternLength*10 {
 				return false
@@ -103,7 +117,7 @@ func (pp *PatternPlugin) Parse(paramName, constraintStr string) (func(string) bo
 	}
 
 	// Для сложных паттернов используем strings.Split (1 аллокация)
-	parts := strings.Split(constraintStr, "*")
+	parts := strings.Split(pattern, "*")
 	return pp.createValidator(parts), nil
 }
 

@@ -21,16 +21,17 @@ func (lp *LengthPlugin) GetName() string {
 }
 
 func (lp *LengthPlugin) CanParse(constraintStr string) bool {
-	if len(constraintStr) < 3 || constraintStr[0:3] != "len" {
+	// Проверяем, начинается ли строка с "len:"
+	if len(constraintStr) < 4 || constraintStr[0:4] != "len:" {
 		return false
 	}
 
-	if len(constraintStr) == 3 {
-		return false // "len" без оператора/числа
+	if len(constraintStr) == 4 {
+		return false // "len:" без оператора/числа
 	}
 
 	// Полная проверка валидности формата
-	err := lp.parseConstraintForCanParse(constraintStr[3:])
+	err := lp.parseConstraintForCanParse(constraintStr[4:])
 	return err == nil
 }
 
@@ -96,11 +97,12 @@ func (lp *LengthPlugin) parseOperatorForCanParse(expr string) error {
 }
 
 func (lp *LengthPlugin) Parse(paramName, constraintStr string) (func(string) bool, error) {
-	if len(constraintStr) < 4 || constraintStr[0:3] != "len" {
-		return nil, fmt.Errorf("length constraint must start with 'len'")
+	// Проверяем формат "len:..."
+	if len(constraintStr) < 4 || constraintStr[0:4] != "len:" {
+		return nil, fmt.Errorf("length constraint must start with 'len:'")
 	}
 
-	rest := constraintStr[3:]
+	rest := constraintStr[4:]
 	validator, err := lp.parseConstraint(rest)
 	if err != nil {
 		return nil, err
