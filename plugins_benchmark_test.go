@@ -30,11 +30,11 @@ var (
 func BenchmarkMixedPlugins(b *testing.B) {
 	// Смешанные констрейнты для разных плагинов
 	constraints := []string{
-		">100",        // comparison
+		"cmp:>100",    // comparison - добавлен cmp:
 		"len:>5",      // length
 		"range:1-100", // range
 		"in:*test*",   // pattern
-		"<50",         // comparison
+		"cmp:<50",     // comparison - добавлен cmp:
 		"len:5..15",   // length
 		"len:>=8",     // length
 		"range:18-65", // range
@@ -62,7 +62,7 @@ func BenchmarkAllPluginsParse(b *testing.B) {
 	}{
 		{
 			plugin:      comparisonPlugin,
-			constraints: []string{">100", "<50", ">=10", "<=200", ">=-50"},
+			constraints: []string{"cmp:>100", "cmp:<50", "cmp:>=10", "cmp:<=200", "cmp:>=-50"}, // добавлен cmp:
 		},
 		{
 			plugin:      lengthPlugin,
@@ -93,7 +93,7 @@ func BenchmarkAllPluginsValidation(b *testing.B) {
 	validators := []func(string) bool{}
 
 	// Comparison
-	if v, err := comparisonPlugin.Parse("age", ">50"); err == nil {
+	if v, err := comparisonPlugin.Parse("age", "cmp:>50"); err == nil { // добавлен cmp:
 		validators = append(validators, v)
 	}
 
@@ -135,9 +135,9 @@ func BenchmarkPluginIntegration(b *testing.B) {
 
 	// Комплексные правила, использующие все плагины
 	rules := []string{
-		"/api?age=[range:18-65]&score=[>50]&username=[len:>5]&file=[in:img_*]",
+		"/api?age=[range:18-65]&score=[cmp:>50]&username=[len:>5]&file=[in:img_*]", // добавлен cmp:
 		"/users?level=[range:1-10]&status=[active,inactive]&name=[len:3..20]&email=[in:*@*]",
-		"/products?price=[<1000]&quantity=[range:1-100]&code=[len:6]&category=[in:*_*]",
+		"/products?price=[cmp:<1000]&quantity=[range:1-100]&code=[len:6]&category=[in:*_*]", // добавлен cmp:
 	}
 
 	// Парсим правила один раз
@@ -172,7 +172,7 @@ func BenchmarkPluginConcurrentUsage(b *testing.B) {
 		patternPlugin,
 	)
 
-	rules := "/api?age=[range:18-65]&score=[>50]&username=[len:>5]&file=[in:img_*]"
+	rules := "/api?age=[range:18-65]&score=[cmp:>50]&username=[len:>5]&file=[in:img_*]" // добавлен cmp:
 
 	// Парсим правила один раз
 	globalParams, urlRules, err := parser.parseRulesUnsafe(rules)
@@ -215,7 +215,7 @@ func BenchmarkPluginMemoryUsage(b *testing.B) {
 	allValidators := []func(string) bool{}
 
 	// Comparison validators
-	for _, constraint := range []string{">10", ">50", ">100", "<10", "<50", "<100"} {
+	for _, constraint := range []string{"cmp:>10", "cmp:>50", "cmp:>100", "cmp:<10", "cmp:<50", "cmp:<100"} { // добавлен cmp:
 		if v, err := comparisonPlugin.Parse("test_param", constraint); err == nil {
 			allValidators = append(allValidators, v)
 		}
@@ -269,11 +269,11 @@ func BenchmarkPluginEdgeCases(b *testing.B) {
 			name:   "comparison_edge",
 			plugin: comparisonPlugin,
 			constraints: []string{
-				">-100",   // отрицательные
-				">999999", // большие числа
-				">",       // неполные
-				">>10",    // двойные операторы
-				">abc",    // текст вместо чисел
+				"cmp:>-100",   // отрицательные - добавлен cmp:
+				"cmp:>999999", // большие числа - добавлен cmp:
+				"cmp:>",       // неполные - добавлен cmp:
+				"cmp:>>10",    // двойные операторы - добавлен cmp:
+				"cmp:>abc",    // текст вместо чисел - добавлен cmp:
 			},
 		},
 		{
@@ -348,10 +348,10 @@ func BenchmarkPluginRealWorldScenario(b *testing.B) {
 
 	// Реалистичные правила для API
 	rules := `
-		age=[18-65];
-		/user/*?score=[>0]&level=[1-10]&username=[len:3..20];
-		/api/v1/*?token=[len:32]&limit=[range:1-100]&offset=[>=0];
-		/products?price=[<10000]&category=[in:*_*]&status=[active,inactive];
+		age=[range:18-65];
+		/user/*?score=[cmp:>0]&level=[range:1-10]&username=[len:3..20]; // добавлен cmp:
+		/api/v1/*?token=[len:32]&limit=[range:1-100]&offset=[cmp:>=0]; // добавлен cmp:
+		/products?price=[cmp:<10000]&category=[in:*_*]&status=[active,inactive]; // добавлен cmp:
 		/search?q=[len:1..100]&page=[range:1-100]&sort=[name,date,price];
 	`
 
@@ -383,7 +383,7 @@ func BenchmarkPluginRealWorldScenario(b *testing.B) {
 
 func BenchmarkPluginParseOnly(b *testing.B) {
 	constraints := []string{
-		">100", "len:>5", "range:1-100", "in:*test*", "<50", "len:5..15",
+		"cmp:>100", "len:>5", "range:1-100", "in:*test*", "cmp:<50", "len:5..15", // добавлен cmp:
 		"invalid", "len:gth>=10", "in:prefix*", "range:18-65",
 	}
 
@@ -402,7 +402,7 @@ func BenchmarkPluginValidationOnly(b *testing.B) {
 	validators := make([]func(string) bool, 0, 10)
 
 	// Добавляем по 2-3 валидатора каждого типа
-	if v, err := comparisonPlugin.Parse("test", ">50"); err == nil {
+	if v, err := comparisonPlugin.Parse("test", "cmp:>50"); err == nil { // добавлен cmp:
 		validators = append(validators, v)
 	}
 	if v, err := lengthPlugin.Parse("test", "len:>5"); err == nil {
@@ -437,7 +437,7 @@ func BenchmarkPluginParseAndValidate(b *testing.B) {
 	}{
 		{
 			plugin:      comparisonPlugin,
-			constraints: []string{">100", "<50", ">=10"},
+			constraints: []string{"cmp:>100", "cmp:<50", "cmp:>=10"}, // добавлен cmp:
 		},
 		{
 			plugin:      lengthPlugin,

@@ -182,27 +182,27 @@ func BenchmarkComparisonPluginSecurity(b *testing.B) {
 	}{
 		{
 			name:       "Greater than",
-			constraint: ">100",
+			constraint: "cmp:>100", // добавлен cmp:
 			values:     []string{"50", "100", "150", "999999"},
 		},
 		{
 			name:       "Less or equal",
-			constraint: "<=50",
+			constraint: "cmp:<=50", // добавлен cmp:
 			values:     []string{"0", "50", "51", "-10"},
 		},
 		{
 			name:       "Negative numbers",
-			constraint: ">=-100",
+			constraint: "cmp:>=-100", // добавлен cmp:
 			values:     []string{"-200", "-100", "0", "100"},
 		},
 		{
 			name:       "Large numbers",
-			constraint: "<1000000",
+			constraint: "cmp:<1000000", // добавлен cmp:
 			values:     []string{"999999", "1000000", "1000001"},
 		},
 		{
 			name:       "Equal boundary",
-			constraint: ">=0",
+			constraint: "cmp:>=0", // добавлен cmp:
 			values:     []string{"-1", "0", "1"},
 		},
 	}
@@ -305,7 +305,7 @@ func BenchmarkPluginInputValidation(b *testing.B) {
 		{
 			name:        "comparison",
 			plugin:      plugins.NewComparisonPlugin(),
-			constraints: []string{">10", "<=50", ">=-100", "<1000", ">=0"},
+			constraints: []string{"cmp:>10", "cmp:<=50", "cmp:>=-100", "cmp:<1000", "cmp:>=0"}, // добавлен cmp:
 		},
 		{
 			name:        "range",
@@ -411,7 +411,7 @@ func BenchmarkPluginBoundaryConditions(b *testing.B) {
 	}{
 		{"pattern", plugins.NewPatternPlugin(), "in:*test*"},
 		{"length", plugins.NewLengthPlugin(), "len:>5"},
-		{"comparison", plugins.NewComparisonPlugin(), ">10"},
+		{"comparison", plugins.NewComparisonPlugin(), "cmp:>10"}, // добавлен cmp:
 		{"range", plugins.NewRangePlugin(), "range:1..100"},
 	}
 

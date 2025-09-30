@@ -16,84 +16,83 @@ type ComparisonPlugin struct {
 }
 
 func NewComparisonPlugin() *ComparisonPlugin {
-	return &ComparisonPlugin{name: "comparison"}
+	return &ComparisonPlugin{name: "cmp"}
 }
 
 func (cp *ComparisonPlugin) GetName() string {
 	return cp.name
 }
 
-// parseOperatorAndNumber извлекает оператор и числовую часть
-func (cp *ComparisonPlugin) parseOperatorAndNumber(constraintStr string) (string, string, bool) {
-	str := strings.TrimSpace(constraintStr)
-
-	if len(str) < 2 {
-		return "", "", false
-	}
-
-	// Определяем оператор
-	var operator string
-	var numStart int
-
-	if len(str) >= 2 && str[1] == '=' {
-		operator = str[:2]
-		numStart = 2
-	} else {
-		operator = str[:1]
-		numStart = 1
-	}
-
-	// Проверяем что есть содержимое после оператора
-	if numStart >= len(str) {
-		return "", "", false
-	}
-
-	numStr := str[numStart:]
-	return operator, numStr, true
-}
-
 func (cp *ComparisonPlugin) Parse(paramName, constraintStr string) (func(string) bool, error) {
 	lenConstraintStr := len(constraintStr)
 	if lenConstraintStr == 0 {
-		return nil, fmt.Errorf("empty constraint")
+		return nil, fmt.Errorf("not for this plugin: empty constraint")
 	}
 
-	// Единый парсинг - сразу получаем оператор и число
-	operator, threshold, err := cp.parseComparisonOptimized(constraintStr)
-	if err != nil {
-		return nil, err
+	// Проверяем формат используя имя плагина
+	prefix := cp.name + ":"
+	if len(constraintStr) < len(prefix) || !strings.HasPrefix(constraintStr, prefix) {
+		return nil, fmt.Errorf("not for this plugin: comparison constraint must start with '%s:'", cp.name)
+	}
+
+	// Извлекаем часть после префикса
+	rest := strings.TrimSpace(constraintStr[len(prefix):])
+	if rest == "" {
+		return nil, fmt.Errorf("empty comparison expression")
+	}
+
+	// Определяем оператор
+	operator, numStart := cp.parseOperator(rest)
+	if operator == "" {
+		return nil, fmt.Errorf("invalid operator format: must start with >, <, >=, or <=")
+	}
+
+	// Проверяем что есть число после оператора
+	if numStart >= len(rest) {
+		return nil, fmt.Errorf("missing number value after operator")
+	}
+
+	numStr := strings.TrimSpace(rest[numStart:])
+	if numStr == "" {
+		return nil, fmt.Errorf("missing number value")
+	}
+
+	// Парсим число
+	threshold, ok := parseNumber(numStr)
+	if !ok {
+		return nil, fmt.Errorf("invalid number format: '%s'", numStr)
 	}
 
 	// Проверяем ограничения на числа
 	if threshold > maxComparisonValue || threshold < -maxComparisonValue {
-		return nil, fmt.Errorf("comparison value out of range: %d (allowed: -%d to %d)",
+		return nil, fmt.Errorf("value out of range: %d (allowed: -%d to %d)",
 			threshold, maxComparisonValue, maxComparisonValue)
 	}
 
 	return cp.createValidator(operator, threshold), nil
 }
 
-// parseComparisonOptimized парсит оператор и число за один проход
-func (cp *ComparisonPlugin) parseComparisonOptimized(constraintStr string) (string, int, error) {
-	str := strings.TrimSpace(constraintStr)
-
-	operator, numStr, isValid := cp.parseOperatorAndNumber(str)
-	if !isValid {
-		return "", 0, fmt.Errorf("invalid comparison format: '%s'. Expected formats: >N, <N, >=N, <=N where N is a number", str)
+// parseOperator определяет оператор и возвращает позицию начала числа
+func (cp *ComparisonPlugin) parseOperator(str string) (string, int) {
+	if len(str) >= 2 {
+		switch str[0:2] {
+		case ">=":
+			return ">=", 2
+		case "<=":
+			return "<=", 2
+		}
 	}
 
-	// Проверяем валидность оператора
-	if operator != ">" && operator != ">=" && operator != "<" && operator != "<=" {
-		return "", 0, fmt.Errorf("invalid comparison operator: '%s'", operator)
+	if len(str) >= 1 {
+		switch str[0] {
+		case '>':
+			return ">", 1
+		case '<':
+			return "<", 1
+		}
 	}
 
-	// Быстрый парсинг числа без аллокаций
-	threshold, ok := parseNumber(numStr)
-	if !ok {
-		return "", 0, fmt.Errorf("invalid number in comparison: '%s'", numStr)
-	}
-
-	return operator, threshold, nil
+	return "", 0
 }
 
 // createValidator создает функцию валидации

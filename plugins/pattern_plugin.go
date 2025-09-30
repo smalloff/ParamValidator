@@ -14,7 +14,7 @@ type PatternPlugin struct {
 }
 
 func NewPatternPlugin() *PatternPlugin {
-	return &PatternPlugin{name: "pattern"}
+	return &PatternPlugin{name: "in"}
 }
 
 func (pp *PatternPlugin) GetName() string {
@@ -22,13 +22,13 @@ func (pp *PatternPlugin) GetName() string {
 }
 
 func (pp *PatternPlugin) Parse(paramName, constraintStr string) (func(string) bool, error) {
-	if len(constraintStr) < 4 || constraintStr[0:3] != "in:" {
-		return nil, fmt.Errorf("pattern constraint must start with 'in:'")
+	prefix := pp.name + ":"
+	if len(constraintStr) < len(prefix) || !strings.HasPrefix(constraintStr, prefix) {
+		return nil, fmt.Errorf("not for this plugin: pattern constraint must start with '%s:'", pp.name)
 	}
-
-	pattern := constraintStr[3:]
+	pattern := strings.TrimSpace(constraintStr[3:])
 	if pattern == "" {
-		return nil, fmt.Errorf("empty pattern")
+		return nil, fmt.Errorf("not for this plugin: empty pattern")
 	}
 
 	if len(pattern) > maxPatternLength {

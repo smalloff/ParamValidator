@@ -533,7 +533,11 @@ func (rp *RuleParser) createParamRule(paramName, constraintStr string) (*ParamRu
 	rule := &ParamRule{Name: paramName}
 
 	// Try plugins first
-	validatorFunc, pluginUsed := rp.tryPlugins(paramName, constraintStr)
+	validatorFunc, pluginUsed, err := rp.tryPlugins(paramName, constraintStr)
+	if err != nil {
+		return nil, err
+	}
+
 	if pluginUsed {
 		rule.Pattern = "plugin"
 		rule.CustomValidator = validatorFunc
@@ -551,23 +555,62 @@ func (rp *RuleParser) createParamRule(paramName, constraintStr string) (*ParamRu
 }
 
 // tryPlugins attempts to parse constraint using registered plugins
-func (rp *RuleParser) tryPlugins(paramName, constraintStr string) (func(string) bool, bool) {
+// Returns: validatorFunc, pluginUsed, error
+func (rp *RuleParser) tryPlugins(paramName, constraintStr string) (func(string) bool, bool, error) {
+	// First check cache
 	for _, plugin := range rp.plugins {
 		if rp.cache != nil {
 			if validatorFunc, found := rp.cache.Get(plugin.GetName(), paramName, constraintStr); found {
-				return validatorFunc, true
+				return validatorFunc, true, nil
 			}
 		}
+	}
 
+	// Try parsing with each plugin
+	var pluginErrors []string
+	for _, plugin := range rp.plugins {
 		validatorFunc, err := plugin.Parse(paramName, constraintStr)
 		if err == nil && validatorFunc != nil {
+			// Success - cache and return
 			if rp.cache != nil {
 				rp.cache.Put(plugin.GetName(), paramName, constraintStr, validatorFunc)
 			}
-			return validatorFunc, true
+			return validatorFunc, true, nil
+		}
+
+		if err != nil {
+			// Если это ошибка "не для этого плагина", продолжаем поиск
+			if isNotForPluginError(err) {
+				pluginErrors = append(pluginErrors, fmt.Sprintf("%s: %v", plugin.GetName(), err))
+				continue
+			}
+			// Любая другая ошибка - это синтаксическая ошибка, возвращаем её
+			return nil, false, fmt.Errorf("plugin %s: %w", plugin.GetName(), err)
 		}
 	}
-	return nil, false
+
+	// Если все плагины вернули "не для этого плагина", это нормально - используем стандартные правила
+	if len(pluginErrors) > 0 {
+		// Логируем для отладки, но не возвращаем ошибку
+		// fmt.Printf("All plugins rejected constraint '%s': %v\n", constraintStr, pluginErrors)
+		return nil, false, nil
+	}
+
+	// No plugin could handle this constraint, but that's OK - use standard rules
+	return nil, false, nil
+}
+
+// isNotForPluginError checks if error indicates that constraint is not for this plugin
+func isNotForPluginError(err error) bool {
+	if err == nil {
+		return false
+	}
+
+	errStr := err.Error()
+
+	return strings.Contains(errStr, "not for this plugin") ||
+		strings.Contains(errStr, "unknown constraint format") ||
+		strings.Contains(errStr, "constraint too short")
 }
 
 // createStandardParamRule creates parameter rule using standard patterns
@@ -646,8 +689,25 @@ func (rp *RuleParser) CheckRulesSyntax(rulesStr string) error {
 // testPluginValidation tests plugin validation functions for all constraints
 func (rp *RuleParser) testPluginValidation(globalParams map[string]*ParamRule, urlRules map[string]*URLRule) error {
 	checkConstraint := func(paramName, constraintStr string) error {
-		rp.tryPlugins(paramName, constraintStr)
-		// If no plugin can handle it, that's fine - it will use standard rules
+		// Try plugins first (same logic as in createParamRule)
+		_, pluginUsed, err := rp.tryPlugins(paramName, constraintStr)
+		if err != nil {
+			return fmt.Errorf("parameter '%s': plugin error for constraint '%s': %w", paramName, constraintStr, err)
+		}
+
+		// If no plugin handled it, check if it's a valid standard constraint
+		if !pluginUsed {
+			testRule := &ParamRule{Name: paramName}
+			if strings.Contains(constraintStr, ",") {
+				// Test enum constraint
+				if err := rp.parseEnumConstraint(testRule, constraintStr); err != nil {
+					return fmt.Errorf("parameter '%s': invalid enum constraint '%s': %w", paramName, constraintStr, err)
+				}
+			}
+			// Other standard patterns (PatternKeyOnly, PatternAny, PatternCallback, PatternEnum)
+			// are always valid, so no need to test them
+		}
+
 		return nil
 	}
 

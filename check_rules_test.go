@@ -50,7 +50,7 @@ func TestCheckRules(t *testing.T) {
 		},
 		{
 			name:      "valid comparison plugin rules",
-			rulesStr:  "age=[>18]&score=[>=50]&price=[<1000]",
+			rulesStr:  "age=[cmp:>18]&score=[cmp:>=50]&price=[cmp:<1000]", // Добавлен cmp:
 			wantError: false,
 		},
 		{
@@ -70,12 +70,12 @@ func TestCheckRules(t *testing.T) {
 		},
 		{
 			name:      "mixed plugin and standard rules",
-			rulesStr:  "page=[1]&age=[>18]&username=[len:>5]&category=[in:*_*]&status=[active]",
+			rulesStr:  "page=[1]&age=[cmp:>18]&username=[len:>5]&category=[in:*_*]&status=[active]", // Добавлен cmp:
 			wantError: false,
 		},
 		{
 			name:      "complex URL rules with plugins",
-			rulesStr:  "/api/*?age=[range:18-65]&score=[>50];/users?username=[len:3..20]&email=[in:*@*]",
+			rulesStr:  "/api/*?age=[range:18-65]&score=[cmp:>50];/users?username=[len:3..20]&email=[in:*@*]", // Добавлен cmp:
 			wantError: false,
 		},
 		{
@@ -93,21 +93,42 @@ func TestCheckRules(t *testing.T) {
 			rulesStr:  strings.Repeat("param=[value]&", 1000),
 			wantError: true,
 		},
-		// Эти правила должны вызывать ошибки при создании валидаторов плагинов
+		// Тесты с некорректными плагинными правилами
 		{
-			name:      "invalid comparison plugin - double operator",
-			rulesStr:  "age=[>>18]",
-			wantError: false, // ИЗМЕНИЛОСЬ - теперь это валидный enum!
+			name:      "invalid comparison plugin - missing number",
+			rulesStr:  "age=[cmp:>]",
+			wantError: true, // Теперь должна быть ошибка синтаксиса
 		},
 		{
-			name:      "invalid length plugin - double operator",
+			name:      "invalid length plugin - missing number",
+			rulesStr:  "username=[len:>]",
+			wantError: true, // Теперь должна быть ошибка синтаксиса
+		},
+		{
+			name:      "invalid range plugin - missing max value",
+			rulesStr:  "level=[range:10-]",
+			wantError: true, // Теперь должна быть ошибка синтаксиса
+		},
+		{
+			name:      "invalid pattern plugin - missing wildcard",
+			rulesStr:  "file=[in:test]",
+			wantError: true, // Ошибка синтаксиса
+		},
+		// Тесты с невалидными плагинными операторами - обрабатываются как enum
+		{
+			name:      "double comparison operator - treated as enum",
+			rulesStr:  "age=[cmp:>>18]",
+			wantError: true, // "not for this plugin" → обрабатывается как enum
+		},
+		{
+			name:      "double length operator - treated as enum",
 			rulesStr:  "username=[len:>>5]",
-			wantError: false, // ИЗМЕНИЛОСЬ - теперь это валидный enum!
+			wantError: true, // "not for this plugin" → обрабатывается как enum
 		},
 		{
-			name:      "invalid range plugin - min > max",
+			name:      "invalid range - min > max",
 			rulesStr:  "level=[range:10-5]",
-			wantError: false, // ИЗМЕНИЛОСЬ - теперь это валидный enum!
+			wantError: true, // Ошибка синтаксиса (валидный префикс, но некорректные значения)
 		},
 	}
 
@@ -160,7 +181,7 @@ func TestCheckRulesWithRealPlugins(t *testing.T) {
 	}{
 		{
 			name:      "valid comparison plugin constraints",
-			rulesStr:  "age=[>18]&score=[>=50]&price=[<1000]",
+			rulesStr:  "age=[cmp:>18]&score=[cmp:>=50]&price=[cmp:<1000]", // Добавлен cmp:
 			wantError: false,
 		},
 		{
@@ -180,23 +201,23 @@ func TestCheckRulesWithRealPlugins(t *testing.T) {
 		},
 		{
 			name:      "mixed plugins in URL rules",
-			rulesStr:  "/api/*?age=[>18]&username=[len:>5];/users?level=[range:1-10]&email=[in:*@*]",
+			rulesStr:  "/api/*?age=[cmp:>18]&username=[len:>5];/users?level=[range:1-10]&email=[in:*@*]", // Добавлен cmp:
 			wantError: false,
 		},
 		{
 			name:      "invalid comparison constraint - double operator",
-			rulesStr:  "age=[>>18]",
-			wantError: false, // Обрабатывается как enum
+			rulesStr:  "age=[cmp:>>18]", // Добавлен cmp:
+			wantError: true,             // "not for this plugin" → обрабатывается как enum
 		},
 		{
 			name:      "invalid length constraint - double operator",
 			rulesStr:  "username=[len:>>5]",
-			wantError: false, // Обрабатывается как enum
+			wantError: true, // "not for this plugin" → обрабатывается как enum
 		},
 		{
 			name:      "invalid range constraint - min > max",
 			rulesStr:  "level=[range:10-5]",
-			wantError: false, // Обрабатывается как enum
+			wantError: true, // Ошибка синтаксиса (валидный префикс, но некорректные значения)
 		},
 		{
 			name:      "unknown plugin constraint - handled as enum",
@@ -204,30 +225,40 @@ func TestCheckRulesWithRealPlugins(t *testing.T) {
 			wantError: false, // Обрабатывается как enum
 		},
 		{
-			name:      "out of range comparison", // ИЗМЕНИЛОСЬ
-			rulesStr:  "age=[>9999999999]",
-			wantError: false, // Обрабатывается как enum, так как CanParse вернет false
+			name:      "out of range comparison",
+			rulesStr:  "age=[cmp:>9999999999]", // Добавлен cmp:
+			wantError: true,                    // Ошибка синтаксиса (число вне диапазона)
 		},
 		{
-			name:      "out of range length", // ИЗМЕНИЛОСЬ
+			name:      "out of range length",
 			rulesStr:  "username=[len:>9999999999]",
-			wantError: false, // Обрабатывается как enum, так как CanParse вернет false
+			wantError: true, // Ошибка синтаксиса (число вне диапазона)
 		},
 		{
-			name:      "out of range range", // ИЗМЕНИЛОСЬ - ИСПРАВЛЕНО!
+			name:      "out of range range",
 			rulesStr:  "level=[range:1-9999999999]",
-			wantError: false, // Обрабатывается как enum, так как CanParse вернет false
+			wantError: true, // Ошибка синтаксиса (число вне диапазона)
 		},
-		// Добавим тесты, которые ДОЛЖНЫ вызывать ошибки
+		// Тесты, которые ДОЛЖНЫ вызывать ошибки
 		{
 			name:      "invalid syntax - unclosed bracket",
-			rulesStr:  "age=[>18",
-			wantError: true, // Должна быть ошибка синтаксиса
+			rulesStr:  "age=[cmp:>18", // Добавлен cmp:
+			wantError: true,           // Должна быть ошибка синтаксиса
 		},
 		{
 			name:      "invalid parameter name",
 			rulesStr:  "=[]",
 			wantError: true, // Должна быть ошибка имени параметра
+		},
+		{
+			name:      "valid enum with invalid plugin format",
+			rulesStr:  "param=[>>18]", // Это enum, а не плагин
+			wantError: false,          // Валидный enum
+		},
+		{
+			name:      "valid enum with unknown plugin prefix",
+			rulesStr:  "param=[unknown:value]",
+			wantError: false, // Валидный enum
 		},
 	}
 
@@ -269,21 +300,33 @@ func TestCheckRulesIntegration(t *testing.T) {
 	}{
 		{
 			name:            "consistent valid rules",
-			rulesStr:        "age=[>18]&username=[len:>5]",
+			rulesStr:        "age=[cmp:>18]&username=[len:>5]", // Добавлен cmp:
 			shouldCheckPass: true,
 			shouldParsePass: true,
 		},
 		{
-			name:            "invalid plugin constraint - treated as enum", // ИЗМЕНИЛОСЬ
-			rulesStr:        "age=[>>18]",
-			shouldCheckPass: true, // ИЗМЕНИЛОСЬ - теперь это валидный enum
-			shouldParsePass: true, // ИЗМЕНИЛОСЬ - теперь это валидный enum
+			name:            "invalid plugin constraint - syntax error",
+			rulesStr:        "age=[cmp:>]", // Добавлен cmp: и нет числа после оператора
+			shouldCheckPass: false,         // Ошибка синтаксиса
+			shouldParsePass: false,         // Ошибка синтаксиса
+		},
+		{
+			name:            "valid enum with double operator",
+			rulesStr:        "param=[>>18]", // Это enum, а не плагин
+			shouldCheckPass: true,           // Валидный enum для CheckRules
+			shouldParsePass: true,           // Валидный enum для ParseRules
 		},
 		{
 			name:            "URL rules consistency",
-			rulesStr:        "/api/*?age=[>18]&username=[len:>5]",
+			rulesStr:        "/api/*?age=[cmp:>18]&username=[len:>5]", // Добавлен cmp:
 			shouldCheckPass: true,
 			shouldParsePass: true,
+		},
+		{
+			name:            "invalid plugin syntax in URL",
+			rulesStr:        "/api/*?age=[cmp:>]", // Добавлен cmp: и нет числа после оператора
+			shouldCheckPass: false,                // Ошибка синтаксиса
+			shouldParsePass: false,                // Ошибка синтаксиса
 		},
 	}
 
@@ -314,6 +357,76 @@ func TestCheckRulesIntegration(t *testing.T) {
 	}
 }
 
+func TestCheckRulesEdgeCases(t *testing.T) {
+	pv, err := NewParamValidator("", WithPlugins(
+		plugins.NewComparisonPlugin(),
+		plugins.NewLengthPlugin(),
+		plugins.NewRangePlugin(),
+		plugins.NewPatternPlugin(),
+	))
+	if err != nil {
+		t.Fatalf("Failed to create validator: %v", err)
+	}
+
+	tests := []struct {
+		name      string
+		rulesStr  string
+		wantError bool
+	}{
+		{
+			name:      "empty constraint in brackets",
+			rulesStr:  "param=[]",
+			wantError: false, // Валидный key-only параметр
+		},
+		{
+			name:      "callback constraint",
+			rulesStr:  "param=[?]",
+			wantError: false, // Валидный callback
+		},
+		{
+			name:      "wildcard all parameters",
+			rulesStr:  "param=[*]",
+			wantError: false, // Валидный wildcard
+		},
+		{
+			name:      "mixed valid and invalid plugin rules",
+			rulesStr:  "valid=[cmp:>10]&invalid=[cmp:>]", // Добавлен cmp: и один валидный, один с ошибкой
+			wantError: true,                              // Одна ошибка ломает всю проверку
+		},
+		{
+			name:      "plugin constraint with spaces",
+			rulesStr:  "age=[ cmp:> 18 ]", // Добавлен cmp:
+			wantError: false,              // Пробелы тримятся
+		},
+		{
+			name:      "multiple plugins in one rule",
+			rulesStr:  "age=[cmp:>18]&name=[len:>5]&file=[in:*test*]&level=[range:1-10]", // Добавлен cmp:
+			wantError: false,                                                             // Все плагины валидны
+		},
+		{
+			name:      "mixed valid plugin and enum",
+			rulesStr:  "age=[cmp:>18]&status=[active]&file=[in:*test*]", // Добавлен cmp:
+			wantError: false,                                            // Плагины + enum работают вместе
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			err := pv.CheckRules(tt.rulesStr)
+
+			if tt.wantError {
+				if err == nil {
+					t.Errorf("CheckRules() expected error for rules %q, but got nil", tt.rulesStr)
+				}
+			} else {
+				if err != nil {
+					t.Errorf("CheckRules() unexpected error = %v for rules %q", err, tt.rulesStr)
+				}
+			}
+		})
+	}
+}
+
 func BenchmarkCheckRules(b *testing.B) {
 	pv, err := NewParamValidator("", WithPlugins(
 		plugins.NewComparisonPlugin(),
@@ -327,9 +440,9 @@ func BenchmarkCheckRules(b *testing.B) {
 
 	testRules := []string{
 		"page=[1]&limit=[5]",
-		"age=[>18]&username=[len:>5]&email=[in:*@*]",
-		"/api/*?page=[1]&limit=[5];/users?age=[>18]&username=[len:>5]",
-		"param1=[range:1-10]&param2=[<100]&param3=[len:5..15]&param4=[in:*test*]",
+		"age=[cmp:>18]&username=[len:>5]&email=[in:*@*]",                              // Добавлен cmp:
+		"/api/*?page=[1]&limit=[5];/users?age=[cmp:>18]&username=[len:>5]",            // Добавлен cmp:
+		"param1=[range:1-10]&param2=[cmp:<100]&param3=[len:5..15]&param4=[in:*test*]", // Добавлен cmp:
 	}
 
 	b.ResetTimer()
@@ -342,9 +455,9 @@ func BenchmarkCheckRules(b *testing.B) {
 func BenchmarkCheckRulesStatic(b *testing.B) {
 	testRules := []string{
 		"page=[1]&limit=[5]",
-		"age=[>18]&username=[len:>5]",
+		"age=[cmp:>18]&username=[len:>5]", // Добавлен cmp:
 		"/api/*?page=[1]&limit=[5]",
-		"param1=[range:1-10]&param2=[<100]",
+		"param1=[range:1-10]&param2=[cmp:<100]", // Добавлен cmp:
 	}
 
 	b.ResetTimer()

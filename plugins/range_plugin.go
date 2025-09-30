@@ -25,13 +25,14 @@ func (rp *RangePlugin) GetName() string {
 }
 
 func (rp *RangePlugin) Parse(paramName, constraintStr string) (func(string) bool, error) {
-	if len(constraintStr) < 6 || !strings.HasPrefix(constraintStr, "range:") {
-		return nil, fmt.Errorf("range constraint must start with 'range:'")
+	prefix := rp.name + ":"
+	if len(constraintStr) < len(prefix) || !strings.HasPrefix(constraintStr, prefix) {
+		return nil, fmt.Errorf("not for this plugin: range constraint must start with '%s:'", rp.name)
 	}
 
-	rest := constraintStr[6:]
+	rest := strings.TrimSpace(constraintStr[6:])
 	if len(rest) < 3 {
-		return nil, fmt.Errorf("range too short")
+		return nil, fmt.Errorf("not for this plugin: range too short")
 	}
 
 	// Находим разделитель за один проход

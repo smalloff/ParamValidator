@@ -13,7 +13,7 @@ type LengthPlugin struct {
 }
 
 func NewLengthPlugin() *LengthPlugin {
-	return &LengthPlugin{name: "length"}
+	return &LengthPlugin{name: "len"}
 }
 
 func (lp *LengthPlugin) GetName() string {
@@ -57,12 +57,22 @@ func (lp *LengthPlugin) parseOperator(expr string) (string, int) {
 }
 
 func (lp *LengthPlugin) Parse(paramName, constraintStr string) (func(string) bool, error) {
-	// Проверяем формат "len:..."
-	if len(constraintStr) < 4 || constraintStr[0:4] != "len:" {
-		return nil, fmt.Errorf("length constraint must start with 'len:'")
+	// Проверяем формат "len:"
+	prefix := lp.name + ":"
+	if len(constraintStr) < len(prefix) || !strings.HasPrefix(constraintStr, prefix) {
+		return nil, fmt.Errorf("not for this plugin: length constraint must start with '%s:'", lp.name)
 	}
 
-	rest := constraintStr[4:]
+	rest := strings.TrimSpace(constraintStr[len(prefix):])
+	if rest == "" {
+		return nil, fmt.Errorf("empty length expression")
+	}
+
+	// Если после "len:" только пробелы - это не наше правило
+	if len(rest) == 0 {
+		return nil, fmt.Errorf("not for this plugin: empty length expression")
+	}
+
 	validator, err := lp.parseConstraint(rest)
 	if err != nil {
 		return nil, err

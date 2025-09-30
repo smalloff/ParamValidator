@@ -525,13 +525,13 @@ func TestPluginSpecificSecurity(t *testing.T) {
 			constraint string
 			shouldFail bool
 		}{
-			{"Valid comparison", ">10", false},
-			{"Double operator", ">>10", true},
-			{"Invalid combination", "><10", true},
-			{"Missing number", ">", true},
-			{"Very large number", ">9999999999", true},
-			{"Negative number", ">-5", false},
-			{"Invalid characters", ">10abc", true},
+			{"Valid comparison", "cmp:>10", false},
+			{"Double operator", "cmp:>>10", true},
+			{"Invalid combination", "cmp:><10", true},
+			{"Missing number", "cmp:>", true},
+			{"Very large number", "cmp:>9999999999", true},
+			{"Negative number", "cmp:>-5", false},
+			{"Invalid characters", "cmp:>10abc", true},
 		}
 
 		for _, tt := range securityTests {
