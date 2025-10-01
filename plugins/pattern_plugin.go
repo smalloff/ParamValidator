@@ -6,9 +6,8 @@ import (
 	"strings"
 )
 
-const maxPatternLength = 1000 // Максимальная длина паттерна
+const maxPatternLength = 1000
 
-// PatternPlugin плагин для простых шаблонов с wildcard *
 type PatternPlugin struct {
 	name string
 }
@@ -26,6 +25,7 @@ func (pp *PatternPlugin) Parse(paramName, constraintStr string) (func(string) bo
 	if len(constraintStr) < len(prefix) || !strings.HasPrefix(constraintStr, prefix) {
 		return nil, fmt.Errorf("not for this plugin: pattern constraint must start with '%s:'", pp.name)
 	}
+
 	pattern := strings.TrimSpace(constraintStr[3:])
 	if pattern == "" {
 		return nil, fmt.Errorf("not for this plugin: empty pattern")
@@ -35,12 +35,11 @@ func (pp *PatternPlugin) Parse(paramName, constraintStr string) (func(string) bo
 		return nil, fmt.Errorf("pattern too long: %d characters", len(pattern))
 	}
 
-	// Проверяем валидность UTF-8
 	if !isValidUTF8(pattern) {
 		return nil, fmt.Errorf("invalid UTF-8 in pattern")
 	}
 
-	// Проверяем наличие wildcard *
+	// Check for wildcard presence
 	hasWildcard := false
 	for i := 0; i < len(pattern); i++ {
 		if pattern[i] == '*' {
@@ -52,21 +51,17 @@ func (pp *PatternPlugin) Parse(paramName, constraintStr string) (func(string) bo
 		return nil, fmt.Errorf("pattern must contain at least one wildcard '*'")
 	}
 
-	// Предварительно анализируем паттерн
 	hasLeadingStar := pattern[0] == '*'
 	hasTrailingStar := pattern[len(pattern)-1] == '*'
 
-	// Если паттерн простой (один *), обрабатываем специально
+	// Optimize common patterns
 	if hasLeadingStar && hasTrailingStar && len(pattern) == 2 {
-		// Паттерн "**" - любая строка включая пустую
 		return func(value string) bool {
-			// Проверяем длину значения
-			return len(value) <= maxPatternLength*10 // Разумное ограничение
+			return len(value) <= maxPatternLength*10
 		}, nil
 	}
 
 	if hasLeadingStar && !hasTrailingStar && strings.Count(pattern, "*") == 1 {
-		// Паттерн "*suffix" - проверяем суффикс
 		suffix := pattern[1:]
 		return func(value string) bool {
 			if len(value) > maxPatternLength*10 {
@@ -77,7 +72,6 @@ func (pp *PatternPlugin) Parse(paramName, constraintStr string) (func(string) bo
 	}
 
 	if !hasLeadingStar && hasTrailingStar && strings.Count(pattern, "*") == 1 {
-		// Паттерн "prefix*" - проверяем префикс
 		prefix := pattern[:len(pattern)-1]
 		return func(value string) bool {
 			if len(value) > maxPatternLength*10 {
@@ -87,24 +81,20 @@ func (pp *PatternPlugin) Parse(paramName, constraintStr string) (func(string) bo
 		}, nil
 	}
 
-	// Для сложных паттернов используем strings.Split (1 аллокация)
 	parts := strings.Split(pattern, "*")
 	return pp.createValidator(parts), nil
 }
 
 func (pp *PatternPlugin) createValidator(parts []string) func(string) bool {
 	return func(value string) bool {
-		// Проверяем длину значения
 		if len(value) > maxPatternLength*10 {
 			return false
 		}
 
-		// Специальный случай: только wildcard "*" - совпадает с любой строкой
 		if len(parts) == 2 && parts[0] == "" && parts[1] == "" {
 			return true
 		}
 
-		// Проверяем паттерн часть за частью
 		start := 0
 		for i, part := range parts {
 			if part == "" {
@@ -132,7 +122,6 @@ func (pp *PatternPlugin) createValidator(parts []string) func(string) bool {
 	}
 }
 
-// Закрытие ресурсов
 func (pp *PatternPlugin) Close() error {
 	return nil
 }

@@ -88,8 +88,8 @@ type CompiledRules struct {
 	urlRules            map[string]*URLRule
 	paramIndex          *ParamIndex
 	globalParamsMask    ParamMask
-	globalParamsByIndex map[int]*ParamRule // индекс -> глобальное правило
-	urlRulesByIndex     map[int][]*URLRule // индекс -> список URL правил
+	globalParamsByIndex map[int]*ParamRule
+	urlRulesByIndex     map[int][]*URLRule
 }
 
 // ParamIndex provides lock-free parameter indexing

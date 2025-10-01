@@ -9,7 +9,6 @@ import (
 	"github.com/smalloff/paramvalidator/plugins"
 )
 
-// TestPatternPluginSecurity тестирует основные уязвимости паттерн-плагина
 func TestPatternPluginSecurity(t *testing.T) {
 	plugin := plugins.NewPatternPlugin()
 
@@ -18,49 +17,42 @@ func TestPatternPluginSecurity(t *testing.T) {
 		pattern     string
 		value       string
 		expectValid bool
-		description string
 	}{
 		{
 			name:        "Empty pattern",
 			pattern:     "in:",
 			value:       "test",
 			expectValid: false,
-			description: "Empty pattern should be rejected",
 		},
 		{
 			name:        "Only wildcard",
 			pattern:     "in:*",
 			value:       "any value",
 			expectValid: true,
-			description: "Single wildcard should match any string",
 		},
 		{
 			name:        "Multiple consecutive wildcards",
 			pattern:     "in:**",
 			value:       "test",
 			expectValid: true,
-			description: "Multiple wildcards should be handled correctly",
 		},
 		{
 			name:        "Pattern with special regex chars",
 			pattern:     "in:*.*+?[](){}|^$\\*",
 			value:       "test.test+?[](){}|^$\\test",
 			expectValid: true,
-			description: "Special regex characters should be treated literally",
 		},
 		{
 			name:        "Unicode pattern safety",
 			pattern:     "in:*🎉*🚀*",
 			value:       "start🎉middle🚀end",
 			expectValid: true,
-			description: "Unicode characters should be handled safely",
 		},
 		{
 			name:        "Null bytes in pattern",
 			pattern:     "in:*\x00*",
 			value:       "test\x00value",
 			expectValid: true,
-			description: "Null bytes should be handled",
 		},
 	}
 
@@ -76,13 +68,12 @@ func TestPatternPluginSecurity(t *testing.T) {
 
 			result := validator(tt.value)
 			if result != tt.expectValid {
-				t.Errorf("%s: expected %v, got %v", tt.description, tt.expectValid, result)
+				t.Errorf("Expected %v, got %v", tt.expectValid, result)
 			}
 		})
 	}
 }
 
-// TestPatternPluginReDoSProtection тестирует защиту от ReDoS атак
 func TestPatternPluginReDoSProtection(t *testing.T) {
 	plugin := plugins.NewPatternPlugin()
 
@@ -119,7 +110,6 @@ func TestPatternPluginReDoSProtection(t *testing.T) {
 				t.Fatalf("Failed to create validator: %v", err)
 			}
 
-			// Многократный запуск для более точного измерения
 			iterations := 10
 			var totalDuration time.Duration
 
@@ -128,8 +118,7 @@ func TestPatternPluginReDoSProtection(t *testing.T) {
 				result := validator(tt.value)
 				duration := time.Since(start)
 				totalDuration += duration
-
-				_ = result // Используем результат
+				_ = result
 			}
 
 			avgDuration := totalDuration / time.Duration(iterations)
@@ -144,7 +133,6 @@ func TestPatternPluginReDoSProtection(t *testing.T) {
 	}
 }
 
-// TestPluginInputValidation тестирует валидацию входных данных плагинов
 func TestPluginInputValidation(t *testing.T) {
 	pluginTests := []struct {
 		name   string
@@ -162,55 +150,46 @@ func TestPluginInputValidation(t *testing.T) {
 		name         string
 		constraint   string
 		shouldReject bool
-		description  string
 	}{
 		{
 			name:         "Extremely long constraint",
 			constraint:   "len:" + strings.Repeat("a", 10000),
 			shouldReject: true,
-			description:  "Very long constraints should be rejected",
 		},
 		{
 			name:         "Null bytes in constraint",
 			constraint:   "in:test\x00value",
-			shouldReject: false, // Могут быть допустимы в некоторых плагинах
-			description:  "Null bytes should be handled safely",
+			shouldReject: false,
 		},
 		{
 			name:         "Invalid UTF-8 sequence",
 			constraint:   "in:valid\xff\xfeinvalid",
 			shouldReject: true,
-			description:  "Invalid UTF-8 should be rejected",
 		},
 		{
 			name:         "Only special characters",
 			constraint:   "in:!@#$%^&*()",
-			shouldReject: false, // Зависит от плагина
-			description:  "Special characters should be handled",
+			shouldReject: false,
 		},
 		{
 			name:         "Empty string",
 			constraint:   "",
 			shouldReject: true,
-			description:  "Empty constraints should be rejected",
 		},
 		{
 			name:         "Valid length constraint",
 			constraint:   "len:>5",
 			shouldReject: false,
-			description:  "Valid length constraint should be accepted",
 		},
 		{
 			name:         "Valid range constraint",
 			constraint:   "range:1-10",
 			shouldReject: false,
-			description:  "Valid range constraint should be accepted",
 		},
 		{
 			name:         "Valid comparison constraint",
-			constraint:   ">100",
+			constraint:   "cmp:>100",
 			shouldReject: false,
-			description:  "Valid comparison constraint should be accepted",
 		},
 	}
 
@@ -218,37 +197,30 @@ func TestPluginInputValidation(t *testing.T) {
 		t.Run(pluginTest.name, func(t *testing.T) {
 			for _, input := range maliciousInputs {
 				t.Run(input.name, func(t *testing.T) {
-					// Пытаемся распарсить
 					validator, err := pluginTest.plugin.Parse("test_param", input.constraint)
 
 					if input.shouldReject {
-						// Ожидаем ошибку или невозможность парсинга
 						if err == nil && validator != nil {
-							t.Errorf("%s: Expected rejection for constraint %q, but it was accepted",
-								input.description, input.constraint)
+							t.Errorf("Expected rejection for constraint %q, but it was accepted", input.constraint)
 						}
 					} else {
-						// Проверяем, что нет паники
 						func() {
 							defer func() {
 								if r := recover(); r != nil {
-									t.Errorf("%s: PANIC for constraint %q: %v",
-										input.description, input.constraint, r)
+									t.Errorf("PANIC for constraint %q: %v", input.constraint, r)
 								}
 							}()
 
-							// Тестируем валидатор, если он был создан
 							if validator != nil {
 								testValues := []string{"", "test", "123", strings.Repeat("x", 100)}
 								for _, testValue := range testValues {
 									result := validator(testValue)
-									_ = result // Используем результат
+									_ = result
 								}
 							}
 						}()
 					}
 
-					// Логируем информацию для отладки
 					t.Logf("Plugin: %s, Constraint: %q, Error: %v",
 						pluginTest.name, input.constraint, err)
 				})
@@ -257,18 +229,15 @@ func TestPluginInputValidation(t *testing.T) {
 	}
 }
 
-// TestPluginMemorySafety тестирует безопасность использования памяти
 func TestPluginMemorySafety(t *testing.T) {
 	plugin := plugins.NewPatternPlugin()
 
 	t.Run("Memory exhaustion protection", func(t *testing.T) {
-		// Создаем валидатор с простым паттерном
 		validator, err := plugin.Parse("test", "in:*test*")
 		if err != nil {
 			t.Fatalf("Failed to create validator: %v", err)
 		}
 
-		// Тестируем с различными размерами входных данных
 		testCases := []struct {
 			name  string
 			value string
@@ -285,7 +254,6 @@ func TestPluginMemorySafety(t *testing.T) {
 				result := validator(tc.value)
 				duration := time.Since(start)
 
-				// Проверяем, что выполнение не занимает слишком много времени
 				if duration > 100*time.Millisecond {
 					t.Errorf("Memory exhaustion potential: processing %d bytes took %v",
 						len(tc.value), duration)
@@ -299,7 +267,6 @@ func TestPluginMemorySafety(t *testing.T) {
 	})
 }
 
-// TestPluginConcurrentSafety тестирует конкурентную безопасность
 func TestPluginConcurrentSafety(t *testing.T) {
 	pluginList := []struct {
 		name   string
@@ -330,7 +297,6 @@ func TestPluginConcurrentSafety(t *testing.T) {
 					}()
 
 					for j := 0; j < iterations; j++ {
-						// Создаем различные constraint для тестирования
 						var constraint string
 						switch pl.name {
 						case "pattern":
@@ -338,17 +304,16 @@ func TestPluginConcurrentSafety(t *testing.T) {
 						case "length":
 							constraint = "len:>5"
 						case "comparison":
-							constraint = ">10"
+							constraint = "cmp:>10"
 						case "range":
 							constraint = "range:1..100"
 						}
 
 						validator, err := pl.plugin.Parse("test_param", constraint)
 						if err != nil {
-							continue // Некоторые комбинации могут быть невалидными
+							continue
 						}
 
-						// Тестируем валидатор
 						if validator != nil {
 							testValues := []string{"", "test", "12345", "valid_value"}
 							for _, value := range testValues {
@@ -360,7 +325,6 @@ func TestPluginConcurrentSafety(t *testing.T) {
 				}(i)
 			}
 
-			// Ждем завершения всех горутин
 			for i := 0; i < goroutines; i++ {
 				<-done
 			}
@@ -368,7 +332,6 @@ func TestPluginConcurrentSafety(t *testing.T) {
 	}
 }
 
-// TestPluginBoundaryConditions тестирует граничные условия
 func TestPluginBoundaryConditions(t *testing.T) {
 	plugin := plugins.NewPatternPlugin()
 
@@ -377,35 +340,30 @@ func TestPluginBoundaryConditions(t *testing.T) {
 		pattern     string
 		values      []string
 		expectError bool
-		description string
 	}{
 		{
 			name:        "Empty value handling",
 			pattern:     "in:*",
 			values:      []string{""},
 			expectError: false,
-			description: "Empty values should be handled correctly",
 		},
 		{
 			name:        "Very long pattern - should be rejected",
-			pattern:     "in:" + strings.Repeat("a", 1000) + "*", // 1001 символов - превышает лимит
+			pattern:     "in:" + strings.Repeat("a", 1000) + "*",
 			values:      []string{},
 			expectError: true,
-			description: "Very long patterns should be rejected",
 		},
 		{
 			name:        "Maximum length pattern",
-			pattern:     "in:" + strings.Repeat("a", 999) + "*", // 1000 символов - максимальная длина
+			pattern:     "in:" + strings.Repeat("a", 999) + "*",
 			values:      []string{strings.Repeat("a", 999) + "suffix"},
 			expectError: false,
-			description: "Maximum length patterns should work",
 		},
 		{
 			name:        "Unicode boundary",
-			pattern:     "in:*" + string([]rune{0x1F600}), // смайлик
+			pattern:     "in:*" + string([]rune{0x1F600}),
 			values:      []string{"prefix" + string([]rune{0x1F600})},
 			expectError: false,
-			description: "Unicode boundary characters should work",
 		},
 	}
 
@@ -425,35 +383,30 @@ func TestPluginBoundaryConditions(t *testing.T) {
 			}
 
 			for _, value := range tt.values {
-				// Проверяем, что нет паники
 				func() {
 					defer func() {
 						if r := recover(); r != nil {
-							t.Errorf("%s: PANIC for value %q: %v",
-								tt.description, value, r)
+							t.Errorf("PANIC for value %q: %v", value, r)
 						}
 					}()
 
 					result := validator(value)
 
-					// Проверяем валидность UTF-8 если значение не пустое
 					if value != "" && !utf8.ValidString(value) {
 						t.Logf("Warning: Test value contains invalid UTF-8: %q", value)
 					}
 
-					t.Logf("Pattern: %q, Value: %q, Result: %v - %s",
-						tt.pattern, value, result, tt.description)
+					t.Logf("Pattern: %q, Value: %q, Result: %v",
+						tt.pattern, value, result)
 				}()
 			}
 		})
 	}
 }
 
-// TestPluginResourceCleanup тестирует корректное освобождение ресурсов
 func TestPluginResourceCleanup(t *testing.T) {
 	plugin := plugins.NewPatternPlugin()
 
-	// Создаем множество валидаторов и проверяем, что нет утечек
 	patterns := []string{
 		"in:*test*",
 		"in:prefix*",
@@ -462,7 +415,6 @@ func TestPluginResourceCleanup(t *testing.T) {
 		"in:" + strings.Repeat("x", 100) + "*",
 	}
 
-	// Многократное создание и использование валидаторов
 	for i := 0; i < 1000; i++ {
 		for _, pattern := range patterns {
 			validator, err := plugin.Parse("test", pattern)
@@ -470,7 +422,6 @@ func TestPluginResourceCleanup(t *testing.T) {
 				continue
 			}
 
-			// Используем валидатор
 			testValues := []string{"", "test", "no_match", strings.Repeat("x", 100)}
 			for _, value := range testValues {
 				result := validator(value)
@@ -484,7 +435,6 @@ func TestPluginResourceCleanup(t *testing.T) {
 	}
 }
 
-// TestPluginSpecificSecurity тестирует специфические уязвимости каждого плагина
 func TestPluginSpecificSecurity(t *testing.T) {
 	t.Run("LengthPlugin security", func(t *testing.T) {
 		plugin := plugins.NewLengthPlugin()
@@ -511,8 +461,6 @@ func TestPluginSpecificSecurity(t *testing.T) {
 				if !tt.shouldFail && err != nil {
 					t.Errorf("Unexpected error for constraint %q: %v", tt.constraint, err)
 				}
-
-				t.Logf("Constraint: %q, Error: %v", tt.constraint, err)
 			})
 		}
 	})
@@ -543,8 +491,6 @@ func TestPluginSpecificSecurity(t *testing.T) {
 				if !tt.shouldFail && err != nil {
 					t.Errorf("Unexpected error for constraint %q: %v", tt.constraint, err)
 				}
-
-				t.Logf("Constraint: %q, Error: %v", tt.constraint, err)
 			})
 		}
 	})
@@ -575,14 +521,11 @@ func TestPluginSpecificSecurity(t *testing.T) {
 				if !tt.shouldFail && err != nil {
 					t.Errorf("Unexpected error for constraint %q: %v", tt.constraint, err)
 				}
-
-				t.Logf("Constraint: %q, Error: %v", tt.constraint, err)
 			})
 		}
 	})
 }
 
-// TestPluginErrorHandling тестирует обработку ошибок в плагинах
 func TestPluginErrorHandling(t *testing.T) {
 	pluginTests := []struct {
 		name   string
@@ -595,40 +538,40 @@ func TestPluginErrorHandling(t *testing.T) {
 			name:   "pattern",
 			plugin: plugins.NewPatternPlugin(),
 			invalidConstraints: []string{
-				"",                                      // empty
-				"in:",                                   // empty pattern
-				"invalid",                               // wrong format
-				"in:" + strings.Repeat("a", 1001) + "*", // too long
+				"",
+				"in:",
+				"invalid",
+				"in:" + strings.Repeat("a", 1001) + "*",
 			},
 		},
 		{
 			name:   "length",
 			plugin: plugins.NewLengthPlugin(),
 			invalidConstraints: []string{
-				"",                    // empty
-				"len:",                // empty constraint
-				"len:>>5",             // invalid operator
-				"len:999999999999999", // too large
+				"",
+				"len:",
+				"len:>>5",
+				"len:999999999999999",
 			},
 		},
 		{
 			name:   "comparison",
 			plugin: plugins.NewComparisonPlugin(),
 			invalidConstraints: []string{
-				"",           // empty
-				">",          // missing number
-				">>10",       // double operator
-				">999999999", // too large
+				"",
+				"cmp:>",
+				"cmp:>>10",
+				"cmp:>999999999",
 			},
 		},
 		{
 			name:   "range",
 			plugin: plugins.NewRangePlugin(),
 			invalidConstraints: []string{
-				"",                  // empty
-				"range:",            // empty range
-				"range:10..1",       // invalid range
-				"range:1..99999999", // too large
+				"",
+				"range:",
+				"range:10..1",
+				"range:1..99999999",
 			},
 		},
 	}
@@ -639,7 +582,6 @@ func TestPluginErrorHandling(t *testing.T) {
 				t.Run(constraint, func(t *testing.T) {
 					validator, err := pt.plugin.Parse("test", constraint)
 
-					// Должна быть ошибка или nil валидатор
 					if err == nil && validator != nil {
 						t.Errorf("Expected error for constraint %q, but got validator", constraint)
 					}

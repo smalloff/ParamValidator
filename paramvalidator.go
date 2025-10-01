@@ -1,3 +1,4 @@
+// paramvalidator.go
 package paramvalidator
 
 import (
@@ -383,20 +384,20 @@ func (pv *ParamValidator) validatePlugin(rule *ParamRule, value string, useFast 
 }
 
 // safeCallback executes callback with panic protection
-func (pv *ParamValidator) safeCallback(paramName, value string) bool {
+func (pv *ParamValidator) safeCallback(paramName, value string) (result bool) {
 	defer func() {
 		if r := recover(); r != nil {
-			// Panic recovered, result remains false
+			result = false
 		}
 	}()
 	return pv.callbackFunc(paramName, value)
 }
 
 // safeCustomValidator executes custom validator with panic protection
-func (pv *ParamValidator) safeCustomValidator(validator func(string) bool, value string) bool {
+func (pv *ParamValidator) safeCustomValidator(validator func(string) bool, value string) (result bool) {
 	defer func() {
 		if r := recover(); r != nil {
-			// Panic recovered, result remains false
+			result = false
 		}
 	}()
 	return validator(value)
@@ -414,14 +415,14 @@ func (pv *ParamValidator) getParamMasksForURL(urlPath string) ParamMasks {
 		return masks
 	}
 
-	// 1. Global parameters
+	// Global parameters
 	for name := range pv.compiledRules.globalParams {
 		if idx := pv.compiledRules.paramIndex.GetIndex(name); idx != -1 {
 			masks.Global.SetBit(idx)
 		}
 	}
 
-	// 2. Most specific rule
+	// Most specific rule
 	mostSpecificRule := pv.findMostSpecificURLRuleUnsafe(urlPath)
 	if mostSpecificRule != nil {
 		for name := range mostSpecificRule.Params {
@@ -431,7 +432,7 @@ func (pv *ParamValidator) getParamMasksForURL(urlPath string) ParamMasks {
 		}
 	}
 
-	// 3. URL rules - INCLUDE all parameters, but check priorities during validation
+	// URL rules - INCLUDE all parameters, but check priorities during validation
 	for pattern, urlRule := range pv.compiledRules.urlRules {
 		if pv.urlMatchesPatternUnsafe(urlPath, pattern) {
 			for name := range urlRule.Params {
@@ -943,15 +944,15 @@ func (pv *ParamValidator) fillParamMasksDirect(masks *ParamMasks, urlPath string
 		return
 	}
 
-	// 1. Global parameters - use pre-calculated mask
+	// Global parameters - use pre-calculated mask
 	masks.Global = pv.compiledRules.globalParamsMask
 
-	// 2. Most specific rule
+	// Most specific rule
 	if mostSpecificRule := pv.findMostSpecificURLRuleUnsafe(urlPath); mostSpecificRule != nil {
 		masks.SpecificURL = mostSpecificRule.ParamMask
 	}
 
-	// 3. URL rules
+	// URL rules
 	for pattern, urlRule := range pv.compiledRules.urlRules {
 		if pv.urlMatchesPatternUnsafe(urlPath, pattern) {
 			filteredMask := urlRule.ParamMask.Difference(masks.SpecificURL)
@@ -1130,7 +1131,7 @@ func (pv *ParamValidator) isAllowAllParamsMasks(masks ParamMasks) bool {
 	return idx != -1 && masks.CombinedMask().GetBit(idx)
 }
 
-// CheckRules быстро проверяет валидность строки правил
+// CheckRules quickly checks validity of rules string
 func (pv *ParamValidator) CheckRules(rulesStr string) error {
 	if !pv.initialized.Load() {
 		return fmt.Errorf("validator not initialized")
@@ -1139,7 +1140,7 @@ func (pv *ParamValidator) CheckRules(rulesStr string) error {
 	return pv.parser.CheckRulesSyntax(rulesStr)
 }
 
-// CheckRulesStatic статическая проверка правил
+// CheckRulesStatic static rules validation
 func CheckRulesStatic(rulesStr string) error {
 	if rulesStr == "" {
 		return nil
@@ -1151,7 +1152,7 @@ func CheckRulesStatic(rulesStr string) error {
 	return parser.CheckRulesSyntax(rulesStr)
 }
 
-// CheckRulesStaticWithPlugins статическая проверка с плагинами
+// CheckRulesStaticWithPlugins static validation with plugins
 func CheckRulesStaticWithPlugins(rulesStr string, plugins []PluginConstraintParser) error {
 	if rulesStr == "" {
 		return nil

@@ -10,185 +10,153 @@ func TestPatternPlugin(t *testing.T) {
 	plugin := plugins.NewPatternPlugin()
 
 	tests := []struct {
-		name        string
-		constraint  string
-		value       string
-		shouldParse bool
-		expected    bool
+		name       string
+		constraint string
+		value      string
+		expectErr  bool
+		expected   bool
 	}{
-		// Префиксные паттерны
 		{
-			name:        "prefix pattern match",
-			constraint:  "in:start*",
-			value:       "start_value",
-			shouldParse: true,
-			expected:    true,
+			name:       "prefix pattern match",
+			constraint: "in:start*",
+			value:      "start_value",
+			expected:   true,
 		},
 		{
-			name:        "prefix pattern exact match",
-			constraint:  "in:start*",
-			value:       "start",
-			shouldParse: true,
-			expected:    true,
+			name:       "prefix pattern exact match",
+			constraint: "in:start*",
+			value:      "start",
+			expected:   true,
 		},
 		{
-			name:        "prefix pattern no match",
-			constraint:  "in:start*",
-			value:       "wrong_start",
-			shouldParse: true,
-			expected:    false,
+			name:       "prefix pattern no match",
+			constraint: "in:start*",
+			value:      "wrong_start",
+			expected:   false,
 		},
 		{
-			name:        "prefix pattern empty value",
-			constraint:  "in:start*",
-			value:       "",
-			shouldParse: true,
-			expected:    false,
-		},
-
-		// Суффиксные паттерны
-		{
-			name:        "suffix pattern match",
-			constraint:  "in:*end",
-			value:       "value_end",
-			shouldParse: true,
-			expected:    true,
+			name:       "prefix pattern empty value",
+			constraint: "in:start*",
+			value:      "",
+			expected:   false,
 		},
 		{
-			name:        "suffix pattern exact match",
-			constraint:  "in:*end",
-			value:       "end",
-			shouldParse: true,
-			expected:    true,
+			name:       "suffix pattern match",
+			constraint: "in:*end",
+			value:      "value_end",
+			expected:   true,
 		},
 		{
-			name:        "suffix pattern no match",
-			constraint:  "in:*end",
-			value:       "end_wrong",
-			shouldParse: true,
-			expected:    false,
-		},
-
-		// Паттерны содержания
-		{
-			name:        "contains pattern match",
-			constraint:  "in:*val*",
-			value:       "some_val_here",
-			shouldParse: true,
-			expected:    true,
+			name:       "suffix pattern exact match",
+			constraint: "in:*end",
+			value:      "end",
+			expected:   true,
 		},
 		{
-			name:        "contains pattern exact match",
-			constraint:  "in:*val*",
-			value:       "val",
-			shouldParse: true,
-			expected:    true,
+			name:       "suffix pattern no match",
+			constraint: "in:*end",
+			value:      "end_wrong",
+			expected:   false,
 		},
 		{
-			name:        "contains pattern no match",
-			constraint:  "in:*val*",
-			value:       "nothing",
-			shouldParse: true,
-			expected:    false,
-		},
-
-		// Множественные части
-		{
-			name:        "multiple parts match",
-			constraint:  "in:*one*two*three*",
-			value:       "blablaoneblablatwoblathreeblabla",
-			shouldParse: true,
-			expected:    true,
+			name:       "contains pattern match",
+			constraint: "in:*val*",
+			value:      "some_val_here",
+			expected:   true,
 		},
 		{
-			name:        "multiple parts exact match",
-			constraint:  "in:*one*two*three*",
-			value:       "onetwothree",
-			shouldParse: true,
-			expected:    true,
+			name:       "contains pattern exact match",
+			constraint: "in:*val*",
+			value:      "val",
+			expected:   true,
 		},
 		{
-			name:        "multiple parts partial match",
-			constraint:  "in:*one*two*three*",
-			value:       "one_two",
-			shouldParse: true,
-			expected:    false,
-		},
-
-		// Любая строка
-		{
-			name:        "any string match",
-			constraint:  "in:*",
-			value:       "any_value",
-			shouldParse: true,
-			expected:    true,
+			name:       "contains pattern no match",
+			constraint: "in:*val*",
+			value:      "nothing",
+			expected:   false,
 		},
 		{
-			name:        "any string empty",
-			constraint:  "in:*",
-			value:       "",
-			shouldParse: true,
-			expected:    true,
-		},
-
-		// Сложные паттерны
-		{
-			name:        "complex pattern match",
-			constraint:  "in:pre*mid*post",
-			value:       "pre123mid456post",
-			shouldParse: true,
-			expected:    true,
+			name:       "multiple parts match",
+			constraint: "in:*one*two*three*",
+			value:      "blablaoneblablatwoblathreeblabla",
+			expected:   true,
 		},
 		{
-			name:        "complex pattern no match",
-			constraint:  "in:pre*mid*post",
-			value:       "pre123mid456",
-			shouldParse: true,
-			expected:    false,
-		},
-
-		// Невалидные форматы
-		{
-			name:        "empty constraint",
-			constraint:  "",
-			shouldParse: false,
+			name:       "multiple parts exact match",
+			constraint: "in:*one*two*three*",
+			value:      "onetwothree",
+			expected:   true,
 		},
 		{
-			name:        "only prefix without pattern",
-			constraint:  "in:",
-			shouldParse: false,
+			name:       "multiple parts partial match",
+			constraint: "in:*one*two*three*",
+			value:      "one_two",
+			expected:   false,
 		},
 		{
-			name:        "only wildcard",
-			constraint:  "in:*",
-			shouldParse: true,
-			expected:    true,
+			name:       "any string match",
+			constraint: "in:*",
+			value:      "any_value",
+			expected:   true,
 		},
 		{
-			name:        "multiple wildcards only",
-			constraint:  "in:**",
-			shouldParse: true,
-			expected:    true,
+			name:       "any string empty",
+			constraint: "in:*",
+			value:      "",
+			expected:   true,
 		},
 		{
-			name:        "too long pattern",
-			constraint:  "in:a*" + string(make([]byte, 1001)), // Создаем слишком длинный паттерн
-			shouldParse: false,
+			name:       "complex pattern match",
+			constraint: "in:pre*mid*post",
+			value:      "pre123mid456post",
+			expected:   true,
 		},
 		{
-			name:        "pattern without wildcard",
-			constraint:  "in:nowildcard",
-			shouldParse: false,
+			name:       "complex pattern no match",
+			constraint: "in:pre*mid*post",
+			value:      "pre123mid456",
+			expected:   false,
 		},
 		{
-			name:        "wrong prefix",
-			constraint:  "len:*",
-			shouldParse: false,
+			name:       "empty constraint",
+			constraint: "",
+			expectErr:  true,
 		},
 		{
-			name:        "wrong prefix range",
-			constraint:  "range*",
-			shouldParse: false,
+			name:       "only prefix without pattern",
+			constraint: "in:",
+			expectErr:  true,
+		},
+		{
+			name:       "only wildcard",
+			constraint: "in:*",
+			expected:   true,
+		},
+		{
+			name:       "multiple wildcards only",
+			constraint: "in:**",
+			expected:   true,
+		},
+		{
+			name:       "too long pattern",
+			constraint: "in:a*" + string(make([]byte, 1001)),
+			expectErr:  true,
+		},
+		{
+			name:       "pattern without wildcard",
+			constraint: "in:nowildcard",
+			expectErr:  true,
+		},
+		{
+			name:       "wrong prefix",
+			constraint: "len:*",
+			expectErr:  true,
+		},
+		{
+			name:       "wrong prefix range",
+			constraint: "range*",
+			expectErr:  true,
 		},
 	}
 
@@ -196,33 +164,33 @@ func TestPatternPlugin(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			validator, err := plugin.Parse("test_param", tt.constraint)
 
-			if tt.shouldParse {
-				if err != nil {
-					t.Errorf("Parse(%q) failed: %v", tt.constraint, err)
-					return
-				}
-
-				// Test validation if we have a validator
-				if validator != nil {
-					result := validator(tt.value)
-					if result != tt.expected {
-						t.Errorf("Validator(%q) for constraint %q = %v, expected %v",
-							tt.value, tt.constraint, result, tt.expected)
-					}
-				} else {
-					t.Errorf("Parse(%q) returned nil validator", tt.constraint)
-				}
-			} else {
+			if tt.expectErr {
 				if err == nil {
 					t.Errorf("Parse(%q) should have failed but succeeded", tt.constraint)
 				}
+				return
+			}
+
+			if err != nil {
+				t.Errorf("Parse(%q) failed: %v", tt.constraint, err)
+				return
+			}
+
+			if validator == nil {
+				t.Errorf("Parse(%q) returned nil validator", tt.constraint)
+				return
+			}
+
+			result := validator(tt.value)
+			if result != tt.expected {
+				t.Errorf("Validator(%q) for constraint %q = %v, expected %v",
+					tt.value, tt.constraint, result, tt.expected)
 			}
 		})
 	}
 }
 
 func TestPatternPluginIntegration(t *testing.T) {
-	// Создаем парсер и явно регистрируем плагин
 	patternPlugin := plugins.NewPatternPlugin()
 	parser := NewRuleParser(patternPlugin)
 
@@ -284,13 +252,11 @@ func TestPatternPluginIntegration(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			// Парсим полные правила
 			globalParams, urlRules, err := parser.parseRulesUnsafe(tt.rule)
 			if err != nil {
 				t.Fatalf("Failed to parse rule %q: %v", tt.rule, err)
 			}
 
-			// Ищем правило параметра
 			var paramRule *ParamRule
 			for _, rule := range globalParams {
 				if rule != nil {
@@ -300,7 +266,6 @@ func TestPatternPluginIntegration(t *testing.T) {
 			}
 
 			if paramRule == nil {
-				// Проверяем URL rules
 				for _, urlRule := range urlRules {
 					for _, rule := range urlRule.Params {
 						if rule != nil {
@@ -339,69 +304,62 @@ func TestPatternEdgeCases(t *testing.T) {
 	plugin := plugins.NewPatternPlugin()
 
 	tests := []struct {
-		name        string
-		constraint  string
-		shouldParse bool
+		name       string
+		constraint string
+		expectErr  bool
 	}{
 		{
-			name:        "valid prefix pattern",
-			constraint:  "in:start*",
-			shouldParse: true,
+			name:       "valid prefix pattern",
+			constraint: "in:start*",
 		},
 		{
-			name:        "valid suffix pattern",
-			constraint:  "in:*end",
-			shouldParse: true,
+			name:       "valid suffix pattern",
+			constraint: "in:*end",
 		},
 		{
-			name:        "valid contains pattern",
-			constraint:  "in:*val*",
-			shouldParse: true,
+			name:       "valid contains pattern",
+			constraint: "in:*val*",
 		},
 		{
-			name:        "any string pattern",
-			constraint:  "in:*",
-			shouldParse: true,
+			name:       "any string pattern",
+			constraint: "in:*",
 		},
 		{
-			name:        "multiple wildcards only",
-			constraint:  "in:**",
-			shouldParse: true,
+			name:       "multiple wildcards only",
+			constraint: "in:**",
 		},
 		{
-			name:        "empty constraint should not parse",
-			constraint:  "",
-			shouldParse: false,
+			name:       "empty constraint should not parse",
+			constraint: "",
+			expectErr:  true,
 		},
 		{
-			name:        "only prefix should not parse",
-			constraint:  "in:",
-			shouldParse: false,
+			name:       "only prefix should not parse",
+			constraint: "in:",
+			expectErr:  true,
 		},
 		{
-			name:        "complex multiple parts",
-			constraint:  "in:*one*two*three*",
-			shouldParse: true,
+			name:       "complex multiple parts",
+			constraint: "in:*one*two*three*",
 		},
 		{
-			name:        "pattern with special characters",
-			constraint:  "in:*.*+?[](){}|^$\\*",
-			shouldParse: true,
+			name:       "pattern with special characters",
+			constraint: "in:*.*+?[](){}|^$\\*",
 		},
 		{
-			name:        "pattern without wildcard should not parse",
-			constraint:  "in:nowildcard",
-			shouldParse: false,
+			name:       "pattern without wildcard should not parse",
+			constraint: "in:nowildcard",
+			expectErr:  true,
 		},
 		{
-			name:        "too long pattern should not parse",
-			constraint:  "in:a*" + string(make([]byte, 1001)),
-			shouldParse: false,
+			name:       "too long pattern should not parse",
+			constraint: "in:a*" + string(make([]byte, 1001)),
+			expectErr:  true,
 		},
 		{
-			name:        "wrong prefix should not parse",
-			constraint:  "len:*",
-			shouldParse: false,
+			name:       "wrong prefix should not parse",
+			constraint: "len:*",
+			expectErr:  true,
 		},
 	}
 
@@ -409,22 +367,21 @@ func TestPatternEdgeCases(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			validator, err := plugin.Parse("test", tt.constraint)
 
-			if tt.shouldParse {
+			if tt.expectErr {
+				if err == nil {
+					t.Errorf("Parse(%q) should have failed but succeeded", tt.constraint)
+				}
+			} else {
 				if err != nil {
 					t.Errorf("Parse(%q) failed: %v", tt.constraint, err)
 				} else if validator == nil {
 					t.Errorf("Parse(%q) returned nil validator", tt.constraint)
-				}
-			} else {
-				if err == nil {
-					t.Errorf("Parse(%q) should have failed but succeeded", tt.constraint)
 				}
 			}
 		})
 	}
 }
 
-// Бенчмарки - убираем CanParse бенчмарк
 func BenchmarkPatternPlugin(b *testing.B) {
 	plugin := plugins.NewPatternPlugin()
 	validator, err := plugin.Parse("test", "in:img_*")
@@ -473,10 +430,7 @@ func BenchmarkPatternPluginFilterQuery(b *testing.B) {
 	err = pv.ParseRules("/api?file=[in:img_*]&id=[in:*user*]")
 
 	if err != nil {
-		b.Fatalf(
-			"Failed to parse rules: %v",
-			err,
-		)
+		b.Fatalf("Failed to parse rules: %v", err)
 	}
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {

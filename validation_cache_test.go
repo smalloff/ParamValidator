@@ -1,4 +1,3 @@
-// validation_cache_test.go
 package paramvalidator
 
 import (
@@ -6,24 +5,20 @@ import (
 	"testing"
 )
 
-// TestValidationCacheBasic tests basic cache operations
 func TestValidationCacheBasic(t *testing.T) {
 	cache := NewValidationCache()
 
-	// Test empty cache
 	if size := cache.Size(); size != 0 {
 		t.Errorf("Expected empty cache, got size %d", size)
 	}
 
 	validator := func(string) bool { return true }
 
-	// Test Put and Get
 	cache.Put("testPlugin", "param1", "constraint1", validator)
 	if size := cache.Size(); size != 1 {
 		t.Errorf("Expected cache size 1, got %d", size)
 	}
 
-	// Test retrieval
 	if cachedValidator, found := cache.Get("testPlugin", "param1", "constraint1"); !found {
 		t.Error("Expected to find validator in cache")
 	} else if cachedValidator == nil {
@@ -32,17 +27,14 @@ func TestValidationCacheBasic(t *testing.T) {
 		t.Error("Cached validator should work correctly")
 	}
 
-	// Test non-existent key
 	if _, found := cache.Get("unknown", "param", "constraint"); found {
 		t.Error("Should not find non-existent validator")
 	}
 }
 
-// TestValidationCacheClear tests cache clearance
 func TestValidationCacheClear(t *testing.T) {
 	cache := NewValidationCache()
 
-	// Add some validators
 	cache.Put("plugin1", "param1", "constraint1", func(string) bool { return true })
 	cache.Put("plugin2", "param2", "constraint2", func(string) bool { return false })
 
@@ -50,27 +42,23 @@ func TestValidationCacheClear(t *testing.T) {
 		t.Errorf("Expected cache size 2, got %d", size)
 	}
 
-	// Clear cache
 	cache.Clear()
 
 	if size := cache.Size(); size != 0 {
 		t.Errorf("Expected empty cache after clear, got size %d", size)
 	}
 
-	// Verify validators are gone
 	if _, found := cache.Get("plugin1", "param1", "constraint1"); found {
 		t.Error("Validator should be removed after clear")
 	}
 }
 
-// TestValidationCacheKeyUniqueness tests cache key uniqueness
 func TestValidationCacheKeyUniqueness(t *testing.T) {
 	cache := NewValidationCache()
 
 	validator1 := func(string) bool { return true }
 	validator2 := func(string) bool { return false }
 
-	// Different plugins, same param/constraint
 	cache.Put("plugin1", "param", "constraint", validator1)
 	cache.Put("plugin2", "param", "constraint", validator2)
 
@@ -78,7 +66,6 @@ func TestValidationCacheKeyUniqueness(t *testing.T) {
 		t.Errorf("Expected 2 validators for different plugins, got %d", size)
 	}
 
-	// Retrieve and verify uniqueness
 	if v1, found := cache.Get("plugin1", "param", "constraint"); !found || v1 == nil {
 		t.Error("Should find validator for plugin1")
 	} else if !v1("test") {
@@ -92,12 +79,10 @@ func TestValidationCacheKeyUniqueness(t *testing.T) {
 	}
 }
 
-// TestValidationCacheConcurrent tests concurrent cache access
 func TestValidationCacheConcurrent(t *testing.T) {
 	cache := NewValidationCache()
 	iterations := 1000
 
-	// Concurrent writes
 	done := make(chan bool)
 	for i := 0; i < iterations; i++ {
 		go func(n int) {
@@ -106,12 +91,10 @@ func TestValidationCacheConcurrent(t *testing.T) {
 		}(i)
 	}
 
-	// Wait for all writes
 	for i := 0; i < iterations; i++ {
 		<-done
 	}
 
-	// Verify all entries are accessible
 	for i := 0; i < iterations; i++ {
 		if _, found := cache.Get("plugin", "param", string(rune(i))); !found {
 			t.Errorf("Validator %d should be accessible", i)
@@ -123,21 +106,17 @@ func TestValidationCacheConcurrent(t *testing.T) {
 	}
 }
 
-// TestValidationCacheFunctionBehavior tests that cached functions maintain correct behavior
 func TestValidationCacheFunctionBehavior(t *testing.T) {
 	cache := NewValidationCache()
 
-	// Create a validator with specific behavior
 	callCount := 0
 	originalValidator := func(s string) bool {
 		callCount++
 		return s == "test"
 	}
 
-	// Store validator
 	cache.Put("testPlugin", "testParam", "testConstraint", originalValidator)
 
-	// Retrieve multiple times
 	validator1, found1 := cache.Get("testPlugin", "testParam", "testConstraint")
 	validator2, found2 := cache.Get("testPlugin", "testParam", "testConstraint")
 
@@ -149,7 +128,6 @@ func TestValidationCacheFunctionBehavior(t *testing.T) {
 		t.Error("Validators should not be nil")
 	}
 
-	// Test that both validators have the same behavior
 	result1 := validator1("test")
 	result2 := validator2("test")
 
@@ -161,7 +139,6 @@ func TestValidationCacheFunctionBehavior(t *testing.T) {
 		t.Error("Validator should return true for 'test'")
 	}
 
-	// Test with different input
 	result3 := validator1("wrong")
 	result4 := validator2("wrong")
 
@@ -174,13 +151,11 @@ func TestValidationCacheFunctionBehavior(t *testing.T) {
 	}
 }
 
-// TestValidationCacheFunctionPointer tests function pointer consistency using reflect
 func TestValidationCacheFunctionPointer(t *testing.T) {
 	cache := NewValidationCache()
 
 	validator := func(s string) bool { return len(s) > 0 }
 
-	// Store and retrieve
 	cache.Put("plugin", "param", "constraint", validator)
 	retrieved, found := cache.Get("plugin", "param", "constraint")
 
@@ -188,16 +163,13 @@ func TestValidationCacheFunctionPointer(t *testing.T) {
 		t.Error("Should find stored validator")
 	}
 
-	// Use reflect to get function pointers (for testing purposes only)
 	val1 := reflect.ValueOf(validator)
 	val2 := reflect.ValueOf(retrieved)
 
-	// Both should be functions
 	if val1.Kind() != reflect.Func || val2.Kind() != reflect.Func {
 		t.Error("Both should be functions")
 	}
 
-	// Test they behave the same
 	testCases := []string{"", "test", "hello"}
 	for _, tc := range testCases {
 		res1 := validator(tc)
@@ -208,11 +180,9 @@ func TestValidationCacheFunctionPointer(t *testing.T) {
 	}
 }
 
-// BenchmarkValidationCache measures cache performance
 func BenchmarkValidationCache(b *testing.B) {
 	cache := NewValidationCache()
 
-	// Pre-populate cache
 	for i := 0; i < 100; i++ {
 		cache.Put("plugin", "param", string(rune(i)), func(string) bool { return true })
 	}
@@ -221,15 +191,13 @@ func BenchmarkValidationCache(b *testing.B) {
 	b.RunParallel(func(pb *testing.PB) {
 		i := 0
 		for pb.Next() {
-			// Mix of hits and misses
-			key := string(rune(i % 150)) // 100 hits, 50 misses
+			key := string(rune(i % 150))
 			cache.Get("plugin", "param", key)
 			i++
 		}
 	})
 }
 
-// BenchmarkValidationCachePut measures cache write performance
 func BenchmarkValidationCachePut(b *testing.B) {
 	cache := NewValidationCache()
 

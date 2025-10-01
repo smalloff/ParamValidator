@@ -1,3 +1,4 @@
+// mask.go
 package paramvalidator
 
 import "sync"
@@ -201,7 +202,7 @@ func (pi *ParamIndex) CreateMaskForParams(params map[string]*ParamRule) ParamMas
 	mask := NewParamMask()
 	for paramName := range params {
 		if idx := pi.GetIndex(paramName); idx != -1 {
-			mask.SetBitUnsafe(idx) // Without bounds checking
+			mask.SetBitUnsafe(idx)
 		}
 	}
 	return mask
@@ -224,13 +225,13 @@ func (pi *ParamIndex) GetParamsFromMask(mask ParamMask) []string {
 func (pm ParamMasks) CombinedMask() ParamMask {
 	// SpecificURL has highest priority
 	result := pm.Global.Union(pm.URL)
-	result = result.Union(pm.SpecificURL) // SpecificURL overwrites conflicting parameters
+	result = result.Union(pm.SpecificURL)
 	return result
 }
 
 // GetRuleSource returns rule source for parameter
 func (pm ParamMasks) GetRuleSource(paramIndex int) RuleSource {
-	// IMPORTANT: check in priority order
+	// Check in priority order
 	if pm.SpecificURL.GetBitUnsafe(paramIndex) {
 		return SourceSpecificURL
 	}
@@ -243,13 +244,13 @@ func (pm ParamMasks) GetRuleSource(paramIndex int) RuleSource {
 	return SourceNone
 }
 
-// GetIndexByBytes ищет параметр по []byte без создания строки
+// GetIndexByBytes finds parameter by []byte without creating string
 func (pi *ParamIndex) GetIndexByBytes(keyBytes []byte) int {
 	var result int = -1
 	pi.paramToIndex.Range(func(key, value interface{}) bool {
 		paramName := key.(string)
 		if len(paramName) == len(keyBytes) {
-			// Побайтовое сравнение
+			// Byte-by-byte comparison
 			match := true
 			for i := 0; i < len(keyBytes); i++ {
 				if keyBytes[i] != paramName[i] {

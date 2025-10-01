@@ -1,4 +1,4 @@
-// comparison_plugin_optimized.go
+// comparison_plugin.go
 package plugins
 
 import (
@@ -7,10 +7,9 @@ import (
 )
 
 const (
-	maxComparisonValue = 1000000 // Максимальное значение для сравнения
+	maxComparisonValue = 1000000
 )
 
-// ComparisonPlugin плагин для операторов сравнения: >5, <10, >=100, <=50
 type ComparisonPlugin struct {
 	name string
 }
@@ -24,30 +23,25 @@ func (cp *ComparisonPlugin) GetName() string {
 }
 
 func (cp *ComparisonPlugin) Parse(paramName, constraintStr string) (func(string) bool, error) {
-	lenConstraintStr := len(constraintStr)
-	if lenConstraintStr == 0 {
+	if len(constraintStr) == 0 {
 		return nil, fmt.Errorf("not for this plugin: empty constraint")
 	}
 
-	// Проверяем формат используя имя плагина
 	prefix := cp.name + ":"
 	if len(constraintStr) < len(prefix) || !strings.HasPrefix(constraintStr, prefix) {
 		return nil, fmt.Errorf("not for this plugin: comparison constraint must start with '%s:'", cp.name)
 	}
 
-	// Извлекаем часть после префикса
 	rest := strings.TrimSpace(constraintStr[len(prefix):])
 	if rest == "" {
 		return nil, fmt.Errorf("empty comparison expression")
 	}
 
-	// Определяем оператор
 	operator, numStart := cp.parseOperator(rest)
 	if operator == "" {
 		return nil, fmt.Errorf("invalid operator format: must start with >, <, >=, or <=")
 	}
 
-	// Проверяем что есть число после оператора
 	if numStart >= len(rest) {
 		return nil, fmt.Errorf("missing number value after operator")
 	}
@@ -57,13 +51,11 @@ func (cp *ComparisonPlugin) Parse(paramName, constraintStr string) (func(string)
 		return nil, fmt.Errorf("missing number value")
 	}
 
-	// Парсим число
 	threshold, ok := parseNumber(numStr)
 	if !ok {
 		return nil, fmt.Errorf("invalid number format: '%s'", numStr)
 	}
 
-	// Проверяем ограничения на числа
 	if threshold > maxComparisonValue || threshold < -maxComparisonValue {
 		return nil, fmt.Errorf("value out of range: %d (allowed: -%d to %d)",
 			threshold, maxComparisonValue, maxComparisonValue)
@@ -72,7 +64,6 @@ func (cp *ComparisonPlugin) Parse(paramName, constraintStr string) (func(string)
 	return cp.createValidator(operator, threshold), nil
 }
 
-// parseOperator определяет оператор и возвращает позицию начала числа
 func (cp *ComparisonPlugin) parseOperator(str string) (string, int) {
 	if len(str) >= 2 {
 		switch str[0:2] {
@@ -95,7 +86,6 @@ func (cp *ComparisonPlugin) parseOperator(str string) (string, int) {
 	return "", 0
 }
 
-// createValidator создает функцию валидации
 func (cp *ComparisonPlugin) createValidator(operator string, threshold int) func(string) bool {
 	switch operator {
 	case ">":
@@ -123,7 +113,6 @@ func (cp *ComparisonPlugin) createValidator(operator string, threshold int) func
 	}
 }
 
-// Закрытие ресурсов (если нужно)
 func (cp *ComparisonPlugin) Close() error {
 	return nil
 }

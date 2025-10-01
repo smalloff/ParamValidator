@@ -104,7 +104,6 @@ func TestComparisonPlugin(t *testing.T) {
 		value      string
 		expected   bool
 	}{
-		// Greater than
 		{
 			name:       "greater than valid",
 			constraint: "cmp:>5",
@@ -123,8 +122,6 @@ func TestComparisonPlugin(t *testing.T) {
 			value:      "4",
 			expected:   false,
 		},
-
-		// Greater than or equal
 		{
 			name:       "greater than or equal valid",
 			constraint: "cmp:>=5",
@@ -143,8 +140,6 @@ func TestComparisonPlugin(t *testing.T) {
 			value:      "4",
 			expected:   false,
 		},
-
-		// Less than
 		{
 			name:       "less than valid",
 			constraint: "cmp:<10",
@@ -163,8 +158,6 @@ func TestComparisonPlugin(t *testing.T) {
 			value:      "11",
 			expected:   false,
 		},
-
-		// Less than or equal
 		{
 			name:       "less than or equal valid",
 			constraint: "cmp:<=10",
@@ -183,8 +176,6 @@ func TestComparisonPlugin(t *testing.T) {
 			value:      "11",
 			expected:   false,
 		},
-
-		// Negative numbers
 		{
 			name:       "negative numbers valid",
 			constraint: "cmp:>-5",
@@ -203,8 +194,6 @@ func TestComparisonPlugin(t *testing.T) {
 			value:      "-50",
 			expected:   true,
 		},
-
-		// Large numbers
 		{
 			name:       "large numbers valid",
 			constraint: "cmp:>100",
@@ -217,8 +206,6 @@ func TestComparisonPlugin(t *testing.T) {
 			value:      "1000001",
 			expected:   false,
 		},
-
-		// Equal boundary
 		{
 			name:       "equal boundary valid",
 			constraint: "cmp:>=0",
@@ -235,14 +222,12 @@ func TestComparisonPlugin(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			// Test Parse
 			validator, err := plugin.Parse("test_param", tt.constraint)
 			if err != nil {
 				t.Errorf("Parse(%q) failed: %v", tt.constraint, err)
 				return
 			}
 
-			// Test validation if we have a validator
 			if validator != nil {
 				result := validator(tt.value)
 				if result != tt.expected {
@@ -257,7 +242,6 @@ func TestComparisonPlugin(t *testing.T) {
 }
 
 func TestComparisonPluginIntegration(t *testing.T) {
-	// Создаем парсер и явно регистрируем плагин
 	comparisonPlugin := plugins.NewComparisonPlugin()
 	parser := NewRuleParser(comparisonPlugin)
 
@@ -319,13 +303,11 @@ func TestComparisonPluginIntegration(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			// Парсим полные правила
 			globalParams, urlRules, err := parser.parseRulesUnsafe(tt.rule)
 			if err != nil {
 				t.Fatalf("Failed to parse rule %q: %v", tt.rule, err)
 			}
 
-			// Ищем правило параметра
 			var paramRule *ParamRule
 			for _, rule := range globalParams {
 				if rule != nil {
@@ -335,7 +317,6 @@ func TestComparisonPluginIntegration(t *testing.T) {
 			}
 
 			if paramRule == nil {
-				// Проверяем URL rules
 				for _, urlRule := range urlRules {
 					for _, rule := range urlRule.Params {
 						if rule != nil {
@@ -370,7 +351,6 @@ func TestComparisonPluginIntegration(t *testing.T) {
 	}
 }
 
-// Убираем бенчмарк CanParse
 func BenchmarkComparisonPlugin(b *testing.B) {
 	plugin := plugins.NewComparisonPlugin()
 	validator, err := plugin.Parse("test", "cmp:>100")

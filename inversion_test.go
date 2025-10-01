@@ -256,7 +256,6 @@ func TestInvertedRulesNormalization(t *testing.T) {
 
 func TestInvertedCallbackRules(t *testing.T) {
 	callbackFunc := func(key string, value string) bool {
-		// Callback считает валидными только значения "valid" и "approved"
 		return value == "valid" || value == "approved"
 	}
 
@@ -282,7 +281,7 @@ func TestInvertedCallbackRules(t *testing.T) {
 			name:     "inverted callback - mixed values",
 			rules:    "/api?token=![?]",
 			url:      "/api?token=valid&token=invalid",
-			expected: false, // один невалидный - вся проверка невалидна
+			expected: false,
 		},
 		{
 			name:     "normal callback vs inverted callback",

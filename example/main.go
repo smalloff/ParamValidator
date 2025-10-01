@@ -4,63 +4,91 @@ import (
 	"fmt"
 
 	"github.com/smalloff/paramvalidator"
+	"github.com/smalloff/paramvalidator/plugins"
 )
 
 func main() {
-	// Define validation rules
-	rules := "/products?page=[1-10]&category=[electronics,books]"
+	// Create plugins
+	rangePlugin := plugins.NewRangePlugin()
+	lengthPlugin := plugins.NewLengthPlugin()
+	comparisonPlugin := plugins.NewComparisonPlugin()
+	patternPlugin := plugins.NewPatternPlugin()
 
-	// Create validator
-	pv, err := paramvalidator.NewParamValidator(rules)
+	// Example 1: Range plugin
+	fmt.Println("=== Range Plugin ===")
+	rules1 := "/products?page=[range:1-10]"
+	pv1, err := paramvalidator.NewParamValidator(rules1, paramvalidator.WithPlugins(rangePlugin))
+	if err != nil {
+		fmt.Println("Error:", err)
+		return
+	}
+	fmt.Println("Valid:", pv1.ValidateURL("/products?page=5"))    // true
+	fmt.Println("Invalid:", pv1.ValidateURL("/products?page=15")) // false
+
+	// Example 2: Length plugin
+	fmt.Println("\n=== Length Plugin ===")
+	rules2 := "/api?username=[len:3..10]"
+	pv2, err := paramvalidator.NewParamValidator(rules2, paramvalidator.WithPlugins(lengthPlugin))
+	if err != nil {
+		fmt.Println("Error:", err)
+		return
+	}
+	fmt.Println("Valid:", pv2.ValidateURL("/api?username=john")) // true
+	fmt.Println("Invalid:", pv2.ValidateURL("/api?username=jo")) // false
+
+	// Example 3: Comparison plugin
+	fmt.Println("\n=== Comparison Plugin ===")
+	rules3 := "/data?score=[cmp:>50]"
+	pv3, err := paramvalidator.NewParamValidator(rules3, paramvalidator.WithPlugins(comparisonPlugin))
+	if err != nil {
+		fmt.Println("Error:", err)
+		return
+	}
+	fmt.Println("Valid:", pv3.ValidateURL("/data?score=75"))   // true
+	fmt.Println("Invalid:", pv3.ValidateURL("/data?score=25")) // false
+
+	// Example 4: Pattern plugin
+	fmt.Println("\n=== Pattern Plugin ===")
+	rules4 := "/files?name=[in:*.jpg]"
+	pv4, err := paramvalidator.NewParamValidator(rules4, paramvalidator.WithPlugins(patternPlugin))
+	if err != nil {
+		fmt.Println("Error:", err)
+		return
+	}
+	fmt.Println("Valid:", pv4.ValidateURL("/files?name=photo.jpg")) // true
+	fmt.Println("Invalid:", pv4.ValidateURL("/files?name=doc.pdf")) // false
+
+	// Example 5: URL filtering
+	fmt.Println("\n=== URL Filtering ===")
+	rules5 := "/api?page=[range:1-10]&name=[len:3..10]"
+	pv5, err := paramvalidator.NewParamValidator(rules5, paramvalidator.WithPlugins(rangePlugin, lengthPlugin))
+	if err != nil {
+		fmt.Println("Error:", err)
+		return
+	}
+	filtered := pv5.FilterURL("/api?page=5&name=john&invalid=param")
+	fmt.Println("Filtered URL:", filtered) // /api?page=5&name=john
+
+	// Example 6: Query validation
+	fmt.Println("\n=== Query Validation ===")
+	rules6 := "/search?q=[len:2..50]&limit=[range:1-100]"
+	pv6, err := paramvalidator.NewParamValidator(rules6, paramvalidator.WithPlugins(lengthPlugin, rangePlugin))
 	if err != nil {
 		fmt.Println("Error:", err)
 		return
 	}
 
-	// Validate URL parameters
-	isValid := pv.ValidateURL("/products?page=5&category=electronics")
-	fmt.Println("URL valid:", isValid) // true
+	validQuery := pv6.ValidateQuery("/search", "q=test&limit=10")
+	fmt.Println("Valid query:", validQuery) // true
 
-	// Normalize invalid URL (removes invalid params)
-	normalized := pv.FilterURL("/products?page=15&category=electronics&invalid=param")
-	fmt.Println("Normalized URL:", normalized) // /products?category=electronics
+	invalidQuery := pv6.ValidateQuery("/search", "q=a&limit=150")
+	fmt.Println("Invalid query:", invalidQuery) // false
 
-	// Validate query parameters string
-	validQuery := pv.ValidateQuery("/products", "page=5&category=electronics")
-	fmt.Println("Query params valid:", validQuery) // true
-
-	// Filter query parameters (keep only allowed ones)
-	filtered := pv.FilterQuery("/products", "page=15&category=books&invalid=value")
-	fmt.Println("Filtered query:", filtered) // category=books
-
-	// Rule with callback parameter [?]
-	rules = "/api?auth=[?]&page=[1-10]"
-
-	// Create validator with callback function
-	pv, err = paramvalidator.NewParamValidator(rules, func(key string, value string) bool {
-		if key == "auth" {
-			// Custom validation logic
-			return value == "secret123"
-		}
-		return false
-	})
-
+	// Example 7: Error handling
+	fmt.Println("\n=== Error Handling ===")
+	invalidRules := "/api?page=[len:constraint]"
+	_, err = paramvalidator.NewParamValidator(invalidRules, paramvalidator.WithPlugins(lengthPlugin))
 	if err != nil {
-		fmt.Println("Error:", err)
-		return
+		fmt.Println("Expected error:", err)
 	}
-
-	// Validate with callback
-	valid1 := pv.ValidateURL("/api?auth=secret123&page=5")
-	fmt.Println("Valid auth:", valid1) // true
-
-	valid2 := pv.ValidateURL("/api?auth=wrong&page=5")
-	fmt.Println("Invalid auth:", valid2) // false
-
-	// Validate and filter query strings separately
-	queryValid := pv.ValidateQuery("/api", "auth=secret123&page=3")
-	fmt.Println("Query validation:", queryValid) // true
-
-	filteredQuery := pv.FilterQuery("/api", "auth=wrong&page=3&extra=param")
-	fmt.Println("Filtered query:", filteredQuery) // page=3
 }

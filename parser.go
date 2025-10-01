@@ -1,3 +1,4 @@
+// parser.go
 package paramvalidator
 
 import (
@@ -555,7 +556,6 @@ func (rp *RuleParser) createParamRule(paramName, constraintStr string) (*ParamRu
 }
 
 // tryPlugins attempts to parse constraint using registered plugins
-// Returns: validatorFunc, pluginUsed, error
 func (rp *RuleParser) tryPlugins(paramName, constraintStr string) (func(string) bool, bool, error) {
 	// First check cache
 	for _, plugin := range rp.plugins {
@@ -579,24 +579,22 @@ func (rp *RuleParser) tryPlugins(paramName, constraintStr string) (func(string) 
 		}
 
 		if err != nil {
-			// Если это ошибка "не для этого плагина", продолжаем поиск
+			// If this is "not for this plugin" error, continue searching
 			if isNotForPluginError(err) {
 				pluginErrors = append(pluginErrors, fmt.Sprintf("%s: %v", plugin.GetName(), err))
 				continue
 			}
-			// Любая другая ошибка - это синтаксическая ошибка, возвращаем её
+			// Any other error is a syntax error, return it
 			return nil, false, fmt.Errorf("plugin %s: %w", plugin.GetName(), err)
 		}
 	}
 
-	// Если все плагины вернули "не для этого плагина", это нормально - используем стандартные правила
+	// If all plugins returned "not for this plugin", use standard rules
 	if len(pluginErrors) > 0 {
-		// Логируем для отладки, но не возвращаем ошибку
-		// fmt.Printf("All plugins rejected constraint '%s': %v\n", constraintStr, pluginErrors)
 		return nil, false, nil
 	}
 
-	// No plugin could handle this constraint, but that's OK - use standard rules
+	// No plugin could handle this constraint, use standard rules
 	return nil, false, nil
 }
 
@@ -689,7 +687,7 @@ func (rp *RuleParser) CheckRulesSyntax(rulesStr string) error {
 // testPluginValidation tests plugin validation functions for all constraints
 func (rp *RuleParser) testPluginValidation(globalParams map[string]*ParamRule, urlRules map[string]*URLRule) error {
 	checkConstraint := func(paramName, constraintStr string) error {
-		// Try plugins first (same logic as in createParamRule)
+		// Try plugins first
 		_, pluginUsed, err := rp.tryPlugins(paramName, constraintStr)
 		if err != nil {
 			return fmt.Errorf("parameter '%s': plugin error for constraint '%s': %w", paramName, constraintStr, err)
@@ -699,13 +697,10 @@ func (rp *RuleParser) testPluginValidation(globalParams map[string]*ParamRule, u
 		if !pluginUsed {
 			testRule := &ParamRule{Name: paramName}
 			if strings.Contains(constraintStr, ",") {
-				// Test enum constraint
 				if err := rp.parseEnumConstraint(testRule, constraintStr); err != nil {
 					return fmt.Errorf("parameter '%s': invalid enum constraint '%s': %w", paramName, constraintStr, err)
 				}
 			}
-			// Other standard patterns (PatternKeyOnly, PatternAny, PatternCallback, PatternEnum)
-			// are always valid, so no need to test them
 		}
 
 		return nil

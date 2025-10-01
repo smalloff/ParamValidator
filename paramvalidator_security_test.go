@@ -10,56 +10,48 @@ import (
 	"unicode/utf8"
 )
 
-// TestParamValidatorSecurity тестирует основные уязвимости paramvalidator
 func TestParamValidatorSecurity(t *testing.T) {
 	tests := []struct {
 		name        string
 		rules       string
 		url         string
 		expectValid bool
-		description string
 	}{
 		{
 			name:        "Empty rules - any URL invalid",
 			rules:       "",
 			url:         "/test?param=value",
 			expectValid: false,
-			description: "Empty rules should reject all URLs",
 		},
 		{
 			name:        "Wildcard rules - allow any",
 			rules:       "*?*",
 			url:         "/any/path?any=param",
 			expectValid: true,
-			description: "Wildcard rules should match any URL",
 		},
 		{
 			name:        "Multiple consecutive wildcards normalized",
 			rules:       "**?**",
 			url:         "/test?param=value",
 			expectValid: true,
-			description: "Multiple wildcards should be normalized to single wildcards",
 		},
 		{
 			name:        "Rules with special regex chars treated literally",
 			rules:       "/test*?param=[special.value]",
 			url:         "/test-path?param=special.value",
 			expectValid: true,
-			description: "Special regex characters should be treated literally",
 		},
 		{
 			name:        "Unicode rules safety",
 			rules:       "/🎉*?param=[🚀]",
 			url:         "/🎉path?param=🚀",
 			expectValid: true,
-			description: "Unicode characters should be handled safely",
 		},
 		{
 			name:        "Path traversal attempts",
 			rules:       "/api/*?param=[valid]",
 			url:         "/api/../etc/passwd?param=valid",
 			expectValid: false,
-			description: "Path traversal should be blocked by URL matching",
 		},
 	}
 
@@ -75,13 +67,12 @@ func TestParamValidatorSecurity(t *testing.T) {
 
 			result := pv.ValidateURL(tt.url)
 			if result != tt.expectValid {
-				t.Errorf("%s: expected %v, got %v", tt.description, tt.expectValid, result)
+				t.Errorf("expected %v, got %v", tt.expectValid, result)
 			}
 		})
 	}
 }
 
-// TestParamValidatorReDoSProtection тестирует защиту от ReDoS атак
 func TestParamValidatorReDoSProtection(t *testing.T) {
 	redosTests := []struct {
 		name        string
@@ -119,7 +110,7 @@ func TestParamValidatorReDoSProtection(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			pv, err := NewParamValidator(tt.rules)
 			if err != nil {
-				t.Logf("Validator creation failed (may be expected): %v", err)
+				t.Logf("Validator creation failed: %v", err)
 				return
 			}
 
@@ -131,79 +122,65 @@ func TestParamValidatorReDoSProtection(t *testing.T) {
 				result := pv.ValidateURL(tt.url)
 				duration := time.Since(start)
 				totalDuration += duration
-
 				_ = result
 			}
 
 			avgDuration := totalDuration / time.Duration(iterations)
 			if avgDuration > tt.maxDuration {
-				t.Errorf("Potential ReDoS detected: %s took avg %v (max allowed: %v). Rules: %q, URL length: %d",
-					tt.name, avgDuration, tt.maxDuration, tt.rules, len(tt.url))
+				t.Errorf("Potential ReDoS detected: %s took avg %v (max allowed: %v)", tt.name, avgDuration, tt.maxDuration)
 			}
-
-			t.Logf("Rules: %q, URL length: %d, Avg duration: %v",
-				tt.rules, len(tt.url), avgDuration)
 		})
 	}
 }
 
-// TestParamValidatorInputValidation тестирует валидацию входных данных
 func TestParamValidatorInputValidation(t *testing.T) {
 	maliciousInputs := []struct {
 		name         string
 		rules        string
 		url          string
 		shouldReject bool
-		description  string
 	}{
 		{
 			name:         "Long rules handling",
 			rules:        strings.Repeat("/path?param=[value]&", 100) + "final=[end]",
 			url:          "/path?param=value&final=end",
 			shouldReject: false,
-			description:  "Long rules should be handled",
 		},
 		{
 			name:         "Long URL handling",
 			rules:        "/api?param=[value]",
 			url:          "/api?param=" + strings.Repeat("x", 1000),
 			shouldReject: false,
-			description:  "Long URLs should be handled safely",
 		},
 		{
 			name:         "Invalid UTF-8 sequence in rules",
 			rules:        "valid\xff\xfeinvalid?param=[value]",
 			url:          "/valid?param=value",
 			shouldReject: true,
-			description:  "Invalid UTF-8 in rules should be rejected",
 		},
 		{
 			name:         "Special characters in rules",
 			rules:        "!@#$%^&*()?param=[value]",
 			url:          "/!@#$%?param=value",
 			shouldReject: false,
-			description:  "Special characters should be handled",
 		},
 		{
 			name:         "Malformed URL in validation",
 			rules:        "/api?param=[value]",
 			url:          ":invalid:url:",
 			shouldReject: true,
-			description:  "Malformed URLs should be rejected",
 		},
 		{
 			name:         "URL with many parameters",
 			rules:        "/api?p1=[v1]&p2=[v2]",
 			url:          "/api?" + strings.Repeat("extra=param&", 50) + "p1=v1&p2=v2",
 			shouldReject: false,
-			description:  "URLs with many parameters should be handled",
 		},
 		{
 			name:         "Deeply nested paths",
 			rules:        "/api/*/v*/*?param=[value]",
 			url:          "/api/" + strings.Repeat("level/", 10) + "v1/final?param=value",
 			shouldReject: false,
-			description:  "Deeply nested paths should be handled",
 		},
 	}
 
@@ -215,30 +192,24 @@ func TestParamValidatorInputValidation(t *testing.T) {
 				if err == nil && pv != nil {
 					result := pv.ValidateURL(input.url)
 					if result {
-						t.Errorf("%s: Expected rejection for URL %q, but it was accepted",
-							input.description, input.url)
+						t.Errorf("Expected rejection for URL %q, but it was accepted", input.url)
 					}
 				}
 			} else {
 				if err == nil && pv != nil {
-					func() {
-						defer func() {
-							if r := recover(); r != nil {
-								t.Errorf("%s: PANIC for URL %q: %v",
-									input.description, input.url, r)
-							}
-						}()
-
-						result := pv.ValidateURL(input.url)
-						_ = result
+					defer func() {
+						if r := recover(); r != nil {
+							t.Errorf("PANIC for URL %q: %v", input.url, r)
+						}
 					}()
+					result := pv.ValidateURL(input.url)
+					_ = result
 				}
 			}
 		})
 	}
 }
 
-// TestParamValidatorMemorySafety тестирует безопасность использования памяти
 func TestParamValidatorMemorySafety(t *testing.T) {
 	t.Run("Memory exhaustion protection", func(t *testing.T) {
 		pv, err := NewParamValidator("/api/*?page=[5]&limit=[10]")
@@ -263,19 +234,14 @@ func TestParamValidatorMemorySafety(t *testing.T) {
 				duration := time.Since(start)
 
 				if duration > 50*time.Millisecond {
-					t.Errorf("Memory exhaustion potential: processing URL of length %d took %v",
-						len(tc.url), duration)
+					t.Errorf("Memory exhaustion potential: processing URL of length %d took %v", len(tc.url), duration)
 				}
-
 				_ = result
-				t.Logf("Processed URL length %d in %v, result: %v",
-					len(tc.url), duration, result)
 			})
 		}
 	})
 }
 
-// TestParamValidatorConcurrentSafety тестирует конкурентную безопасность
 func TestParamValidatorConcurrentSafety(t *testing.T) {
 	pv, err := NewParamValidator("/api/*?page=[5]&limit=[10]&sort=[name,date]")
 	if err != nil {
@@ -345,49 +311,42 @@ func TestParamValidatorConcurrentSafety(t *testing.T) {
 	}
 }
 
-// TestParamValidatorBoundaryConditions тестирует граничные условия
 func TestParamValidatorBoundaryConditions(t *testing.T) {
 	tests := []struct {
 		name        string
 		rules       string
 		url         string
 		expectValid bool
-		description string
 	}{
 		{
 			name:        "Empty URL handling",
 			rules:       "/api?param=[value]",
 			url:         "",
 			expectValid: false,
-			description: "Empty URLs should be rejected",
 		},
 		{
 			name:        "Long rules handling",
 			rules:       "/" + strings.Repeat("a", 500) + "?param=[value]",
 			url:         "/" + strings.Repeat("a", 500) + "?param=value",
 			expectValid: true,
-			description: "Long rules should work",
 		},
 		{
 			name:        "Unicode boundary",
 			rules:       "/" + string([]rune{0x1F600}) + "*?param=[value]",
 			url:         "/" + string([]rune{0x1F600}) + "test?param=value",
 			expectValid: true,
-			description: "Unicode boundary characters should work",
 		},
 		{
 			name:        "Many URL rules",
 			rules:       strings.Repeat("/api"+string(rune('a'))+"?param=[value];", 10),
 			url:         "/apia?param=value",
 			expectValid: true,
-			description: "Many URL rules should be handled",
 		},
 		{
 			name:        "Complex parameter constraints",
 			rules:       "/api?p1=[value1]&p2=[value2]&p3=[value3]",
 			url:         "/api?p1=value1&p2=value2&p3=value3",
 			expectValid: true,
-			description: "Complex parameter constraints should work",
 		},
 	}
 
@@ -402,28 +361,22 @@ func TestParamValidatorBoundaryConditions(t *testing.T) {
 				return
 			}
 
-			func() {
-				defer func() {
-					if r := recover(); r != nil {
-						t.Errorf("%s: PANIC for URL %q: %v",
-							tt.description, tt.url, r)
-					}
-				}()
-
-				result := pv.ValidateURL(tt.url)
-
-				if tt.url != "" && !utf8.ValidString(tt.url) {
-					t.Logf("Warning: Test URL contains invalid UTF-8: %q", tt.url)
+			defer func() {
+				if r := recover(); r != nil {
+					t.Errorf("PANIC for URL %q: %v", tt.url, r)
 				}
-
-				t.Logf("Rules: %q, URL: %q, Result: %v - %s",
-					tt.rules, tt.url, result, tt.description)
 			}()
+
+			result := pv.ValidateURL(tt.url)
+
+			if tt.url != "" && !utf8.ValidString(tt.url) {
+				t.Logf("Warning: Test URL contains invalid UTF-8: %q", tt.url)
+			}
+			_ = result
 		})
 	}
 }
 
-// TestParamValidatorResourceCleanup тестирует корректное освобождение ресурсов
 func TestParamValidatorResourceCleanup(t *testing.T) {
 	rules := []string{
 		"/api/*?page=[5]&limit=[10]",
@@ -461,14 +414,9 @@ func TestParamValidatorResourceCleanup(t *testing.T) {
 				}
 			}
 		}
-
-		if i%20 == 0 {
-			t.Logf("Completed %d iterations without resource leaks", i)
-		}
 	}
 }
 
-// TestParamValidatorSpecificSecurity тестирует специфические уязвимости
 func TestParamValidatorSpecificSecurity(t *testing.T) {
 	t.Run("URL parsing vulnerabilities", func(t *testing.T) {
 		securityTests := []struct {
@@ -493,9 +441,6 @@ func TestParamValidatorSpecificSecurity(t *testing.T) {
 				result := pv.ValidateURL(tt.url)
 				if tt.shouldFail && result {
 					t.Errorf("Expected URL %q to be rejected, but it was accepted", tt.url)
-				}
-				if !tt.shouldFail && !result {
-					t.Logf("URL %q was rejected but may be acceptable", tt.url)
 				}
 			})
 		}
@@ -543,7 +488,6 @@ func TestParamValidatorSpecificSecurity(t *testing.T) {
 	})
 }
 
-// TestParamValidatorCallbackSecurity тестирует безопасность callback-функций
 func TestParamValidatorCallbackSecurity(t *testing.T) {
 	callbackFunc := func(key string, value string) bool {
 		if len(value) > 100 {
@@ -585,21 +529,16 @@ func TestParamValidatorCallbackSecurity(t *testing.T) {
 			t.Fatalf("Failed to create validator: %v", err)
 		}
 
-		func() {
-			defer func() {
-				if r := recover(); r != nil {
-					t.Logf("Callback panic handled as expected: %v", r)
-					return
-				}
-			}()
-			result := pv.ValidateURL("/api?test=panic")
-			_ = result
-			t.Log("No panic occurred - callback may be protected")
+		defer func() {
+			if r := recover(); r != nil {
+				return
+			}
 		}()
+		result := pv.ValidateURL("/api?test=panic")
+		_ = result
 	})
 }
 
-// BenchmarkParamValidatorSecurity бенчмарки безопасности
 func BenchmarkParamValidatorSecurity(b *testing.B) {
 	benchmarks := []struct {
 		name  string
@@ -646,7 +585,6 @@ func BenchmarkParamValidatorSecurity(b *testing.B) {
 	}
 }
 
-// TestFilterURLPattern тестирует нормализацию URL паттернов
 func TestFilterURLPattern(t *testing.T) {
 	tests := []struct {
 		input    string
@@ -668,7 +606,6 @@ func TestFilterURLPattern(t *testing.T) {
 			result := normalizeURLPattern(tt.input)
 			if result != tt.expected {
 				t.Logf("FilterURLPattern(%q) = %q, want %q", tt.input, result, tt.expected)
-				// Не падаем, просто логируем различия
 			}
 		})
 	}

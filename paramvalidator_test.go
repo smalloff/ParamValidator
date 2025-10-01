@@ -102,7 +102,7 @@ func TestParseRules(t *testing.T) {
 		{
 			name:      "invalid enum values",
 			rulesStr:  "page=[a,b,c]",
-			wantError: false, // Enum values can be any strings
+			wantError: false,
 		},
 	}
 
@@ -113,8 +113,6 @@ func TestParseRules(t *testing.T) {
 			if tt.wantError {
 				if err == nil {
 					t.Errorf("ParseRules() expected error for rules %q, but got nil", tt.rulesStr)
-				} else {
-					t.Logf("ParseRules() correctly returned error: %v", err)
 				}
 			} else {
 				if err != nil {
@@ -788,10 +786,7 @@ func TestConcurrentValidation(t *testing.T) {
 		go func(id int) {
 			defer wg.Done()
 
-			// Генерируем значение страницы от 1 до 5
 			pageValue := fmt.Sprintf("%d", (id%5)+1)
-
-			// Определяем, должно ли значение проходить валидацию
 			shouldPass := pageValue == "5"
 
 			switch id % 4 {
@@ -810,13 +805,11 @@ func TestConcurrentValidation(t *testing.T) {
 			case 2:
 				normalized := pv.FilterURL(fmt.Sprintf("/api/users?page=%s&invalid=value", pageValue))
 				if shouldPass {
-					// Если значение должно проходить, проверяем что оно осталось в URL
 					if !strings.Contains(normalized, "page="+pageValue) {
 						errorCh <- fmt.Errorf("goroutine %d: normalization failed for valid page=%s: %s",
 							id, pageValue, normalized)
 					}
 				} else {
-					// Если значение не должно проходить, проверяем что оно удалено
 					if strings.Contains(normalized, "page="+pageValue) {
 						errorCh <- fmt.Errorf("goroutine %d: normalization failed for invalid page=%s: %s",
 							id, pageValue, normalized)
@@ -826,18 +819,15 @@ func TestConcurrentValidation(t *testing.T) {
 				filtered := pv.FilterQuery("/api/users",
 					fmt.Sprintf("page=%s&limit=10&invalid=value", pageValue))
 				if shouldPass {
-					// Если значение должно проходить, проверяем что оно осталось
 					if !strings.Contains(filtered, "page="+pageValue) || !strings.Contains(filtered, "limit=10") {
 						errorCh <- fmt.Errorf("goroutine %d: filtering failed for valid page=%s: %s",
 							id, pageValue, filtered)
 					}
 				} else {
-					// Если значение не должно проходить, проверяем что оно удалено
 					if strings.Contains(filtered, "page="+pageValue) {
 						errorCh <- fmt.Errorf("goroutine %d: filtering failed for invalid page=%s: %s",
 							id, pageValue, filtered)
 					}
-					// Но limit=10 должен остаться, так как он всегда валиден
 					if !strings.Contains(filtered, "limit=10") {
 						errorCh <- fmt.Errorf("goroutine %d: filtering removed valid limit for page=%s: %s",
 							id, pageValue, filtered)
@@ -886,7 +876,6 @@ func TestConcurrentFilterQuery(t *testing.T) {
 			filtered := pv.FilterQuery("/api/users", query)
 
 			if shouldPass {
-				// Проверяем, что валидные параметры остались
 				if !strings.Contains(filtered, "page="+pageValue) {
 					errorCh <- fmt.Errorf("goroutine %d: valid page parameter filtered out: %s", id, filtered)
 				}
@@ -897,13 +886,11 @@ func TestConcurrentFilterQuery(t *testing.T) {
 					errorCh <- fmt.Errorf("goroutine %d: valid sort parameter filtered out: %s", id, filtered)
 				}
 			} else {
-				// Проверяем, что невалидный параметр страницы удален
 				if strings.Contains(filtered, "page="+pageValue) {
 					errorCh <- fmt.Errorf("goroutine %d: invalid page parameter not filtered: %s", id, filtered)
 				}
 			}
 
-			// Проверяем, что невалидные параметры всегда удаляются
 			if strings.Contains(filtered, "invalid=value") || strings.Contains(filtered, "extra=param") {
 				errorCh <- fmt.Errorf("goroutine %d: invalid parameters not filtered: %s", id, filtered)
 			}
@@ -974,7 +961,6 @@ func TestConcurrentValidateQuery(t *testing.T) {
 	}
 }
 
-// Benchmark tests
 func BenchmarkValidateURL(b *testing.B) {
 	pv, err := NewParamValidator("/api/v1/*?page=[5]&limit=[10]&sort=[name,date]")
 	if err != nil {
@@ -1027,7 +1013,6 @@ func BenchmarkValidateQuery(b *testing.B) {
 	}
 }
 
-// BenchmarkConcurrentValidation measures concurrent URL validation performance
 func BenchmarkConcurrentValidation(b *testing.B) {
 	pv, err := NewParamValidator("/api/*?page=[5]&limit=[10]&sort=[name,date]")
 	if err != nil {
@@ -1044,7 +1029,6 @@ func BenchmarkConcurrentValidation(b *testing.B) {
 	})
 }
 
-// BenchmarkConcurrentNormalization measures concurrent URL normalization performance
 func BenchmarkConcurrentNormalization(b *testing.B) {
 	pv, err := NewParamValidator("/api/*?page=[5]&limit=[10]")
 	if err != nil {
@@ -1059,7 +1043,6 @@ func BenchmarkConcurrentNormalization(b *testing.B) {
 	})
 }
 
-// BenchmarkConcurrentFilterQuery measures concurrent query parameter filtering performance
 func BenchmarkConcurrentFilterQuery(b *testing.B) {
 	pv, err := NewParamValidator("/api/*?page=[5]&limit=[10]")
 	if err != nil {
@@ -1076,7 +1059,6 @@ func BenchmarkConcurrentFilterQuery(b *testing.B) {
 	})
 }
 
-// BenchmarkConcurrentValidateQuery measures concurrent query parameter validation performance
 func BenchmarkConcurrentValidateQuery(b *testing.B) {
 	pv, err := NewParamValidator("/api/*?page=[5]&limit=[10]&sort=[name,date]")
 	if err != nil {
@@ -1119,7 +1101,6 @@ func BenchmarkValidateQueryBytes(b *testing.B) {
 	}
 
 	urlPath := []byte("/api/data")
-	// ВАЛИДНЫЙ запрос - все параметры разрешены
 	queryBytes := []byte("page=5&limit=10&sort=name")
 
 	b.ResetTimer()

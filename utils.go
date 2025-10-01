@@ -1,3 +1,4 @@
+// utils.go
 package paramvalidator
 
 import (
@@ -10,7 +11,7 @@ func normalizeURLPattern(pattern string) string {
 		return ""
 	}
 
-	// Быстрая проверка на простой случай (большинство URL)
+	// Fast check for simple case (most URLs)
 	if isSimplePattern(pattern) {
 		if pattern[0] != '/' {
 			return "/" + pattern
@@ -21,25 +22,25 @@ func normalizeURLPattern(pattern string) string {
 	return normalizeComplexPattern(pattern)
 }
 
-// isSimplePattern проверяет, нуждается ли паттерн в сложной нормализации
+// isSimplePattern checks if pattern needs complex normalization
 func isSimplePattern(pattern string) bool {
 	if len(pattern) == 0 {
 		return true
 	}
 
-	// Быстрая проверка на наличие специальных символов
+	// Fast check for special characters
 	for i := 0; i < len(pattern); i++ {
 		switch pattern[i] {
 		case '*', '.', '/':
-			// Проверяем конкретные случаи
+			// Check specific cases
 			switch pattern[i] {
 			case '*':
-				// Проверяем двойные **
+				// Check for double **
 				if i+1 < len(pattern) && pattern[i+1] == '*' {
 					return false
 				}
 			case '.':
-				// Проверяем "./" или ".."
+				// Check for "./" or ".."
 				if i+1 < len(pattern) && pattern[i+1] == '.' {
 					return false // ".."
 				}
@@ -47,7 +48,7 @@ func isSimplePattern(pattern string) bool {
 					return false // "./"
 				}
 			case '/':
-				// Проверяем "//"
+				// Check for "//"
 				if i+1 < len(pattern) && pattern[i+1] == '/' {
 					return false
 				}
@@ -58,23 +59,23 @@ func isSimplePattern(pattern string) bool {
 	return pattern[0] == '/'
 }
 
-// normalizeComplexPattern обрабатывает сложные случаи
+// normalizeComplexPattern handles complex cases
 func normalizeComplexPattern(pattern string) string {
-	// 1. Обработка двойных **
+	// 1. Handle double **
 	pattern = removeDoubleStars(pattern)
 
-	// 2. Если начинается с *, возвращаем как есть
+	// 2. If starts with *, return as is
 	if len(pattern) > 0 && pattern[0] == '*' {
 		return pattern
 	}
 
-	// 3. Обработка с path segments
+	// 3. Handle path segments
 	return cleanPathSegments(pattern)
 }
 
-// removeDoubleStars удаляет последовательные **
+// removeDoubleStars removes consecutive **
 func removeDoubleStars(pattern string) string {
-	// Быстрая проверка - есть ли двойные ** вообще
+	// Fast check - are there any double ** at all
 	hasDoubleStar := false
 	for i := 0; i < len(pattern)-1; i++ {
 		if pattern[i] == '*' && pattern[i+1] == '*' {
@@ -87,14 +88,14 @@ func removeDoubleStars(pattern string) string {
 		return pattern
 	}
 
-	// Ручная замена "**" на "*"
+	// Manual replacement of "**" with "*"
 	var result strings.Builder
 	result.Grow(len(pattern))
 
 	for i := 0; i < len(pattern); i++ {
 		if i < len(pattern)-1 && pattern[i] == '*' && pattern[i+1] == '*' {
 			result.WriteByte('*')
-			i++ // Пропускаем следующий *
+			i++ // Skip next *
 		} else {
 			result.WriteByte(pattern[i])
 		}
@@ -103,12 +104,12 @@ func removeDoubleStars(pattern string) string {
 	return result.String()
 }
 
-// cleanPathSegments очищает path segments
+// cleanPathSegments cleans path segments
 func cleanPathSegments(pattern string) string {
 	var segments []string
 	start := 0
 
-	// Ручной split по '/'
+	// Manual split by '/'
 	for i := 0; i <= len(pattern); i++ {
 		if i == len(pattern) || pattern[i] == '/' {
 			if start < i {
@@ -125,7 +126,7 @@ func cleanPathSegments(pattern string) string {
 		}
 	}
 
-	// Собираем результат
+	// Build result
 	if len(segments) == 0 {
 		if pattern[0] == '/' {
 			return "/"
@@ -140,6 +141,7 @@ func cleanPathSegments(pattern string) string {
 	return result
 }
 
+// containsPathTraversal checks for path traversal patterns
 func containsPathTraversal(path string) bool {
 	n := len(path)
 	if n < 2 {
@@ -169,19 +171,19 @@ func containsPathTraversal(path string) bool {
 	return false
 }
 
-// findSpecialCharsUltraFast максимально оптимизированный поиск *
+// findSpecialCharsUltraFast highly optimized search for *
 func findSpecialCharsUltraFast(s string) bool {
 	n := len(s)
 	i := 0
 
-	// Обрабатываем по 4 символа за раз
+	// Process 4 characters at a time
 	for ; i <= n-4; i += 4 {
 		if s[i] == '*' || s[i+1] == '*' || s[i+2] == '*' || s[i+3] == '*' {
 			return true
 		}
 	}
 
-	// Обрабатываем оставшиеся символы
+	// Process remaining characters
 	for ; i < n; i++ {
 		if s[i] == '*' {
 			return true
@@ -191,6 +193,7 @@ func findSpecialCharsUltraFast(s string) bool {
 	return false
 }
 
+// bytesEqual compares two byte slices for equality
 func bytesEqual(a, b []byte) bool {
 	if len(a) != len(b) {
 		return false

@@ -7,7 +7,6 @@ import (
 	"github.com/smalloff/paramvalidator/plugins"
 )
 
-// BenchmarkPatternPluginSecurity бенчмарки для паттерн-плагина
 func BenchmarkPatternPluginSecurity(b *testing.B) {
 	plugin := plugins.NewPatternPlugin()
 
@@ -66,7 +65,6 @@ func BenchmarkPatternPluginSecurity(b *testing.B) {
 	}
 }
 
-// BenchmarkPatternPluginReDoSProtection бенчмарки для защиты от ReDoS
 func BenchmarkPatternPluginReDoSProtection(b *testing.B) {
 	plugin := plugins.NewPatternPlugin()
 
@@ -115,7 +113,6 @@ func BenchmarkPatternPluginReDoSProtection(b *testing.B) {
 	}
 }
 
-// BenchmarkLengthPluginSecurity бенчмарки для length-плагина
 func BenchmarkLengthPluginSecurity(b *testing.B) {
 	plugin := plugins.NewLengthPlugin()
 
@@ -171,7 +168,6 @@ func BenchmarkLengthPluginSecurity(b *testing.B) {
 	}
 }
 
-// BenchmarkComparisonPluginSecurity бенчмарки для comparison-плагина
 func BenchmarkComparisonPluginSecurity(b *testing.B) {
 	plugin := plugins.NewComparisonPlugin()
 
@@ -182,27 +178,27 @@ func BenchmarkComparisonPluginSecurity(b *testing.B) {
 	}{
 		{
 			name:       "Greater than",
-			constraint: "cmp:>100", // добавлен cmp:
+			constraint: "cmp:>100",
 			values:     []string{"50", "100", "150", "999999"},
 		},
 		{
 			name:       "Less or equal",
-			constraint: "cmp:<=50", // добавлен cmp:
+			constraint: "cmp:<=50",
 			values:     []string{"0", "50", "51", "-10"},
 		},
 		{
 			name:       "Negative numbers",
-			constraint: "cmp:>=-100", // добавлен cmp:
+			constraint: "cmp:>=-100",
 			values:     []string{"-200", "-100", "0", "100"},
 		},
 		{
 			name:       "Large numbers",
-			constraint: "cmp:<1000000", // добавлен cmp:
+			constraint: "cmp:<1000000",
 			values:     []string{"999999", "1000000", "1000001"},
 		},
 		{
 			name:       "Equal boundary",
-			constraint: "cmp:>=0", // добавлен cmp:
+			constraint: "cmp:>=0",
 			values:     []string{"-1", "0", "1"},
 		},
 	}
@@ -227,7 +223,6 @@ func BenchmarkComparisonPluginSecurity(b *testing.B) {
 	}
 }
 
-// BenchmarkRangePluginSecurity бенчмарки для range-плагина
 func BenchmarkRangePluginSecurity(b *testing.B) {
 	plugin := plugins.NewRangePlugin()
 
@@ -283,7 +278,6 @@ func BenchmarkRangePluginSecurity(b *testing.B) {
 	}
 }
 
-// BenchmarkPluginInputValidation бенчмарки валидации входных данных
 func BenchmarkPluginInputValidation(b *testing.B) {
 	plugins := []struct {
 		name   string
@@ -305,7 +299,7 @@ func BenchmarkPluginInputValidation(b *testing.B) {
 		{
 			name:        "comparison",
 			plugin:      plugins.NewComparisonPlugin(),
-			constraints: []string{"cmp:>10", "cmp:<=50", "cmp:>=-100", "cmp:<1000", "cmp:>=0"}, // добавлен cmp:
+			constraints: []string{"cmp:>10", "cmp:<=50", "cmp:>=-100", "cmp:<1000", "cmp:>=0"},
 		},
 		{
 			name:        "range",
@@ -333,7 +327,6 @@ func BenchmarkPluginInputValidation(b *testing.B) {
 		b.Run(pl.name+"_validation", func(b *testing.B) {
 			validators := make([]func(string) bool, 0, len(pl.constraints))
 
-			// Создаем валидаторы один раз
 			for _, constraint := range pl.constraints {
 				validator, err := pl.plugin.Parse("test_param", constraint)
 				if err == nil && validator != nil {
@@ -360,7 +353,6 @@ func BenchmarkPluginInputValidation(b *testing.B) {
 	}
 }
 
-// BenchmarkPluginMemorySafety бенчмарки безопасности памяти
 func BenchmarkPluginMemorySafety(b *testing.B) {
 	plugin := plugins.NewPatternPlugin()
 	validator, err := plugin.Parse("test", "in:*test*")
@@ -368,10 +360,9 @@ func BenchmarkPluginMemorySafety(b *testing.B) {
 		b.Fatalf("Failed to create validator: %v", err)
 	}
 
-	// Предотвращаем кэширование
 	memoryTests := []struct {
 		name  string
-		value func(int) string // Генератор значений
+		value func(int) string
 	}{
 		{
 			"Large",
@@ -392,7 +383,7 @@ func BenchmarkPluginMemorySafety(b *testing.B) {
 			b.ReportAllocs()
 
 			for i := 0; i < b.N; i++ {
-				value := mt.value(i) // Уникальное значение каждый раз
+				value := mt.value(i)
 				result := validator(value)
 				_ = result
 			}
@@ -400,7 +391,6 @@ func BenchmarkPluginMemorySafety(b *testing.B) {
 	}
 }
 
-// BenchmarkPluginBoundaryConditions бенчмарки граничных условий
 func BenchmarkPluginBoundaryConditions(b *testing.B) {
 	plugins := []struct {
 		name   string
@@ -411,16 +401,15 @@ func BenchmarkPluginBoundaryConditions(b *testing.B) {
 	}{
 		{"pattern", plugins.NewPatternPlugin(), "in:*test*"},
 		{"length", plugins.NewLengthPlugin(), "len:>5"},
-		{"comparison", plugins.NewComparisonPlugin(), "cmp:>10"}, // добавлен cmp:
+		{"comparison", plugins.NewComparisonPlugin(), "cmp:>10"},
 		{"range", plugins.NewRangePlugin(), "range:1..100"},
 	}
 
-	// Только критические boundary values
 	boundaryValues := []string{
-		"",           // empty
-		"0",          // zero
-		"test",       // normal
-		"1234567890", // max length number
+		"",
+		"0",
+		"test",
+		"1234567890",
 	}
 
 	for _, pl := range plugins {
@@ -443,7 +432,6 @@ func BenchmarkPluginBoundaryConditions(b *testing.B) {
 	}
 }
 
-// BenchmarkPluginConcurrentSafety бенчмарки конкурентной безопасности
 func BenchmarkPluginConcurrentSafety(b *testing.B) {
 	plugin := plugins.NewPatternPlugin()
 	validator, err := plugin.Parse("test", "in:*test*")
@@ -473,7 +461,6 @@ func BenchmarkPluginConcurrentSafety(b *testing.B) {
 
 		b.RunParallel(func(pb *testing.PB) {
 			for pb.Next() {
-				// Создаем новый валидатор в каждой горутине
 				localValidator, err := plugin.Parse("test", "in:*test*")
 				if err != nil {
 					b.Fatalf("Failed to create validator: %v", err)
@@ -488,7 +475,6 @@ func BenchmarkPluginConcurrentSafety(b *testing.B) {
 	})
 }
 
-// BenchmarkPluginSecurityEdgeCases бенчмарки для крайних случаев безопасности
 func BenchmarkPluginSecurityEdgeCases(b *testing.B) {
 	plugin := plugins.NewPatternPlugin()
 

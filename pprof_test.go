@@ -7,7 +7,6 @@ import (
 	"testing"
 )
 
-// TestCPUProfile - профиль для валидации URL
 func TestCPUProfile(t *testing.T) {
 	f, err := os.Create("cpu.prof")
 	if err != nil {
@@ -22,13 +21,11 @@ func TestCPUProfile(t *testing.T) {
 
 	pv := createTestValidator(t)
 
-	// Предварительно создаем URL без strconv.Itoa в цикле
 	urls := make([]string, 1000)
 	for i := 0; i < 1000; i++ {
 		urls[i] = "/user/" + strconv.Itoa(i) + "?age=25&score=75&username=testuser"
 	}
 
-	// Теперь в горячем цикле только использование
 	for i := 0; i < 100000; i++ {
 		pv.ValidateURL(urls[i%1000])
 	}
@@ -37,13 +34,11 @@ func TestCPUProfile(t *testing.T) {
 func TestMemoryProfile(t *testing.T) {
 	pv := createTestValidator(t)
 
-	// Предварительно создаем URL
 	urls := make([]string, 1000)
 	for i := 0; i < 1000; i++ {
 		urls[i] = "/user/" + strconv.Itoa(i) + "?age=25&score=75&username=testuser&extra=param"
 	}
 
-	// Операции фильтрации без аллокаций в цикле
 	for i := 0; i < 50000; i++ {
 		pv.FilterURL(urls[i%1000])
 	}
