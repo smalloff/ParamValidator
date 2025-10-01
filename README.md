@@ -67,6 +67,8 @@ URL-Specific and global Rules "count[cmp:<100];/api/*/products?page=[5]&category
 
 ## Quick Start
 
+
+### ValidateURL
 ```go
 package main
 
@@ -82,5 +84,46 @@ rangePlugin := plugins.NewRangePlugin()
 
     valid := pv.ValidateURL("/api?user_id=42&role=admin")
     println(valid) // Output: true
+}
+```
+
+### FilterURL
+```go
+package main
+
+import (
+	"github.com/smalloff/paramvalidator"
+	"github.com/smalloff/paramvalidator/plugins"
+)
+
+func main() {
+	rangePlugin := plugins.NewLengthPlugin()
+	pv, _ := paramvalidator.NewParamValidator("/api?name=[len:>5]&role=[moderator,admin]",
+		paramvalidator.WithPlugins(rangePlugin))
+
+	valid := pv.FilterURL("/api?name=small&role=admin")
+	println(valid) // /api?role=admin
+}
+```
+
+### FilterQuery with callback
+```go
+package main
+
+import (
+	"github.com/smalloff/paramvalidator"
+)
+
+func main() {
+	pv, _ := paramvalidator.NewParamValidator("/api/*/users?name=[?]&role=[moderator,admin]",
+		paramvalidator.WithCallback(func(paramName string, paramValue string) bool {
+			if paramName == "name" {
+				return len(paramValue) > 5
+			}
+			return true
+		}))
+
+	valid := pv.FilterQuery("/api/v2/users", "name=small&role=admin")
+	println(valid) // /api?role=admin
 }
 ```
