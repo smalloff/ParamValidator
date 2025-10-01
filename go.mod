@@ -1,3 +1,2 @@
-module github.com/smalloff/paramvalidator/v2
-
+module github.com/smalloff/paramvalidator
 go 1.24
