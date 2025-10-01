@@ -958,15 +958,10 @@ func (pv *ParamValidator) fillParamMasksDirect(masks *ParamMasks, urlPath string
 }
 
 // Clear removes all validation rules
-func (pv *ParamValidator) Clear() {
+func (pv *ParamValidator) ClearRules() {
 	pv.mu.Lock()
 	defer pv.mu.Unlock()
 	pv.clearUnsafe()
-}
-
-// ClearRules clears all loaded validation rules
-func (pv *ParamValidator) ClearRules() {
-	pv.Clear()
 }
 
 // clearUnsafe resets all rules without locking

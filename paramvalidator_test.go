@@ -438,7 +438,7 @@ func TestClear(t *testing.T) {
 		t.Error("Should validate before clear")
 	}
 
-	pv.Clear()
+	pv.ClearRules()
 
 	if pv.ValidateURL("/api?page=5") {
 		t.Error("Should not validate after clear")
