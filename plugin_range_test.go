@@ -428,6 +428,211 @@ func TestRangePluginIntegration(t *testing.T) {
 	}
 }
 
+// Новые тесты для внешних методов ValidateURL и FilterURL
+func TestRangePluginWithValidateURL(t *testing.T) {
+	rangePlugin := plugins.NewRangePlugin()
+
+	tests := []struct {
+		name     string
+		rules    string
+		url      string
+		expected bool
+	}{
+		{
+			name:     "validate URL with basic range",
+			rules:    "/api?age=[range:18-65]",
+			url:      "/api?age=25",
+			expected: true,
+		},
+		{
+			name:     "validate URL with basic range too low",
+			rules:    "/api?age=[range:18-65]",
+			url:      "/api?age=16",
+			expected: false,
+		},
+		{
+			name:     "validate URL with basic range too high",
+			rules:    "/api?age=[range:18-65]",
+			url:      "/api?age=70",
+			expected: false,
+		},
+		{
+			name:     "validate URL with dots range",
+			rules:    "/api?price=[range:100..1000]",
+			url:      "/api?price=500",
+			expected: true,
+		},
+		{
+			name:     "validate URL with dots range too low",
+			rules:    "/api?price=[range:100..1000]",
+			url:      "/api?price=50",
+			expected: false,
+		},
+		{
+			name:     "validate URL with dots range too high",
+			rules:    "/api?price=[range:100..1000]",
+			url:      "/api?price=1500",
+			expected: false,
+		},
+		{
+			name:     "validate URL with negative range",
+			rules:    "/api?temp=[range:-20..40]",
+			url:      "/api?temp=25",
+			expected: true,
+		},
+		{
+			name:     "validate URL with negative range negative value",
+			rules:    "/api?temp=[range:-20..40]",
+			url:      "/api?temp=-10",
+			expected: true,
+		},
+		{
+			name:     "validate URL with negative range too low",
+			rules:    "/api?temp=[range:-20..40]",
+			url:      "/api?temp=-25",
+			expected: false,
+		},
+		{
+			name:     "validate URL with all negative range",
+			rules:    "/api?score=[range:-100..-50]",
+			url:      "/api?score=-75",
+			expected: true,
+		},
+		{
+			name:     "validate URL with single value range",
+			rules:    "/api?version=[range:5..5]",
+			url:      "/api?version=5",
+			expected: true,
+		},
+		{
+			name:     "validate URL with single value range invalid",
+			rules:    "/api?version=[range:5..5]",
+			url:      "/api?version=4",
+			expected: false,
+		},
+		{
+			name:     "validate URL with multiple range constraints",
+			rules:    "/api?age=[range:18-65]&price=[range:100..1000]",
+			url:      "/api?age=25&price=500",
+			expected: true,
+		},
+		{
+			name:     "validate URL with one invalid range constraint",
+			rules:    "/api?age=[range:18-65]&price=[range:100..1000]",
+			url:      "/api?age=16&price=500",
+			expected: false,
+		},
+		{
+			name:     "validate URL with boundary values",
+			rules:    "/api?level=[range:0-100]",
+			url:      "/api?level=0",
+			expected: true,
+		},
+		{
+			name:     "validate URL with upper boundary",
+			rules:    "/api?level=[range:0-100]",
+			url:      "/api?level=100",
+			expected: true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			pv, err := NewParamValidator(tt.rules, WithPlugins(rangePlugin))
+			if err != nil {
+				t.Fatalf("Failed to create validator: %v", err)
+			}
+
+			result := pv.ValidateURL(tt.url)
+			if result != tt.expected {
+				t.Errorf("ValidateURL(%q) with rules %q = %v, expected %v",
+					tt.url, tt.rules, result, tt.expected)
+			}
+		})
+	}
+}
+
+func TestRangePluginWithFilterURL(t *testing.T) {
+	rangePlugin := plugins.NewRangePlugin()
+
+	tests := []struct {
+		name     string
+		rules    string
+		url      string
+		expected string
+	}{
+		{
+			name:     "filter URL with basic range",
+			rules:    "/api?age=[range:18-65]",
+			url:      "/api?age=25&age=16",
+			expected: "/api?age=25",
+		},
+		{
+			name:     "filter URL with dots range",
+			rules:    "/api?price=[range:100..1000]",
+			url:      "/api?price=500&price=50",
+			expected: "/api?price=500",
+		},
+		{
+			name:     "filter URL with negative range",
+			rules:    "/api?temp=[range:-20..40]",
+			url:      "/api?temp=25&temp=-25",
+			expected: "/api?temp=25",
+		},
+		{
+			name:     "filter URL with all negative range",
+			rules:    "/api?score=[range:-100..-50]",
+			url:      "/api?score=-75&score=-25",
+			expected: "/api?score=-75",
+		},
+		{
+			name:     "filter URL with multiple range constraints",
+			rules:    "/api?age=[range:18-65]&price=[range:100..1000]",
+			url:      "/api?age=25&price=500&invalid=value",
+			expected: "/api?age=25&price=500",
+		},
+		{
+			name:     "filter URL remove all invalid parameters",
+			rules:    "/api?age=[range:18-65]&price=[range:100..1000]",
+			url:      "/api?age=16&price=50&invalid=value",
+			expected: "/api",
+		},
+		{
+			name:     "filter URL with mixed valid and invalid values",
+			rules:    "/api?age=[range:18-65]&price=[range:100..1000]",
+			url:      "/api?age=25&age=16&price=500&price=50",
+			expected: "/api?age=25&price=500",
+		},
+		{
+			name:     "filter URL with boundary values",
+			rules:    "/api?level=[range:0-100]",
+			url:      "/api?level=0&level=100&level=-1&level=101",
+			expected: "/api?level=0&level=100",
+		},
+		{
+			name:     "filter URL with single value range",
+			rules:    "/api?version=[range:5..5]",
+			url:      "/api?version=5&version=4",
+			expected: "/api?version=5",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			pv, err := NewParamValidator(tt.rules, WithPlugins(rangePlugin))
+			if err != nil {
+				t.Fatalf("Failed to create validator: %v", err)
+			}
+
+			result := pv.FilterURL(tt.url)
+			if result != tt.expected {
+				t.Errorf("FilterURL(%q) with rules %q = %q, expected %q",
+					tt.url, tt.rules, result, tt.expected)
+			}
+		})
+	}
+}
+
 func TestRangeEdgeCases(t *testing.T) {
 	plugin := plugins.NewRangePlugin()
 
@@ -650,5 +855,32 @@ func BenchmarkRangePluginMultipleValidators(b *testing.B) {
 		for j, validator := range validators {
 			validator(values[j])
 		}
+	}
+}
+
+// Новые бенчмарки для внешних методов
+func BenchmarkRangePluginValidateURL(b *testing.B) {
+	rangePlugin := plugins.NewRangePlugin()
+	pv, err := NewParamValidator("/api?age=[range:18-65]&price=[range:100..1000]", WithPlugins(rangePlugin))
+	if err != nil {
+		b.Fatalf("Failed to create validator: %v", err)
+	}
+
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		pv.ValidateURL("/api?age=25&price=500")
+	}
+}
+
+func BenchmarkRangePluginFilterURL(b *testing.B) {
+	rangePlugin := plugins.NewRangePlugin()
+	pv, err := NewParamValidator("/api?age=[range:18-65]&price=[range:100..1000]", WithPlugins(rangePlugin))
+	if err != nil {
+		b.Fatalf("Failed to create validator: %v", err)
+	}
+
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		pv.FilterURL("/api?age=25&price=500&invalid=value")
 	}
 }

@@ -300,6 +300,180 @@ func TestPatternPluginIntegration(t *testing.T) {
 	}
 }
 
+func TestPatternPluginWithValidateURL(t *testing.T) {
+	patternPlugin := plugins.NewPatternPlugin()
+
+	tests := []struct {
+		name     string
+		rules    string
+		url      string
+		expected bool
+	}{
+		{
+			name:     "validate URL with prefix pattern",
+			rules:    "/api?file=[in:img_*]",
+			url:      "/api?file=img_photo.jpg",
+			expected: true,
+		},
+		{
+			name:     "validate URL with prefix pattern no match",
+			rules:    "/api?file=[in:img_*]",
+			url:      "/api?file=doc_file.pdf",
+			expected: false,
+		},
+		{
+			name:     "validate URL with suffix pattern",
+			rules:    "/api?file=[in:*.jpg]",
+			url:      "/api?file=photo.jpg",
+			expected: true,
+		},
+		{
+			name:     "validate URL with suffix pattern no match",
+			rules:    "/api?file=[in:*.jpg]",
+			url:      "/api?file=document.pdf",
+			expected: false,
+		},
+		{
+			name:     "validate URL with contains pattern",
+			rules:    "/api?id=[in:*user*]",
+			url:      "/api?id=new_user_123",
+			expected: true,
+		},
+		{
+			name:     "validate URL with contains pattern no match",
+			rules:    "/api?id=[in:*user*]",
+			url:      "/api?id=admin_123",
+			expected: false,
+		},
+		{
+			name:     "validate URL with complex pattern",
+			rules:    "/api?key=[in:prefix_*_suffix]",
+			url:      "/api?key=prefix_value_suffix",
+			expected: true,
+		},
+		{
+			name:     "validate URL with complex pattern no match",
+			rules:    "/api?key=[in:prefix_*_suffix]",
+			url:      "/api?key=prefix_value",
+			expected: false,
+		},
+		{
+			name:     "validate URL with multiple pattern constraints",
+			rules:    "/api?file=[in:img_*]&id=[in:*user*]",
+			url:      "/api?file=img_photo.jpg&id=new_user_123",
+			expected: true,
+		},
+		{
+			name:     "validate URL with one invalid pattern constraint",
+			rules:    "/api?file=[in:img_*]&id=[in:*user*]",
+			url:      "/api?file=img_photo.jpg&id=admin_123",
+			expected: false,
+		},
+		{
+			name:     "validate URL with wildcard pattern",
+			rules:    "/api?any=[in:*]",
+			url:      "/api?any=anything",
+			expected: true,
+		},
+		{
+			name:     "validate URL with wildcard pattern empty",
+			rules:    "/api?any=[in:*]",
+			url:      "/api?any=",
+			expected: true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			pv, err := NewParamValidator(tt.rules, WithPlugins(patternPlugin))
+			if err != nil {
+				t.Fatalf("Failed to create validator: %v", err)
+			}
+
+			result := pv.ValidateURL(tt.url)
+			if result != tt.expected {
+				t.Errorf("ValidateURL(%q) with rules %q = %v, expected %v",
+					tt.url, tt.rules, result, tt.expected)
+			}
+		})
+	}
+}
+
+func TestPatternPluginWithFilterURL(t *testing.T) {
+	patternPlugin := plugins.NewPatternPlugin()
+
+	tests := []struct {
+		name     string
+		rules    string
+		url      string
+		expected string
+	}{
+		{
+			name:     "filter URL with prefix pattern",
+			rules:    "/api?file=[in:img_*]",
+			url:      "/api?file=img_photo.jpg&file=doc_file.pdf",
+			expected: "/api?file=img_photo.jpg",
+		},
+		{
+			name:     "filter URL with suffix pattern",
+			rules:    "/api?file=[in:*.jpg]",
+			url:      "/api?file=photo.jpg&file=document.pdf",
+			expected: "/api?file=photo.jpg",
+		},
+		{
+			name:     "filter URL with contains pattern",
+			rules:    "/api?id=[in:*user*]",
+			url:      "/api?id=new_user_123&id=admin_123",
+			expected: "/api?id=new_user_123",
+		},
+		{
+			name:     "filter URL with complex pattern",
+			rules:    "/api?key=[in:prefix_*_suffix]",
+			url:      "/api?key=prefix_value_suffix&key=prefix_value",
+			expected: "/api?key=prefix_value_suffix",
+		},
+		{
+			name:     "filter URL with multiple pattern constraints",
+			rules:    "/api?file=[in:img_*]&id=[in:*user*]",
+			url:      "/api?file=img_photo.jpg&id=new_user_123&invalid=value",
+			expected: "/api?file=img_photo.jpg&id=new_user_123",
+		},
+		{
+			name:     "filter URL remove all invalid parameters",
+			rules:    "/api?file=[in:img_*]&id=[in:*user*]",
+			url:      "/api?file=doc_file.pdf&id=admin_123&invalid=value",
+			expected: "/api",
+		},
+		{
+			name:     "filter URL with mixed valid and invalid values",
+			rules:    "/api?file=[in:img_*]&id=[in:*user*]",
+			url:      "/api?file=img_photo.jpg&file=doc.pdf&id=new_user_123&id=admin_456",
+			expected: "/api?file=img_photo.jpg&id=new_user_123",
+		},
+		{
+			name:     "filter URL with wildcard pattern",
+			rules:    "/api?any=[in:*]",
+			url:      "/api?any=anything&any=nothing",
+			expected: "/api?any=anything&any=nothing",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			pv, err := NewParamValidator(tt.rules, WithPlugins(patternPlugin))
+			if err != nil {
+				t.Fatalf("Failed to create validator: %v", err)
+			}
+
+			result := pv.FilterURL(tt.url)
+			if result != tt.expected {
+				t.Errorf("FilterURL(%q) with rules %q = %q, expected %q",
+					tt.url, tt.rules, result, tt.expected)
+			}
+		})
+	}
+}
+
 func TestPatternEdgeCases(t *testing.T) {
 	plugin := plugins.NewPatternPlugin()
 
@@ -453,5 +627,31 @@ func BenchmarkPatternPluginValidateQuery(b *testing.B) {
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
 		pv.ValidateQuery("/api", "file=img_photo.jpg&id=new_user_123&invalid=value")
+	}
+}
+
+func BenchmarkPatternPluginValidateURL(b *testing.B) {
+	patternPlugin := plugins.NewPatternPlugin()
+	pv, err := NewParamValidator("/api?file=[in:img_*]&id=[in:*user*]", WithPlugins(patternPlugin))
+	if err != nil {
+		b.Fatalf("Failed to create validator: %v", err)
+	}
+
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		pv.ValidateURL("/api?file=img_photo.jpg&id=new_user_123")
+	}
+}
+
+func BenchmarkPatternPluginFilterURL(b *testing.B) {
+	patternPlugin := plugins.NewPatternPlugin()
+	pv, err := NewParamValidator("/api?file=[in:img_*]&id=[in:*user*]", WithPlugins(patternPlugin))
+	if err != nil {
+		b.Fatalf("Failed to create validator: %v", err)
+	}
+
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		pv.FilterURL("/api?file=img_photo.jpg&id=new_user_123&invalid=value")
 	}
 }

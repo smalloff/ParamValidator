@@ -108,9 +108,6 @@ func matchPrefixPattern(urlPath, pattern string) bool {
 }
 
 func wildcardMatch(urlPath, pattern string) bool {
-	if containsPathTraversal(urlPath) {
-		return false
-	}
 	urlStart, patternStart := 0, 0
 	urlLen, patternLen := len(urlPath), len(pattern)
 

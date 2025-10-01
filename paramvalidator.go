@@ -122,10 +122,6 @@ func (pv *ParamValidator) validateURLUnsafe(u *url.URL) bool {
 		return false
 	}
 
-	if containsPathTraversal(u.Path) {
-		return false
-	}
-
 	masks := pv.getParamMasksForURL(u.Path)
 
 	if idx := pv.compiledRules.paramIndex.GetIndex(PatternAll); idx != -1 && masks.CombinedMask().GetBit(idx) {

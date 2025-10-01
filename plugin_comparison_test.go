@@ -351,6 +351,180 @@ func TestComparisonPluginIntegration(t *testing.T) {
 	}
 }
 
+func TestComparisonPluginWithValidateURL(t *testing.T) {
+	comparisonPlugin := plugins.NewComparisonPlugin()
+
+	tests := []struct {
+		name     string
+		rules    string
+		url      string
+		expected bool
+	}{
+		{
+			name:     "validate URL with greater than",
+			rules:    "/api?age=[cmp:>18]",
+			url:      "/api?age=25",
+			expected: true,
+		},
+		{
+			name:     "validate URL with greater than too low",
+			rules:    "/api?age=[cmp:>18]",
+			url:      "/api?age=16",
+			expected: false,
+		},
+		{
+			name:     "validate URL with less than",
+			rules:    "/api?price=[cmp:<1000]",
+			url:      "/api?price=500",
+			expected: true,
+		},
+		{
+			name:     "validate URL with less than too high",
+			rules:    "/api?price=[cmp:<1000]",
+			url:      "/api?price=1500",
+			expected: false,
+		},
+		{
+			name:     "validate URL with greater or equal",
+			rules:    "/api?score=[cmp:>=50]",
+			url:      "/api?score=50",
+			expected: true,
+		},
+		{
+			name:     "validate URL with greater or equal below",
+			rules:    "/api?score=[cmp:>=50]",
+			url:      "/api?score=49",
+			expected: false,
+		},
+		{
+			name:     "validate URL with less or equal",
+			rules:    "/api?quantity=[cmp:<=10]",
+			url:      "/api?quantity=10",
+			expected: true,
+		},
+		{
+			name:     "validate URL with less or equal above",
+			rules:    "/api?quantity=[cmp:<=10]",
+			url:      "/api?quantity=11",
+			expected: false,
+		},
+		{
+			name:     "validate URL with multiple comparison constraints",
+			rules:    "/api?age=[cmp:>18]&price=[cmp:<1000]",
+			url:      "/api?age=25&price=500",
+			expected: true,
+		},
+		{
+			name:     "validate URL with one invalid comparison constraint",
+			rules:    "/api?age=[cmp:>18]&price=[cmp:<1000]",
+			url:      "/api?age=16&price=500",
+			expected: false,
+		},
+		{
+			name:     "validate URL with negative numbers",
+			rules:    "/api?temp=[cmp:>-10]",
+			url:      "/api?temp=-5",
+			expected: true,
+		},
+		{
+			name:     "validate URL with negative numbers invalid",
+			rules:    "/api?temp=[cmp:>-10]",
+			url:      "/api?temp=-15",
+			expected: false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			pv, err := NewParamValidator(tt.rules, WithPlugins(comparisonPlugin))
+			if err != nil {
+				t.Fatalf("Failed to create validator: %v", err)
+			}
+
+			result := pv.ValidateURL(tt.url)
+			if result != tt.expected {
+				t.Errorf("ValidateURL(%q) with rules %q = %v, expected %v",
+					tt.url, tt.rules, result, tt.expected)
+			}
+		})
+	}
+}
+
+func TestComparisonPluginWithFilterURL(t *testing.T) {
+	comparisonPlugin := plugins.NewComparisonPlugin()
+
+	tests := []struct {
+		name     string
+		rules    string
+		url      string
+		expected string
+	}{
+		{
+			name:     "filter URL with greater than",
+			rules:    "/api?age=[cmp:>18]",
+			url:      "/api?age=25&age=16",
+			expected: "/api?age=25",
+		},
+		{
+			name:     "filter URL with less than",
+			rules:    "/api?price=[cmp:<1000]",
+			url:      "/api?price=500&price=1500",
+			expected: "/api?price=500",
+		},
+		{
+			name:     "filter URL with greater or equal",
+			rules:    "/api?score=[cmp:>=50]",
+			url:      "/api?score=50&score=49",
+			expected: "/api?score=50",
+		},
+		{
+			name:     "filter URL with less or equal",
+			rules:    "/api?quantity=[cmp:<=10]",
+			url:      "/api?quantity=10&quantity=11",
+			expected: "/api?quantity=10",
+		},
+		{
+			name:     "filter URL with multiple comparison constraints",
+			rules:    "/api?age=[cmp:>18]&price=[cmp:<1000]",
+			url:      "/api?age=25&price=500&invalid=value",
+			expected: "/api?age=25&price=500",
+		},
+		{
+			name:     "filter URL remove all invalid parameters",
+			rules:    "/api?age=[cmp:>18]&price=[cmp:<1000]",
+			url:      "/api?age=16&price=1500&invalid=value",
+			expected: "/api",
+		},
+		{
+			name:     "filter URL with mixed valid and invalid values",
+			rules:    "/api?score=[cmp:>=50]&quantity=[cmp:<=10]",
+			url:      "/api?score=75&score=25&quantity=5&quantity=15",
+			expected: "/api?score=75&quantity=5",
+		},
+		{
+			name:     "filter URL with negative numbers",
+			rules:    "/api?temp=[cmp:>-10]",
+			url:      "/api?temp=-5&temp=-15",
+			expected: "/api?temp=-5",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			pv, err := NewParamValidator(tt.rules, WithPlugins(comparisonPlugin))
+			if err != nil {
+				t.Fatalf("Failed to create validator: %v", err)
+			}
+
+			result := pv.FilterURL(tt.url)
+			if result != tt.expected {
+				t.Errorf("FilterURL(%q) with rules %q = %q, expected %q",
+					tt.url, tt.rules, result, tt.expected)
+			}
+		})
+	}
+}
+
 func BenchmarkComparisonPlugin(b *testing.B) {
 	plugin := plugins.NewComparisonPlugin()
 	validator, err := plugin.Parse("test", "cmp:>100")
@@ -421,5 +595,31 @@ func BenchmarkComparisonPluginValidateQuery(b *testing.B) {
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
 		pv.ValidateQuery("/api", "score=75&quantity=5&invalid=value")
+	}
+}
+
+func BenchmarkComparisonPluginValidateURL(b *testing.B) {
+	comparisonPlugin := plugins.NewComparisonPlugin()
+	pv, err := NewParamValidator("/api?age=[cmp:>18]&price=[cmp:<1000]", WithPlugins(comparisonPlugin))
+	if err != nil {
+		b.Fatalf("Failed to create validator: %v", err)
+	}
+
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		pv.ValidateURL("/api?age=25&price=500")
+	}
+}
+
+func BenchmarkComparisonPluginFilterURL(b *testing.B) {
+	comparisonPlugin := plugins.NewComparisonPlugin()
+	pv, err := NewParamValidator("/api?age=[cmp:>18]&price=[cmp:<1000]", WithPlugins(comparisonPlugin))
+	if err != nil {
+		b.Fatalf("Failed to create validator: %v", err)
+	}
+
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		pv.FilterURL("/api?age=25&price=500&invalid=value")
 	}
 }

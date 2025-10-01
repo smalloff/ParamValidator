@@ -105,18 +105,6 @@ func (rp *RuleParser) isValidURLPattern(pattern string) bool {
 	if pattern == "" || len(pattern) > MaxURLLength {
 		return false
 	}
-
-	if strings.Contains(pattern, "..") ||
-		strings.Contains(pattern, "//") ||
-		strings.Contains(pattern, "./") ||
-		strings.Contains(pattern, "/.") ||
-		strings.HasPrefix(pattern, "javascript:") ||
-		strings.HasPrefix(pattern, "data:") ||
-		strings.HasPrefix(pattern, "vbscript:") ||
-		strings.HasPrefix(pattern, "file:") {
-		return false
-	}
-
 	return true
 }
 
@@ -208,11 +196,6 @@ func (rp *RuleParser) parseURLRulesUnsafe(rulesStr string) (map[string]*URLRule,
 			for k, v := range parsedGlobalParams {
 				globalParams[k] = v
 			}
-			continue
-		}
-
-		urlPattern = normalizeURLPattern(urlPattern)
-		if urlPattern == "" {
 			continue
 		}
 

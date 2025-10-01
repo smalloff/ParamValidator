@@ -322,6 +322,138 @@ func TestLengthPluginIntegration(t *testing.T) {
 	}
 }
 
+func TestLengthPluginWithValidateURL(t *testing.T) {
+	lengthPlugin := plugins.NewLengthPlugin()
+
+	tests := []struct {
+		name     string
+		rules    string
+		url      string
+		expected bool
+	}{
+		{
+			name:     "validate URL with len greater than",
+			rules:    "/api?username=[len:>5]",
+			url:      "/api?username=john_doe",
+			expected: true,
+		},
+		{
+			name:     "validate URL with len greater than too short",
+			rules:    "/api?username=[len:>5]",
+			url:      "/api?username=john",
+			expected: false,
+		},
+		{
+			name:     "validate URL with len range",
+			rules:    "/api?code=[len:5..10]",
+			url:      "/api?code=123456",
+			expected: true,
+		},
+		{
+			name:     "validate URL with len range too short",
+			rules:    "/api?code=[len:5..10]",
+			url:      "/api?code=123",
+			expected: false,
+		},
+		{
+			name:     "validate URL with exact length",
+			rules:    "/api?token=[len:32]",
+			url:      "/api?token=abc123def456ghi789jkl012mno345pq",
+			expected: true,
+		},
+		{
+			name:     "validate URL with exact length wrong",
+			rules:    "/api?token=[len:32]",
+			url:      "/api?token=short",
+			expected: false,
+		},
+		{
+			name:     "validate URL with multiple length constraints",
+			rules:    "/api?username=[len:>5]&code=[len:5..10]",
+			url:      "/api?username=john_doe&code=123456",
+			expected: true,
+		},
+		{
+			name:     "validate URL with one invalid length constraint",
+			rules:    "/api?username=[len:>5]&code=[len:5..10]",
+			url:      "/api?username=john&code=123456",
+			expected: false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			pv, err := NewParamValidator(tt.rules, WithPlugins(lengthPlugin))
+			if err != nil {
+				t.Fatalf("Failed to create validator: %v", err)
+			}
+
+			result := pv.ValidateURL(tt.url)
+			if result != tt.expected {
+				t.Errorf("ValidateURL(%q) with rules %q = %v, expected %v",
+					tt.url, tt.rules, result, tt.expected)
+			}
+		})
+	}
+}
+
+func TestLengthPluginWithFilterURL(t *testing.T) {
+	lengthPlugin := plugins.NewLengthPlugin()
+
+	tests := []struct {
+		name     string
+		rules    string
+		url      string
+		expected string
+	}{
+		{
+			name:     "filter URL with len greater than",
+			rules:    "/api?username=[len:>5]",
+			url:      "/api?username=john_doe&username=john",
+			expected: "/api?username=john_doe",
+		},
+		{
+			name:     "filter URL with len range",
+			rules:    "/api?code=[len:5..10]",
+			url:      "/api?code=123456&code=123&code=12345678901",
+			expected: "/api?code=123456",
+		},
+		{
+			name:     "filter URL with exact length",
+			rules:    "/api?token=[len:32]",
+			url:      "/api?token=abc123def456ghi789jkl012mno345pq&token=short",
+			expected: "/api?token=abc123def456ghi789jkl012mno345pq",
+		},
+		{
+			name:     "filter URL with multiple length constraints",
+			rules:    "/api?username=[len:>5]&code=[len:5..10]",
+			url:      "/api?username=john_doe&code=123456&invalid=value",
+			expected: "/api?username=john_doe&code=123456",
+		},
+		{
+			name:     "filter URL remove all invalid parameters",
+			rules:    "/api?username=[len:>5]&code=[len:5..10]",
+			url:      "/api?username=john&code=123&invalid=value",
+			expected: "/api",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			pv, err := NewParamValidator(tt.rules, WithPlugins(lengthPlugin))
+			if err != nil {
+				t.Fatalf("Failed to create validator: %v", err)
+			}
+
+			result := pv.FilterURL(tt.url)
+			if result != tt.expected {
+				t.Errorf("FilterURL(%q) with rules %q = %q, expected %q",
+					tt.url, tt.rules, result, tt.expected)
+			}
+		})
+	}
+}
+
 func TestLengthEdgeCases(t *testing.T) {
 	plugin := plugins.NewLengthPlugin()
 
@@ -479,5 +611,31 @@ func BenchmarkLengthPluginValidateQuery(b *testing.B) {
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
 		pv.ValidateQuery("/api", "username=john_doe&code=123456&invalid=value")
+	}
+}
+
+func BenchmarkLengthPluginValidateURL(b *testing.B) {
+	lengthPlugin := plugins.NewLengthPlugin()
+	pv, err := NewParamValidator("/api?username=[len:>5]&code=[len:5..10]", WithPlugins(lengthPlugin))
+	if err != nil {
+		b.Fatalf("Failed to create validator: %v", err)
+	}
+
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		pv.ValidateURL("/api?username=john_doe&code=123456")
+	}
+}
+
+func BenchmarkLengthPluginFilterURL(b *testing.B) {
+	lengthPlugin := plugins.NewLengthPlugin()
+	pv, err := NewParamValidator("/api?username=[len:>5]&code=[len:5..10]", WithPlugins(lengthPlugin))
+	if err != nil {
+		b.Fatalf("Failed to create validator: %v", err)
+	}
+
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		pv.FilterURL("/api?username=john_doe&code=123456&invalid=value")
 	}
 }

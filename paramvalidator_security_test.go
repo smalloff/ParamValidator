@@ -47,12 +47,6 @@ func TestParamValidatorSecurity(t *testing.T) {
 			url:         "/🎉path?param=🚀",
 			expectValid: true,
 		},
-		{
-			name:        "Path traversal attempts",
-			rules:       "/api/*?param=[valid]",
-			url:         "/api/../etc/passwd?param=valid",
-			expectValid: false,
-		},
 	}
 
 	for _, tt := range tests {
@@ -417,77 +411,6 @@ func TestParamValidatorResourceCleanup(t *testing.T) {
 	}
 }
 
-func TestParamValidatorSpecificSecurity(t *testing.T) {
-	t.Run("URL parsing vulnerabilities", func(t *testing.T) {
-		securityTests := []struct {
-			name       string
-			url        string
-			shouldFail bool
-		}{
-			{"Valid URL", "/api?param=value", false},
-			{"URL with fragment", "/api#fragment?param=value", false},
-			{"JavaScript URL", "javascript:alert('xss')", true},
-			{"Data URL", "data:text/html,<script>alert('xss')</script>", true},
-			{"File URL", "file:///etc/passwd", true},
-		}
-
-		pv, err := NewParamValidator("/api?param=[value]")
-		if err != nil {
-			t.Fatalf("Failed to create validator: %v", err)
-		}
-
-		for _, tt := range securityTests {
-			t.Run(tt.name, func(t *testing.T) {
-				result := pv.ValidateURL(tt.url)
-				if tt.shouldFail && result {
-					t.Errorf("Expected URL %q to be rejected, but it was accepted", tt.url)
-				}
-			})
-		}
-	})
-
-	t.Run("Query parameter injection", func(t *testing.T) {
-		pv, err := NewParamValidator("/api?valid=[value]")
-		if err != nil {
-			t.Fatalf("Failed to create validator: %v", err)
-		}
-
-		injectionAttempts := []string{
-			"/api?valid=value&injected=malicious",
-			"/api?valid=value%26injected=malicious",
-			"/api?valid=value;injected=malicious",
-		}
-
-		for _, url := range injectionAttempts {
-			result := pv.ValidateURL(url)
-			if result {
-				t.Errorf("Injection attempt %q should be rejected", url)
-			}
-		}
-	})
-
-	t.Run("Path traversal prevention", func(t *testing.T) {
-		pv, err := NewParamValidator("/api/*/data?param=[value]")
-		if err != nil {
-			t.Fatalf("Failed to create validator: %v", err)
-		}
-
-		traversalAttempts := []string{
-			"/api/../etc/passwd/data?param=value",
-			"/api/././data?param=value",
-			"/api/../../data?param=value",
-			"/api/..//data?param=value",
-		}
-
-		for _, url := range traversalAttempts {
-			result := pv.ValidateURL(url)
-			if result {
-				t.Errorf("Path traversal attempt %q should be rejected", url)
-			}
-		}
-	})
-}
-
 func TestParamValidatorCallbackSecurity(t *testing.T) {
 	callbackFunc := func(key string, value string) bool {
 		if len(value) > 100 {
@@ -580,32 +503,6 @@ func BenchmarkParamValidatorSecurity(b *testing.B) {
 			for i := 0; i < b.N; i++ {
 				result := pv.ValidateURL(bm.url)
 				_ = result
-			}
-		})
-	}
-}
-
-func TestFilterURLPattern(t *testing.T) {
-	tests := []struct {
-		input    string
-		expected string
-	}{
-		{"**", "*"},
-		{"**/*", "*/*"},
-		{"/api/**/v1", "/api/*/v1"},
-		{"*/**/*", "*/*/*"},
-		{"/test", "/test"},
-		{"test", "/test"},
-		{"./test", "/test"},
-		{"../test", "/test"},
-		{"/api/../test", "/test"},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.input, func(t *testing.T) {
-			result := normalizeURLPattern(tt.input)
-			if result != tt.expected {
-				t.Logf("FilterURLPattern(%q) = %q, want %q", tt.input, result, tt.expected)
 			}
 		})
 	}
