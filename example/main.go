@@ -66,7 +66,7 @@ func main() {
 	fmt.Printf("5. ValidateQuery:\nQuery: %s\nValid: %t\n", query, queryValid)
 
 	// 6. Check rules -> Expected error: failed to parse params for URL /api: plugin len: invalid length value: 'invalid'
-	fmt.Println("\n=== Error Handling ===")
+	fmt.Println("\n=== CheckRules ===")
 	invalidRules := "/api?page=[len:invalid]"
 	err = pv.CheckRules(invalidRules)
 	if err != nil {
