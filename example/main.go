@@ -4,63 +4,72 @@ import (
 	"fmt"
 
 	"github.com/smalloff/paramvalidator"
+	"github.com/smalloff/paramvalidator/plugins"
 )
 
 func main() {
-	// Define validation rules
-	rules := "/products?page=[1-10]&category=[electronics,books]"
-
-	// Create validator
-	pv, err := paramvalidator.NewParamValidator(rules)
-	if err != nil {
-		fmt.Println("Error:", err)
-		return
-	}
-
-	// Validate URL parameters
-	isValid := pv.ValidateURL("/products?page=5&category=electronics")
-	fmt.Println("URL valid:", isValid) // true
-
-	// Normalize invalid URL (removes invalid params)
-	normalized := pv.NormalizeURL("/products?page=15&category=electronics&invalid=param")
-	fmt.Println("Normalized URL:", normalized) // /products?category=electronics
-
-	// Validate query parameters string
-	validQuery := pv.ValidateQueryParams("/products", "page=5&category=electronics")
-	fmt.Println("Query params valid:", validQuery) // true
-
-	// Filter query parameters (keep only allowed ones)
-	filtered := pv.FilterQueryParams("/products", "page=15&category=books&invalid=value")
-	fmt.Println("Filtered query:", filtered) // category=books
-
-	// Rule with callback parameter [?]
-	rules = "/api?auth=[?]&page=[1-10]"
-
-	// Create validator with callback function
-	pv, err = paramvalidator.NewParamValidator(rules, func(key string, value string) bool {
-		if key == "auth" {
-			// Custom validation logic
-			return value == "secret123"
+	// Create callback function
+	callbackFunc := func(key string, value string) bool {
+		switch key {
+		case "year":
+			return value == "2025"
+		default:
+			return false
 		}
-		return false
-	})
+	}
 
+	// Create plugins
+	rangePlugin := plugins.NewRangePlugin()
+	lengthPlugin := plugins.NewLengthPlugin()
+	comparisonPlugin := plugins.NewComparisonPlugin()
+	patternPlugin := plugins.NewPatternPlugin()
+
+	// Unified rules combining all plugin types, user callback and inversion
+	rules := "/*/data?page=[range:1-100]&username=[len:3..20]&score=[cmp:>50]&file=[in:*.jpg]&status=![pending,rejected]&year=[?]"
+
+	// Create validator with all plugins and callback
+	pv, err := paramvalidator.NewParamValidator(
+		rules,
+		paramvalidator.WithPlugins(rangePlugin, lengthPlugin, comparisonPlugin, patternPlugin),
+		paramvalidator.WithCallback(callbackFunc),
+	)
 	if err != nil {
-		fmt.Println("Error:", err)
+		fmt.Println("Error creating validator:", err)
 		return
 	}
 
-	// Validate with callback
-	valid1 := pv.ValidateURL("/api?auth=secret123&page=5")
-	fmt.Println("Valid auth:", valid1) // true
+	fmt.Printf("Rules: %s\n\n", rules)
 
-	valid2 := pv.ValidateURL("/api?auth=wrong&page=5")
-	fmt.Println("Invalid auth:", valid2) // false
+	// 1. ValidateURL -> true
+	url := "/api/data?page=5&username=john_doe&score=75&file=photo.jpg&status=approved"
+	valid := pv.ValidateURL(url)
+	fmt.Printf("1. ValidateURL:\nURL: %s\nValid: %t\n\n", url, valid)
 
-	// Validate and filter query strings separately
-	queryValid := pv.ValidateQueryParams("/api", "auth=secret123&page=3")
-	fmt.Println("Query validation:", queryValid) // true
+	// 2. ValidateURL -> false
+	url = "/api/data?page=1000&username=john_doe&score=75&file=photo.jpg&status=approved"
+	valid = pv.ValidateURL(url)
+	fmt.Printf("2. ValidateURL:\nURL: %s\nValid: %t\n\n", url, valid)
 
-	filteredQuery := pv.FilterQueryParams("/api", "auth=wrong&page=3&extra=param")
-	fmt.Println("Filtered query:", filteredQuery) // page=3
+	// 3. ValidateURL with callback -> true
+	url = "/api/data?year=2025&username=john_doe&score=75&file=photo.jpg&status=approved"
+	valid = pv.ValidateURL(url)
+	fmt.Printf("3. ValidateURL with callback:\nURL: %s\nValid: %t\n\n", url, valid)
+
+	// 4. FilterURL -> /users/data?page=5&username=john_doe&file=photo.jpg
+	urlWithExtra := "/users/data?page=5&username=john_doe&score=30&file=photo.jpg&status=pending&invalid=param"
+	filtered := pv.FilterURL(urlWithExtra)
+	fmt.Printf("4. FilterURL:\nOriginal: %s\nFiltered: %s\n\n", urlWithExtra, filtered)
+
+	// 5. ValidateQuery -> false
+	query := "page=5&username=john_doe&score=75&file=photo.png&status=approved"
+	queryValid := pv.ValidateQuery("/pages/data", query)
+	fmt.Printf("5. ValidateQuery:\nQuery: %s\nValid: %t\n", query, queryValid)
+
+	// 6. Check rules -> Expected error: failed to parse params for URL /api: plugin len: invalid length value: 'invalid'
+	fmt.Println("\n=== CheckRules ===")
+	invalidRules := "/api?page=[len:invalid]"
+	err = pv.CheckRules(invalidRules)
+	if err != nil {
+		fmt.Println("Expected error:", err)
+	}
 }
