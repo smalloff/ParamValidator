@@ -45,6 +45,8 @@ Key-only parameter (no value) "active=[]"
 Any value "query=[*]"
 
 Callback parameter "token=[?]"
+
+Inversion "page=![5]"
 ```
 
 ## Plugins Rule Syntax
