@@ -76,8 +76,10 @@ import (
 )
 
 func main() {
-    pv, _ := paramvalidator.NewParamValidator("/api?user_id=[range:1-100]", paramvalidator.WithPlugins(plugins.NewRangePlugin()))
-    valid := pv.ValidateURL("/api?user_id=42")
+rangePlugin := plugins.NewRangePlugin()
+    pv, _ := paramvalidator.NewParamValidator("/api?user_id=[range:1-100]&role=[moderator,admin]",
+         paramvalidator.WithPlugins(rangePlugin))
+    valid := pv.ValidateURL("/api?user_id=42&role=admin")
     println(valid) // Output: true
 }
 ```
