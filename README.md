@@ -99,9 +99,9 @@ import (
 )
 
 func main() {
-	rangePlugin := plugins.NewLengthPlugin()
+	lengthPlugin := plugins.NewLengthPlugin()
 	pv, _ := paramvalidator.NewParamValidator("/api?name=[len:>5]&role=[moderator,admin]",
-		paramvalidator.WithPlugins(rangePlugin))
+		paramvalidator.WithPlugins(lengthPlugin))
 
 	valid := pv.FilterURL("/api?name=small&role=admin")
 	println(valid) // /api?role=admin
