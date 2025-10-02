@@ -1035,8 +1035,19 @@ func (pv *ParamValidator) ParseRules(rulesStr string) error {
 
 	pv.globalParams = globalParams
 	pv.urlRules = urlRules
+	pv.rules = rulesStr
 	pv.compileRulesUnsafe()
 	return nil
+}
+
+func (pv *ParamValidator) RulesString() (string, error) {
+	if !pv.initialized.Load() {
+		return "", fmt.Errorf("validator not initialized")
+	}
+	pv.mu.Lock()
+	defer pv.mu.Unlock()
+	result := pv.rules
+	return result, nil
 }
 
 // compileRulesUnsafe compiles rules for faster access with masks
