@@ -1111,3 +1111,207 @@ func BenchmarkValidateQueryBytes(b *testing.B) {
 		}
 	}
 }
+
+func TestNewlineSeparator(t *testing.T) {
+	tests := []struct {
+		name     string
+		rules    string
+		url      string
+		expected bool
+	}{
+		{
+			name:     "multiple URL rules with newline",
+			rules:    "/products?page=[5]\n/users?sort=[name,date]\n/search?q=[]",
+			url:      "/products?page=5",
+			expected: true,
+		},
+		{
+			name:     "second rule in newline list",
+			rules:    "/products?page=[5]\n/users?sort=[name,date]",
+			url:      "/users?sort=name",
+			expected: true,
+		},
+		{
+			name:     "third rule in newline list",
+			rules:    "/products?page=[5]\n/users?sort=[name,date]\n/search?q=[]",
+			url:      "/search?q",
+			expected: true,
+		},
+		{
+			name:     "mixed semicolon and newline",
+			rules:    "/products?page=[5];/users?sort=[name,date]\n/search?q=[]",
+			url:      "/search?q",
+			expected: true,
+		},
+		{
+			name:     "newline with spaces",
+			rules:    "/products?page=[5]   \n   /users?sort=[name,date]   \n   /search?q=[]",
+			url:      "/users?sort=date",
+			expected: true,
+		},
+		{
+			name:     "multiple newlines between rules",
+			rules:    "/products?page=[5]\n\n/users?sort=[name,date]\n\n/search?q=[]",
+			url:      "/search?q",
+			expected: true,
+		},
+		{
+			name:     "global rules with newline",
+			rules:    "page=[5]\nlimit=[10,20]",
+			url:      "/any/path?page=5&limit=10",
+			expected: true,
+		},
+		{
+			name:     "mixed global and URL rules with newline",
+			rules:    "page=[5]\n/users?sort=[name,date]",
+			url:      "/users?sort=name&page=5",
+			expected: true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			pv, err := NewParamValidator(tt.rules)
+			if err != nil {
+				t.Fatalf("Failed to create validator: %v", err)
+			}
+			result := pv.ValidateURL(tt.url)
+			if result != tt.expected {
+				t.Errorf("ValidateURL(%q) with rules %q = %v, expected %v",
+					tt.url, tt.rules, result, tt.expected)
+			}
+		})
+	}
+}
+
+func TestNewlineSeparatorNormalization(t *testing.T) {
+	tests := []struct {
+		name     string
+		rules    string
+		url      string
+		expected string
+	}{
+		{
+			name:     "normalize with newline rules",
+			rules:    "/products?page=[5]\n/users?sort=[name,date]",
+			url:      "/products?page=5&invalid=value",
+			expected: "/products?page=5",
+		},
+		{
+			name:     "normalize with second newline rule",
+			rules:    "/products?page=[5]\n/users?sort=[name,date]",
+			url:      "/users?sort=name&invalid=value",
+			expected: "/users?sort=name",
+		},
+		{
+			name:     "multiple rules with newline - filter invalid",
+			rules:    "/api/v1/*?page=[5]\n/api/v1/users?limit=[10]",
+			url:      "/api/v1/users?page=5&limit=10&invalid=value",
+			expected: "/api/v1/users?page=5&limit=10",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			pv, err := NewParamValidator(tt.rules)
+			if err != nil {
+				t.Fatalf("Failed to create validator: %v", err)
+			}
+			result := pv.FilterURL(tt.url)
+			if result != tt.expected {
+				t.Errorf("FilterURL(%q) with rules %q = %q, expected %q",
+					tt.url, tt.rules, result, tt.expected)
+			}
+		})
+	}
+}
+
+func TestWindowsNewlineSeparator(t *testing.T) {
+	tests := []struct {
+		name     string
+		rules    string
+		url      string
+		expected bool
+	}{
+		{
+			name:     "Windows newline CRLF",
+			rules:    "/products?page=[5]\r\n/users?sort=[name,date]",
+			url:      "/products?page=5",
+			expected: true,
+		},
+		{
+			name:     "Windows newline second rule",
+			rules:    "/products?page=[5]\r\n/users?sort=[name,date]",
+			url:      "/users?sort=name",
+			expected: true,
+		},
+		{
+			name:     "mixed Unix and Windows newlines",
+			rules:    "/products?page=[5]\n/users?sort=[name,date]\r\n/search?q=[]",
+			url:      "/search?q",
+			expected: true,
+		},
+		{
+			name:     "global rules with Windows newline",
+			rules:    "page=[5]\r\nlimit=[10,20]",
+			url:      "/any/path?page=5&limit=10",
+			expected: true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			pv, err := NewParamValidator(tt.rules)
+			if err != nil {
+				t.Fatalf("Failed to create validator: %v", err)
+			}
+			result := pv.ValidateURL(tt.url)
+			if result != tt.expected {
+				t.Errorf("ValidateURL(%q) with rules %q = %v, expected %v",
+					tt.url, tt.rules, result, tt.expected)
+			}
+		})
+	}
+}
+
+func TestMixedNewlineFormats(t *testing.T) {
+	tests := []struct {
+		name     string
+		rules    string
+		url      string
+		expected bool
+	}{
+		{
+			name:     "mixed Unix and Windows newlines complex",
+			rules:    "/api/v1?page=[5]\n/api/v2?limit=[10]\r\n/api/v3?sort=[name]",
+			url:      "/api/v2?limit=10",
+			expected: true,
+		},
+		{
+			name:     "Windows newlines with spaces",
+			rules:    "  /products?page=[5]  \r\n  /users?sort=[name]  \r\n  /search?q=[]  ",
+			url:      "/users?sort=name",
+			expected: true,
+		},
+		{
+			name:     "multiple Windows newlines",
+			rules:    "/products?page=[5]\r\n\r\n/users?sort=[name]\r\n\r\n/search?q=[]",
+			url:      "/search?q",
+			expected: true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			pv, err := NewParamValidator(tt.rules)
+			if err != nil {
+				t.Fatalf("Failed to create validator: %v", err)
+			}
+			result := pv.ValidateURL(tt.url)
+			if result != tt.expected {
+				t.Errorf("ValidateURL(%q) with rules %q = %v, expected %v",
+					tt.url, tt.rules, result, tt.expected)
+			}
+		})
+	}
+}

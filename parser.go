@@ -152,16 +152,19 @@ func (rp *RuleParser) parseRulesUnsafe(rulesStr string) (map[string]*ParamRule, 
 
 // detectRuleType determines the type of rules in the string
 func (rp *RuleParser) detectRuleType(rulesStr string) RuleType {
+	// Сначала убираем все пробелы и переносы строк для анализа
 	cleanRulesStr := strings.ReplaceAll(rulesStr, " ", "")
+	cleanRulesStr = strings.ReplaceAll(cleanRulesStr, "\n", "")
 
+	// Если есть паттерны URL (/? или *? или / с параметрами в [])
 	if strings.Contains(cleanRulesStr, "/?") ||
 		strings.Contains(cleanRulesStr, "*?") ||
 		(strings.Contains(cleanRulesStr, "/") && strings.Contains(cleanRulesStr, "?")) {
 		return RuleTypeURL
 	}
 
+	// Если есть слеш и квадратные скобки (URL правила без ?)
 	if strings.Contains(cleanRulesStr, "/") &&
-		!strings.Contains(cleanRulesStr, "=") &&
 		(strings.Contains(cleanRulesStr, "[") || strings.Contains(cleanRulesStr, "]")) {
 		return RuleTypeURL
 	}
@@ -169,9 +172,29 @@ func (rp *RuleParser) detectRuleType(rulesStr string) RuleType {
 	return RuleTypeGlobal
 }
 
-// parseGlobalParamsUnsafe parses global parameter rules
+// parseGlobalParamsUnsafe parses global parameter rules with separator support
 func (rp *RuleParser) parseGlobalParamsUnsafe(rulesStr string) (map[string]*ParamRule, error) {
-	return rp.parseParamsFromString(rulesStr, '&')
+
+	ruleStrings := rp.splitRulesMulti(rulesStr, []byte{';', '\n'})
+
+	params := make(map[string]*ParamRule)
+
+	for _, ruleStr := range ruleStrings {
+		if ruleStr == "" {
+			continue
+		}
+
+		ruleParams, err := rp.parseParamsFromString(ruleStr, '&')
+		if err != nil {
+			return nil, err
+		}
+
+		for k, v := range ruleParams {
+			params[k] = v
+		}
+	}
+
+	return params, nil
 }
 
 // parseURLRulesUnsafe parses URL-specific rules
@@ -183,6 +206,17 @@ func (rp *RuleParser) parseURLRulesUnsafe(rulesStr string) (map[string]*URLRule,
 
 	for _, urlRuleStr := range urlRuleStrings {
 		if urlRuleStr == "" {
+			continue
+		}
+
+		if rp.detectRuleType(urlRuleStr) == RuleTypeGlobal {
+			parsedGlobalParams, err := rp.parseGlobalParamsUnsafe(urlRuleStr)
+			if err != nil {
+				return nil, nil, fmt.Errorf("failed to parse global params: %w", err)
+			}
+			for k, v := range parsedGlobalParams {
+				globalParams[k] = v
+			}
 			continue
 		}
 
@@ -289,23 +323,74 @@ func (rp *RuleParser) splitRules(rulesStr string, separator byte) []string {
 	return result
 }
 
-// splitURLRules splits URL rules string by semicolon or returns single rule
+// splitURLRules splits URL rules string by semicolon or newline
 func (rp *RuleParser) splitURLRules(rulesStr string) []string {
+	if rp.detectRuleType(rulesStr) == RuleTypeGlobal {
+		return []string{rulesStr}
+	}
+
 	var builder strings.Builder
 	builder.Grow(len(rulesStr))
 
 	for _, r := range rulesStr {
-		if r != ' ' && r != '\n' {
+		if r != ' ' {
 			builder.WriteRune(r)
 		}
 	}
 	cleanRulesStr := builder.String()
 
-	if strings.Contains(cleanRulesStr, ";") {
-		return rp.splitRules(rulesStr, ';')
+	return rp.splitRulesMulti(cleanRulesStr, []byte{';', '\n'})
+}
+
+// splitRulesMulti splits rules string considering multiple separators and bracket nesting
+func (rp *RuleParser) splitRulesMulti(rulesStr string, separators []byte) []string {
+	var result []string
+	var current strings.Builder
+	bracketDepth := 0
+
+	for i := 0; i < len(rulesStr); i++ {
+		char := rulesStr[i]
+
+		switch char {
+		case '[':
+			bracketDepth++
+		case ']':
+			if bracketDepth > 0 {
+				bracketDepth--
+			}
+		}
+
+		// Проверяем, является ли текущий символ одним из разделителей
+		isSeparator := false
+		for _, sep := range separators {
+			if char == sep && bracketDepth == 0 {
+				isSeparator = true
+				break
+			}
+		}
+
+		if isSeparator {
+			if current.Len() > 0 {
+				ruleStr := strings.TrimSpace(current.String())
+				if ruleStr != "" {
+					result = append(result, ruleStr)
+				}
+				current.Reset()
+			}
+			continue
+		}
+
+		current.WriteByte(char)
 	}
 
-	return []string{rulesStr}
+	if current.Len() > 0 {
+		ruleStr := strings.TrimSpace(current.String())
+		if ruleStr != "" {
+			result = append(result, ruleStr)
+		}
+	}
+
+	return result
 }
 
 // extractURLAndParams separates URL pattern from parameters string
