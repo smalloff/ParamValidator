@@ -1315,3 +1315,295 @@ func TestMixedNewlineFormats(t *testing.T) {
 		})
 	}
 }
+
+// Add these tests to the paramvalidator_test.go file
+
+func TestCommentsInRules(t *testing.T) {
+	tests := []struct {
+		name     string
+		rules    string
+		url      string
+		expected bool
+	}{
+		{
+			name:     "inline comment after rule",
+			rules:    "/api?page=[5] ## this is a comment",
+			url:      "/api?page=5",
+			expected: true,
+		},
+		{
+			name:     "inline comment with multiple rules",
+			rules:    "/products?page=[5] ## product page rule\n/users?sort=[name] ## user sort rule",
+			url:      "/users?sort=name",
+			expected: true,
+		},
+		{
+			name:     "comment on its own line",
+			rules:    "## Global rules section\npage=[5]\n## URL rules section\n/api?limit=[10]",
+			url:      "/api?limit=10&page=5",
+			expected: true,
+		},
+		{
+			name:     "comment in global parameters",
+			rules:    "page=[5] ## page parameter\nlimit=[10,20] ## limit parameter",
+			url:      "/any/path?page=5&limit=10",
+			expected: true,
+		},
+		{
+			name:     "multiple comments mixed with rules",
+			rules:    "## Start of rules\npage=[5]\n## URL specific rules\n/api?sort=[name]\n## End of rules",
+			url:      "/api?sort=name&page=5",
+			expected: true,
+		},
+		{
+			name:     "comment after complex rule",
+			rules:    "/search?q=[]&sort=[name,date] ## search with key-only and enum",
+			url:      "/search?q&sort=name",
+			expected: true,
+		},
+		{
+			name:     "comment with special characters",
+			rules:    "/api?token=[?] ## callback validation for tokens",
+			url:      "/api?token=test",
+			expected: false, // callback without function should fail
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			pv, err := NewParamValidator(tt.rules)
+			if err != nil {
+				t.Fatalf("Failed to create validator: %v", err)
+			}
+			result := pv.ValidateURL(tt.url)
+			if result != tt.expected {
+				t.Errorf("ValidateURL(%q) with rules %q = %v, expected %v",
+					tt.url, tt.rules, result, tt.expected)
+			}
+		})
+	}
+}
+
+func TestCommentsWithSemicolonSeparator(t *testing.T) {
+	tests := []struct {
+		name     string
+		rules    string
+		url      string
+		expected bool
+	}{
+		{
+			name:     "comments with semicolon separator",
+			rules:    "/api?page=[5]; ## api rules\n/users?sort=[name]; ## user rules\n/search?q=[]",
+			url:      "/search?q",
+			expected: true,
+		},
+		{
+			name:     "comment after semicolon",
+			rules:    "/products?page=[5]; ## comment after semicolon\n/users?sort=[name]",
+			url:      "/users?sort=name",
+			expected: true,
+		},
+		{
+			name:     "mixed comments and semicolons",
+			rules:    "## Global section\npage=[5];limit=[10]\n## URL section\n/api?sort=[name]",
+			url:      "/any/path?page=5&limit=10",
+			expected: true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			pv, err := NewParamValidator(tt.rules)
+			if err != nil {
+				t.Fatalf("Failed to create validator: %v", err)
+			}
+			result := pv.ValidateURL(tt.url)
+			if result != tt.expected {
+				t.Errorf("ValidateURL(%q) with rules %q = %v, expected %v",
+					tt.url, tt.rules, result, tt.expected)
+			}
+		})
+	}
+}
+
+func TestCommentsInFilterURL(t *testing.T) {
+	tests := []struct {
+		name     string
+		rules    string
+		url      string
+		expected string
+	}{
+		{
+			name:     "filter with commented rules",
+			rules:    "/api?page=[5] ## only page 5 allowed\nlimit=[10,20] ## limits",
+			url:      "/api?page=5&limit=10&invalid=value",
+			expected: "/api?page=5&limit=10",
+		},
+		{
+			name:     "comments in URL rules filtering",
+			rules:    "## Product rules\n/products?category=[electronics] ## electronics only\n## User rules\n/users?role=[admin]",
+			url:      "/products?category=electronics&invalid=param",
+			expected: "/products?category=electronics",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			pv, err := NewParamValidator(tt.rules)
+			if err != nil {
+				t.Fatalf("Failed to create validator: %v", err)
+			}
+			result := pv.FilterURL(tt.url)
+			if result != tt.expected {
+				t.Errorf("FilterURL(%q) with rules %q = %q, expected %q",
+					tt.url, tt.rules, result, tt.expected)
+			}
+		})
+	}
+}
+
+func TestCommentsEdgeCases(t *testing.T) {
+	tests := []struct {
+		name      string
+		rules     string
+		wantError bool
+	}{
+		{
+			name:      "only comments - should be valid empty rules",
+			rules:     "## Only comments here\n## Another comment",
+			wantError: false,
+		},
+		{
+			name:      "comment with double hash in constraint - should be preserved",
+			rules:     "/api?pattern=[value##withhash] ## this is a comment",
+			wantError: false,
+		},
+		{
+			name:      "comment inside brackets - should be part of constraint",
+			rules:     "/api?param=[value ## not a comment]",
+			wantError: false,
+		},
+		{
+			name:      "multiple hash symbols",
+			rules:     "/api?param=[value] ### triple hash comment",
+			wantError: false,
+		},
+		{
+			name:      "hash inside nested brackets",
+			rules:     "/api?filter=[and[eq##hash]] ## comment",
+			wantError: false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			pv, err := NewParamValidator(tt.rules)
+
+			if tt.wantError {
+				if err == nil {
+					t.Errorf("NewParamValidator() expected error for rules %q, but got nil", tt.rules)
+				}
+				if pv != nil {
+					t.Error("NewParamValidator() should return nil validator when error occurs")
+				}
+			} else {
+				if err != nil {
+					t.Errorf("NewParamValidator() unexpected error = %v for rules %q", err, tt.rules)
+				}
+				// For non-error cases, we expect a validator to be created
+				// but it might have empty rules, which is fine
+				if pv == nil {
+					t.Error("Expected validator to be created")
+				}
+			}
+		})
+	}
+}
+
+func TestCommentsWithCallback(t *testing.T) {
+	callbackFunc := func(key string, value string) bool {
+		return value == "secret123"
+	}
+
+	tests := []struct {
+		name     string
+		rules    string
+		url      string
+		expected bool
+	}{
+		{
+			name:     "callback with comment",
+			rules:    "/auth?token=[?] ## callback validation",
+			url:      "/auth?token=secret123",
+			expected: true,
+		},
+		{
+			name:     "callback with invalid value and comment",
+			rules:    "/auth?token=[?] ## only secret123 allowed",
+			url:      "/auth?token=wrong",
+			expected: false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			pv, err := NewParamValidator(tt.rules, WithCallback(callbackFunc))
+			if err != nil {
+				t.Fatalf("Failed to create validator: %v", err)
+			}
+			result := pv.ValidateURL(tt.url)
+			if result != tt.expected {
+				t.Errorf("ValidateURL(%q) with rules %q = %v, expected %v",
+					tt.url, tt.rules, result, tt.expected)
+			}
+		})
+	}
+}
+
+func TestCommentsInComplexRules(t *testing.T) {
+	tests := []struct {
+		name     string
+		rules    string
+		url      string
+		expected bool
+	}{
+		{
+			name: "complex rules with extensive comments",
+			rules: `## API Version 1 Rules
+/api/v1/*?page=[1,2,3] ## pagination
+&limit=[10,20,50] ## page sizes
+&sort=[name,date] ## sort fields
+
+## Admin Section
+/admin/*?access=[admin] ## admin access required
+&action=[view,edit] ## allowed actions
+
+## Public API
+/public?format=[json,xml] ## response formats
+&callback=[] ## JSONP support`,
+
+			url:      "/api/v1/users?page=2&limit=20&sort=name",
+			expected: true,
+		},
+		{
+			name:     "mixed rules with Windows line endings and comments",
+			rules:    "page=[1] ## global page\r\nlimit=[10] ## global limit\r\n/api?sort=[name] ## api sort",
+			url:      "/api?page=1&limit=10&sort=name",
+			expected: true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			pv, err := NewParamValidator(tt.rules)
+			if err != nil {
+				t.Fatalf("Failed to create validator: %v", err)
+			}
+			result := pv.ValidateURL(tt.url)
+			if result != tt.expected {
+				t.Errorf("ValidateURL(%q) with rules %q = %v, expected %v",
+					tt.url, tt.rules, result, tt.expected)
+			}
+		})
+	}
+}

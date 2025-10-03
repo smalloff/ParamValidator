@@ -59,6 +59,59 @@ func (rp *RuleParser) Close() error {
 	return nil
 }
 
+// removeComments removes comments from rules string
+func (rp *RuleParser) removeComments(rulesStr string) string {
+	var result strings.Builder
+	bracketDepth := 0
+	inQuotes := false
+	escapeNext := false
+
+	for i := 0; i < len(rulesStr); i++ {
+		char := rulesStr[i]
+
+		// Handle escape sequences
+		if escapeNext {
+			result.WriteByte(char)
+			escapeNext = false
+			continue
+		}
+
+		if char == '\\' {
+			escapeNext = true
+			result.WriteByte(char)
+			continue
+		}
+
+		// Track bracket depth
+		if char == '[' && !inQuotes {
+			bracketDepth++
+		} else if char == ']' && !inQuotes && bracketDepth > 0 {
+			bracketDepth--
+		}
+
+		// Track quotes (in case we need to handle them in the future)
+		if char == '"' && bracketDepth > 0 {
+			inQuotes = !inQuotes
+		}
+
+		// Check for comment start only when not inside brackets
+		if char == '#' && i+1 < len(rulesStr) && rulesStr[i+1] == '#' && bracketDepth == 0 {
+			// Found comment start outside brackets - skip to end of line
+			for i < len(rulesStr) && rulesStr[i] != '\n' {
+				i++
+			}
+			if i < len(rulesStr) && rulesStr[i] == '\n' {
+				result.WriteByte('\n')
+			}
+			continue
+		}
+
+		result.WriteByte(char)
+	}
+
+	return result.String()
+}
+
 // validateRulesString performs common validation on rules string
 func (rp *RuleParser) validateRulesString(rulesStr string) error {
 	if len(rulesStr) > MaxRulesSize {
@@ -114,6 +167,9 @@ func (rp *RuleParser) parseRulesUnsafe(rulesStr string) (map[string]*ParamRule, 
 		return make(map[string]*ParamRule), make(map[string]*URLRule), nil
 	}
 
+	// Remove comments before parsing
+	rulesStr = rp.removeComments(rulesStr)
+
 	if err := rp.validateRulesString(rulesStr); err != nil {
 		return nil, nil, err
 	}
@@ -152,18 +208,21 @@ func (rp *RuleParser) parseRulesUnsafe(rulesStr string) (map[string]*ParamRule, 
 
 // detectRuleType determines the type of rules in the string
 func (rp *RuleParser) detectRuleType(rulesStr string) RuleType {
-	// Сначала убираем все пробелы и переносы строк для анализа
-	cleanRulesStr := strings.ReplaceAll(rulesStr, " ", "")
+	// Remove comments first
+	cleanRulesStr := rp.removeComments(rulesStr)
+
+	// Then remove all spaces and newlines for analysis
+	cleanRulesStr = strings.ReplaceAll(cleanRulesStr, " ", "")
 	cleanRulesStr = strings.ReplaceAll(cleanRulesStr, "\n", "")
 
-	// Если есть паттерны URL (/? или *? или / с параметрами в [])
+	// If there are URL patterns (/? or *? or / with parameters in [])
 	if strings.Contains(cleanRulesStr, "/?") ||
 		strings.Contains(cleanRulesStr, "*?") ||
 		(strings.Contains(cleanRulesStr, "/") && strings.Contains(cleanRulesStr, "?")) {
 		return RuleTypeURL
 	}
 
-	// Если есть слеш и квадратные скобки (URL правила без ?)
+	// If there are slashes and square brackets (URL rules without ?)
 	if strings.Contains(cleanRulesStr, "/") &&
 		(strings.Contains(cleanRulesStr, "[") || strings.Contains(cleanRulesStr, "]")) {
 		return RuleTypeURL
@@ -174,6 +233,8 @@ func (rp *RuleParser) detectRuleType(rulesStr string) RuleType {
 
 // parseGlobalParamsUnsafe parses global parameter rules with separator support
 func (rp *RuleParser) parseGlobalParamsUnsafe(rulesStr string) (map[string]*ParamRule, error) {
+	// Remove comments first
+	rulesStr = rp.removeComments(rulesStr)
 
 	ruleStrings := rp.splitRulesMulti(rulesStr, []byte{';', '\n'})
 
@@ -199,6 +260,9 @@ func (rp *RuleParser) parseGlobalParamsUnsafe(rulesStr string) (map[string]*Para
 
 // parseURLRulesUnsafe parses URL-specific rules
 func (rp *RuleParser) parseURLRulesUnsafe(rulesStr string) (map[string]*URLRule, map[string]*ParamRule, error) {
+	// Remove comments first
+	rulesStr = rp.removeComments(rulesStr)
+
 	urlRules := make(map[string]*URLRule)
 	globalParams := make(map[string]*ParamRule)
 
@@ -360,7 +424,7 @@ func (rp *RuleParser) splitRulesMulti(rulesStr string, separators []byte) []stri
 			}
 		}
 
-		// Проверяем, является ли текущий символ одним из разделителей
+		// Check if current character is one of the separators
 		isSeparator := false
 		for _, sep := range separators {
 			if char == sep && bracketDepth == 0 {
@@ -739,6 +803,9 @@ func (rp *RuleParser) CheckRulesSyntax(rulesStr string) error {
 	if rulesStr == "" {
 		return nil
 	}
+
+	// Remove comments before validation
+	rulesStr = rp.removeComments(rulesStr)
 
 	if err := rp.validateRulesString(rulesStr); err != nil {
 		return err
