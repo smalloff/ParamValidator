@@ -47,6 +47,9 @@ Any value "query=[*]"
 Callback parameter "token=[?]"
 
 Inversion "page=![5]"
+
+## comment
+line breaks
 ```
 
 ## Plugins Rule Syntax
