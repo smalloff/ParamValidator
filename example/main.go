@@ -72,4 +72,17 @@ func main() {
 	if err != nil {
 		fmt.Println("Expected error:", err)
 	}
+
+	// 6. Check rules with comments and multi lines -> true
+	fmt.Println("\n=== CheckRules with comments and multi lines ===")
+	rulesMulti := `## comment
+sort=[date_desc,date_asc,updated_desc,updated_asc,price_desc,price_asc,votings_desc,votings_asc,downloads_desc,downloads_asc,views_desc,views_asc]&tags=[*]&s=[]
+## allowed for main
+/?*`
+	err = pv.CheckRules(rulesMulti)
+	if err != nil {
+		fmt.Println("Expected error:", err)
+	}
+
+	println(err == nil)
 }
