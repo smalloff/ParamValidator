@@ -1,6 +1,6 @@
 # ParamValidator
 
-A Go library for validating and normalizing URL parameters. Supports various pattern types. High performance. More on [Wiki](smalloff/paramvalidator/wiki/Documentation).
+A Go library for validating and normalizing URL parameters. Supports various pattern types. High performance. More on [Wiki](https://github.com/smalloff/paramvalidator/wiki/Documentation).
 
 ## Installation
 go get github.com/smalloff/paramvalidator
